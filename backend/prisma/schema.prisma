@@ -1,0 +1,17 @@
+// Nexora POS — Prisma schema
+// NOTE: No models yet. Models are added incrementally, module by module,
+// as each module is approved and implemented (see docs/architecture-proposal.md).
+//
+// Prisma 7: the connection string is no longer set here. The CLI (generate/
+// migrate/studio) reads it from ../prisma.config.ts, and the running app
+// reads DATABASE_URL itself and hands it to the @prisma/adapter-pg driver
+// adapter in src/config/prisma.js. Both ultimately come from backend/.env —
+// never hardcode a connection string in either place.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
