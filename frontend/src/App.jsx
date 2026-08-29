@@ -15,6 +15,26 @@ import SalesQuotationPage from './modules/sales-quotation/SalesQuotationPage';
 import SalesQuotationOverviewPage from './modules/sales-quotation/SalesQuotationOverviewPage';
 import SalesQuotationStatusPage from './modules/sales-quotation/SalesQuotationStatusPage';
 import CreateSalesQuotationPage from './modules/sales-quotation/CreateSalesQuotationPage';
+import SalesOrderPage from './modules/sales-order/SalesOrderPage';
+import SalesOrderOverviewPage from './modules/sales-order/SalesOrderOverviewPage';
+import SalesOrderStatusPage from './modules/sales-order/SalesOrderStatusPage';
+import CreateSalesOrderPage from './modules/sales-order/CreateSalesOrderPage';
+import SalesInvoicePage from './modules/sales-invoice/SalesInvoicePage';
+import SalesInvoiceOverviewPage from './modules/sales-invoice/SalesInvoiceOverviewPage';
+import SalesInvoiceStatusPage from './modules/sales-invoice/SalesInvoiceStatusPage';
+import CreateSalesInvoicePage from './modules/sales-invoice/CreateSalesInvoicePage';
+import BarcodeLabelPage from './modules/barcode-label/BarcodeLabelPage';
+import BarcodeLabelOverviewPage from './modules/barcode-label/BarcodeLabelOverviewPage';
+import BarcodeLabelStatusPage from './modules/barcode-label/BarcodeLabelStatusPage';
+import CreateBarcodeLabelPage from './modules/barcode-label/CreateBarcodeLabelPage';
+import StockIndentPage from './modules/stock-indent/StockIndentPage';
+import StockIndentOverviewPage from './modules/stock-indent/StockIndentOverviewPage';
+import StockIndentStatusPage from './modules/stock-indent/StockIndentStatusPage';
+import CreateStockIndentPage from './modules/stock-indent/CreateStockIndentPage';
+import StockTransferPage from './modules/stock-transfer/StockTransferPage';
+import StockTransferOverviewPage from './modules/stock-transfer/StockTransferOverviewPage';
+import StockTransferStatusPage from './modules/stock-transfer/StockTransferStatusPage';
+import CreateStockTransferPage from './modules/stock-transfer/CreateStockTransferPage';
 import AddNewCustomerPage from './modules/customer/AddNewCustomerPage';
 import ProtectedRoute from './routes/ProtectedRoute';
 import AppShell from './components/layout/AppShell';
@@ -49,6 +69,39 @@ export default function App() {
             <Route path="/sales-quotation/converted" element={<SalesQuotationStatusPage status="converted" />} />
             <Route path="/sales-quotation/expired" element={<SalesQuotationStatusPage status="expired" />} />
             <Route path="/sales-quotation/create" element={<CreateSalesQuotationPage />} />
+            <Route path="/sales-order" element={<SalesOrderPage />} />
+            <Route path="/sales-order/overview" element={<SalesOrderOverviewPage />} />
+            <Route path="/sales-order/pending" element={<SalesOrderStatusPage status="pending" />} />
+            <Route path="/sales-order/confirmed" element={<SalesOrderStatusPage status="confirmed" />} />
+            <Route path="/sales-order/delivered" element={<SalesOrderStatusPage status="delivered" />} />
+            <Route path="/sales-order/create" element={<CreateSalesOrderPage />} />
+            <Route path="/sales-invoice" element={<SalesInvoicePage />} />
+            <Route path="/sales-invoice/overview" element={<SalesInvoiceOverviewPage />} />
+            <Route path="/sales-invoice/draft" element={<SalesInvoiceStatusPage status="draft" />} />
+            <Route path="/sales-invoice/sent" element={<SalesInvoiceStatusPage status="sent" />} />
+            <Route path="/sales-invoice/paid" element={<SalesInvoiceStatusPage status="paid" />} />
+            <Route path="/sales-invoice/overdue" element={<SalesInvoiceStatusPage status="overdue" />} />
+            <Route path="/sales-invoice/create" element={<CreateSalesInvoicePage />} />
+            <Route path="/barcode-label" element={<BarcodeLabelPage />} />
+            <Route path="/barcode-label/overview" element={<BarcodeLabelOverviewPage />} />
+            <Route path="/barcode-label/draft" element={<BarcodeLabelStatusPage status="draft" />} />
+            <Route path="/barcode-label/pending-print" element={<BarcodeLabelStatusPage status="pending-print" />} />
+            <Route path="/barcode-label/printed" element={<BarcodeLabelStatusPage status="printed" />} />
+            <Route path="/barcode-label/create" element={<CreateBarcodeLabelPage />} />
+            <Route path="/stock-indent" element={<StockIndentPage />} />
+            <Route path="/stock-indent/overview" element={<StockIndentOverviewPage />} />
+            <Route path="/stock-indent/draft" element={<StockIndentStatusPage status="draft" />} />
+            <Route path="/stock-indent/pending-approval" element={<StockIndentStatusPage status="pending-approval" />} />
+            <Route path="/stock-indent/approved" element={<StockIndentStatusPage status="approved" />} />
+            <Route path="/stock-indent/rejected" element={<StockIndentStatusPage status="rejected" />} />
+            <Route path="/stock-indent/create" element={<CreateStockIndentPage />} />
+            <Route path="/stock-transfer" element={<StockTransferPage />} />
+            <Route path="/stock-transfer/overview" element={<StockTransferOverviewPage />} />
+            <Route path="/stock-transfer/draft" element={<StockTransferStatusPage status="draft" />} />
+            <Route path="/stock-transfer/in-transit" element={<StockTransferStatusPage status="in-transit" />} />
+            <Route path="/stock-transfer/received" element={<StockTransferStatusPage status="received" />} />
+            <Route path="/stock-transfer/cancelled" element={<StockTransferStatusPage status="cancelled" />} />
+            <Route path="/stock-transfer/create" element={<CreateStockTransferPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/home" replace />} />
