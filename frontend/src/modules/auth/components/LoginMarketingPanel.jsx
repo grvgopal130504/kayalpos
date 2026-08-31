@@ -109,7 +109,7 @@ export default function LoginMarketingPanel() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: 'primary.main',
-                    bgcolor: 'rgba(255,255,255,0.75)',
+                    bgcolor: 'background.paper',
                   }}
                 >
                   <Icon fontSize="small" />
@@ -194,19 +194,6 @@ export default function LoginMarketingPanel() {
               </Stack>
             ))}
           </Paper>
-
-          <Typography
-            variant="caption"
-            align="center"
-            sx={{
-              display: 'block',
-              mt: 1.25,
-              fontSize: 11,
-              color: 'text.secondary',
-            }}
-          >
-            © {new Date().getFullYear()} TechconZ Nexora Pvt Ltd. All Rights Reserved.
-          </Typography>
         </Box>
       </Stack>
     </Box>

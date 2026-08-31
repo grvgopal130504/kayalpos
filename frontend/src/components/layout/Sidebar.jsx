@@ -2,11 +2,27 @@ import { NavLink } from 'react-router-dom';
 import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Divider, Tooltip } from '@mui/material';
 import { NAV_SECTIONS } from './navConfig';
 import AppLogo from '../common/AppLogo';
+import { useAppSelector } from '../../app/hooks';
+import { selectAccentThemeKey } from '../../features/ui/uiSlice';
+import { getAccentTheme, accentCssBackground } from '../../theme/accentThemes';
 
 export const SIDEBAR_WIDTH = 264;
-export const SIDEBAR_RAIL_WIDTH = 76;
+export const SIDEBAR_RAIL_WIDTH = 70;
 
-function NavList({ collapsed, onNavigate }) {
+// Nav item sizing — tweak these to resize every menu row at once instead of
+// hunting through the ListItemButton sx below.
+const NAV_ITEM_HEIGHT = 0;
+const NAV_ITEM_PADDING_TOP = 1;
+const NAV_ITEM_PADDING_BOTTOM = 1;
+const NAV_ITEM_GAP = 1;
+const NAV_ITEM_RADIUS = 0;
+const NAV_ITEM_PADDING_X = 16;
+const NAV_ITEM_PADDING_X_COLLAPSED = 12;
+const NAV_ICON_WIDTH = 40;
+const NAV_ICON_FONT_SIZE = 20;
+const NAV_LABEL_FONT_SIZE = 13;
+
+function NavList({ collapsed, onNavigate, activeBackground }) {
   return (
     <Box
       sx={{
@@ -41,14 +57,16 @@ function NavList({ collapsed, onNavigate }) {
                   to={item.path}
                   onClick={onNavigate}
                   sx={{
-                    borderRadius: 2,
-                    mb: 0.5,
-                    minHeight: 44,
+                    borderRadius: `${NAV_ITEM_RADIUS}px`,
+                    mb: `${NAV_ITEM_GAP}px`,
+                    minHeight: NAV_ITEM_HEIGHT,
+                    pt: `${NAV_ITEM_PADDING_TOP}px`,
+                    pb: `${NAV_ITEM_PADDING_BOTTOM}px`,
                     justifyContent: collapsed ? 'center' : 'flex-start',
-                    px: collapsed ? 1.5 : 2,
+                    px: `${collapsed ? NAV_ITEM_PADDING_X_COLLAPSED : NAV_ITEM_PADDING_X}px`,
                     color: 'rgba(255,255,255,0.75)',
                     '&.active': {
-                      bgcolor: 'primary.main',
+                      background: activeBackground,
                       color: '#fff',
                       '& .MuiListItemIcon-root': { color: '#fff' },
                     },
@@ -57,17 +75,17 @@ function NavList({ collapsed, onNavigate }) {
                 >
                   <ListItemIcon
                     sx={{
-                      minWidth: collapsed ? 0 : 40,
+                      minWidth: collapsed ? 0 : NAV_ICON_WIDTH,
                       color: 'inherit',
                       justifyContent: 'center',
                     }}
                   >
-                    <Icon fontSize="small" />
+                    <Icon sx={{ fontSize: NAV_ICON_FONT_SIZE }} />
                   </ListItemIcon>
                   {!collapsed && (
                     <ListItemText
                       primary={item.label}
-                      slotProps={{ primary: { fontSize: 14, fontWeight: 500, noWrap: true } }}
+                      slotProps={{ primary: { fontSize: NAV_LABEL_FONT_SIZE, fontWeight: 500, noWrap: true } }}
                     />
                   )}
                 </ListItemButton>
@@ -95,6 +113,12 @@ function NavList({ collapsed, onNavigate }) {
  */
 export default function Sidebar({ variant, collapsed = false, open, onClose, onNavigate }) {
   const width = collapsed ? SIDEBAR_RAIL_WIDTH : SIDEBAR_WIDTH;
+  const accentThemeKey = useAppSelector(selectAccentThemeKey);
+  // Solid accent presets already flow into the active nav item via
+  // `primary.main` (see theme.js), but MUI's palette can only hold one flat
+  // color there — so a gradient preset is applied directly as a CSS
+  // background here instead of through the theme.
+  const activeBackground = accentCssBackground(getAccentTheme(accentThemeKey));
 
   const content = (
     <Box
@@ -124,7 +148,7 @@ export default function Sidebar({ variant, collapsed = false, open, onClose, onN
           subtitleColor="rgba(255,255,255,0.65)"
         />
       </Box>
-      <NavList collapsed={collapsed} onNavigate={onNavigate} />
+      <NavList collapsed={collapsed} onNavigate={onNavigate} activeBackground={activeBackground} />
     </Box>
   );
 
@@ -150,12 +174,12 @@ export default function Sidebar({ variant, collapsed = false, open, onClose, onN
       sx={{
         width,
         flexShrink: 0,
-        transition: (theme) => theme.transitions.create('width'),
+        transition: (theme) => theme.transitions.create('width', { duration: 450, easing: theme.transitions.easing.easeInOut }),
         '& .MuiDrawer-paper': {
           width,
           boxSizing: 'border-box',
           border: 'none',
-          transition: (theme) => theme.transitions.create('width'),
+          transition: (theme) => theme.transitions.create('width', { duration: 450, easing: theme.transitions.easing.easeInOut }),
           overflowX: 'hidden',
         },
       }}

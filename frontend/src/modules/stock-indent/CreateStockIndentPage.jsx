@@ -12,12 +12,12 @@ import AddIcon from '@mui/icons-material/Add';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
-import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
+import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
 
 import IndentItemsTable from './components/IndentItemsTable';
@@ -148,16 +148,8 @@ export default function CreateStockIndentPage({ onBack }) {
                       },
                     }}
                   />
-                  <FormTextField
-                    name="indentDate"
-                    label="Indent Date *"
-                    slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                  />
-                  <FormTextField
-                    name="requiredDate"
-                    label="Required Date *"
-                    slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                  />
+                  <FormDatePicker name="indentDate" label="Indent Date *" />
+                  <FormDatePicker name="requiredDate" label="Required Date *" />
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <FormSelect name="department" label="Department / Section *" options={DEPARTMENT_OPTIONS} />

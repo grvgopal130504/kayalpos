@@ -4,19 +4,19 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
-  Paper, InputAdornment, IconButton, RadioGroup, FormControlLabel, Radio, Tooltip, TextField,
+  Paper, RadioGroup, FormControlLabel, Radio, Tooltip, TextField,
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
-import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
+import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
 import FormCheckbox from '../../components/form/FormCheckbox';
 
@@ -47,7 +47,7 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
     if (embedded && onCreated) {
       onCreated();
     } else {
-      navigate('/promotion/overview');
+      navigate('/promotion');
     }
   };
 
@@ -180,35 +180,10 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
                   <PromotionFormSection number={4} title="Validity Period">
                     <Grid container spacing={2}>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField
-                          name="startDate"
-                          label="Start Date *"
-                          slotProps={{
-                            input: {
-                              endAdornment: (
-                                <InputAdornment position="end">
-                                  <IconButton size="small"><CalendarTodayOutlinedIcon fontSize="small" /></IconButton>
-                                </InputAdornment>
-                              ),
-                            },
-                          }}
-                        />
+                        <FormDatePicker name="startDate" label="Start Date *" />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField
-                          name="endDate"
-                          label="End Date *"
-                          disabled={noExpiry}
-                          slotProps={{
-                            input: {
-                              endAdornment: (
-                                <InputAdornment position="end">
-                                  <IconButton size="small" disabled={noExpiry}><CalendarTodayOutlinedIcon fontSize="small" /></IconButton>
-                                </InputAdornment>
-                              ),
-                            },
-                          }}
-                        />
+                        <FormDatePicker name="endDate" label="End Date *" disabled={noExpiry} />
                       </Grid>
                       <Grid size={12}>
                         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>

@@ -4,19 +4,19 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
-  Paper, InputAdornment, IconButton, RadioGroup, FormControlLabel, Radio, Tooltip, TextField,
+  Paper, RadioGroup, FormControlLabel, Radio, Tooltip, TextField,
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AddIcon from '@mui/icons-material/Add';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
-import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
+import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
 import FormCheckbox from '../../components/form/FormCheckbox';
 
@@ -124,35 +124,10 @@ export default function CreateGiftVoucherPage() {
                   <VoucherFormSection number={2} title="Validity">
                     <Grid container spacing={2}>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField
-                          name="validFrom"
-                          label="Valid From *"
-                          slotProps={{
-                            input: {
-                              endAdornment: (
-                                <InputAdornment position="end">
-                                  <IconButton size="small"><CalendarTodayOutlinedIcon fontSize="small" /></IconButton>
-                                </InputAdornment>
-                              ),
-                            },
-                          }}
-                        />
+                        <FormDatePicker name="validFrom" label="Valid From *" />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField
-                          name="validTill"
-                          label="Valid Till *"
-                          disabled={noExpiry}
-                          slotProps={{
-                            input: {
-                              endAdornment: (
-                                <InputAdornment position="end">
-                                  <IconButton size="small" disabled={noExpiry}><CalendarTodayOutlinedIcon fontSize="small" /></IconButton>
-                                </InputAdornment>
-                              ),
-                            },
-                          }}
-                        />
+                        <FormDatePicker name="validTill" label="Valid Till *" disabled={noExpiry} />
                       </Grid>
                       <Grid size={12}>
                         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>

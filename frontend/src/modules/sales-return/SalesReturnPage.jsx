@@ -215,10 +215,6 @@ export default function SalesReturnPage() {
           />
         </Grid>
       </Grid>
-
-      <Typography variant="caption" align="center" sx={{ color: 'text.secondary', display: 'block', pt: 1 }}>
-        © {new Date().getFullYear()} TechconZ Nexora Pvt Ltd. All Rights Reserved.
-      </Typography>
     </Stack>
   );
 }

@@ -44,14 +44,23 @@ function RowActions({ onAction }) {
  * Promotion list: tab filter (All/Active/Upcoming/Expired), search, a
  * (placeholder) Filters button, the paginated table itself, and a row-click
  * to load that promotion into PromotionDetailsCard on the right.
+ *
+ * The tab can be controlled from outside via `tab` + `onTabChange` — the
+ * Promotion page does this so switching this filter also swaps the stat
+ * tiles, details panel and bottom section above/below the table to match
+ * the selected status, instead of the tab only affecting the rows shown
+ * here. When `tab` isn't supplied the component falls back to owning the
+ * value itself (seeded from `defaultTab`), for any standalone usage that
+ * doesn't need that wider sync.
  */
 export default function PromotionTable({
   promotions, selectedCode, onSelectPromotion, onRowAction, onFilters,
-  defaultTab = 'all', showUsageColumn = false, showPageSizeSelector = false,
+  tab: controlledTab, onTabChange, defaultTab = 'all', showUsageColumn = false, showPageSizeSelector = false,
   searchPlaceholder = 'Search promotion by name or code…',
   nameColumnLabel = 'Promotion Name', usageColumnLabel = 'Usage (Till Date)',
 }) {
-  const [tab, setTab] = useState(defaultTab);
+  const [internalTab, setInternalTab] = useState(defaultTab);
+  const tab = controlledTab ?? internalTab;
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(showPageSizeSelector ? PAGE_SIZE_OPTIONS[0] : 7);
@@ -69,7 +78,10 @@ export default function PromotionTable({
   const rangeEnd = Math.min(safePage * pageSize, filtered.length);
   const visibleRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const handleTabChange = (v) => { setTab(v); setPage(1); };
+  const handleTabChange = (v) => {
+    if (onTabChange) onTabChange(v); else setInternalTab(v);
+    setPage(1);
+  };
   const handleQueryChange = (v) => { setQuery(v); setPage(1); };
   const handlePageSizeChange = (v) => { setPageSize(v); setPage(1); };
 

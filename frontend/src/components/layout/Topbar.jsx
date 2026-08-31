@@ -1,10 +1,18 @@
-import { AppBar, Toolbar, IconButton, Box, Badge, Tooltip } from '@mui/material';
+import { useState } from 'react';
+import {
+  AppBar, Toolbar, IconButton, Box, Badge, Tooltip, Menu, MenuItem, ListItemText,
+} from '@mui/material';
 import MenuOutlinedIcon from '@mui/icons-material/MenuOutlined';
 import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
-import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
-import { useAppDispatch } from '../../app/hooks';
-import { showToast } from '../../features/ui/uiSlice';
-import SearchBar from '../common/SearchBar';
+import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import {
+  showToast, toggleThemeMode, selectThemeMode, setAccentTheme, selectAccentThemeKey,
+} from '../../features/ui/uiSlice';
+import { ACCENT_THEMES, accentCssBackground } from '../../theme/accentThemes';
+import GlobalSearch from './GlobalSearch';
 import OutletSwitcher from './OutletSwitcher';
 import UserMenu from './UserMenu';
 
@@ -12,8 +20,57 @@ import UserMenu from './UserMenu';
 // find and wire up once that backend exists.
 const MOCK_NOTIFICATION_COUNT = 5;
 
+// Accent color picker, sitting right next to the light/dark toggle: six
+// flat colors + six two-color gradient combos (ACCENT_THEMES), each shown
+// as a small round swatch with the selected row highlighted — separate from
+// light/dark mode, which controls the page background/text palette.
+function AccentThemeMenu() {
+  const dispatch = useAppDispatch();
+  const accentThemeKey = useAppSelector(selectAccentThemeKey);
+  const [anchorEl, setAnchorEl] = useState(null);
+
+  const handleSelect = (key) => {
+    setAnchorEl(null);
+    dispatch(setAccentTheme(key));
+  };
+
+  return (
+    <>
+      <Tooltip title="Theme color">
+        <IconButton onClick={(e) => setAnchorEl(e.currentTarget)}>
+          <PaletteOutlinedIcon />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={() => setAnchorEl(null)}
+        slotProps={{ paper: { sx: { maxHeight: 420 } } }}
+      >
+        {ACCENT_THEMES.map((accent) => (
+          <MenuItem key={accent.key} selected={accentThemeKey === accent.key} onClick={() => handleSelect(accent.key)}>
+            <Box
+              sx={{
+                width: 18,
+                height: 18,
+                borderRadius: '50%',
+                mr: 1.5,
+                flexShrink: 0,
+                background: accentCssBackground(accent),
+              }}
+            />
+            <ListItemText>{accent.label}</ListItemText>
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+}
+
 export default function Topbar({ onMenuClick }) {
   const dispatch = useAppDispatch();
+  const themeMode = useAppSelector(selectThemeMode);
+  const isDark = themeMode === 'dark';
 
   return (
     <AppBar
@@ -30,12 +87,12 @@ export default function Topbar({ onMenuClick }) {
         <OutletSwitcher />
 
         <Box sx={{ flex: '0 1 480px', display: { xs: 'none', md: 'block' } }}>
-          <SearchBar placeholder="Search menus, items, invoices, customers…" />
+          <GlobalSearch placeholder="Search pages… (e.g. Customer, Stock Count)" />
         </Box>
 
         {/* Always-present spacer — absorbs whatever space the (capped) search
-            bar doesn't use, so notifications/help/user stay pinned to the
-            far right corner on every breakpoint instead of trailing the
+            bar doesn't use, so notifications/theme-toggle/user stay pinned to
+            the far right corner on every breakpoint instead of trailing the
             search box. */}
         <Box sx={{ flex: 1 }} />
 
@@ -47,14 +104,13 @@ export default function Topbar({ onMenuClick }) {
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Help">
-          <IconButton
-            sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
-            onClick={() => dispatch(showToast('Help center is coming soon', 'info'))}
-          >
-            <HelpOutlineOutlinedIcon />
+        <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+          <IconButton onClick={() => dispatch(toggleThemeMode())}>
+            {isDark ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
           </IconButton>
         </Tooltip>
+
+        <AccentThemeMenu />
 
         <UserMenu />
       </Toolbar>
