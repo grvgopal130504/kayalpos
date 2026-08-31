@@ -1,0 +1,150 @@
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import {
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, ButtonBase,
+} from '@mui/material';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+
+import { useAppDispatch } from '../../app/hooks';
+import { logout } from '../../features/auth/authSlice';
+import { showToast } from '../../features/ui/uiSlice';
+
+import { CASHIER, REPORT_ITEMS } from './reportsMockData';
+
+function ReportCard({ item, onOpen }) {
+  const Icon = item.icon;
+  return (
+    <Paper variant="outlined" sx={{ borderRadius: 3, height: '100%' }}>
+      <ButtonBase
+        onClick={() => onOpen(item)}
+        sx={{
+          width: '100%',
+          height: '100%',
+          p: 2.25,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 1.75,
+          textAlign: 'left',
+          borderRadius: 3,
+          transition: 'transform 0.15s, box-shadow 0.15s',
+          '&:hover': { transform: 'translateY(-2px)', boxShadow: 2 },
+        }}
+      >
+        <Box
+          sx={{
+            width: 48,
+            height: 48,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: `${item.color}1F`,
+            color: item.color,
+            flexShrink: 0,
+          }}
+        >
+          <Icon />
+        </Box>
+        <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main' }}>
+              {item.label}
+            </Typography>
+            <NavigateNextIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+          </Stack>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {item.description}
+          </Typography>
+        </Stack>
+      </ButtonBase>
+    </Paper>
+  );
+}
+
+/**
+ * Reports — the central reports landing page, reached from the main
+ * sidebar's "Reports" item. Same card-grid shape as the Masters page: each
+ * card is a shortcut into that report's own screen (Sales, Inventory,
+ * Purchase, Cashier, Financial, SAP), and every card now navigates
+ * directly to its own built report screen.
+ */
+export default function ReportsPage() {
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    dispatch(logout());
+    navigate('/login', { replace: true });
+  };
+
+  const BUILT_REPORT_KEYS = ['sales-report', 'inventory-report', 'purchase-report', 'cashier-reports', 'financial-reports', 'sap-reports'];
+  const handleOpen = (item) => {
+    if (BUILT_REPORT_KEYS.includes(item.key)) {
+      navigate(item.path);
+      return;
+    }
+    dispatch(showToast(`${item.label} is coming soon`, 'info'));
+  };
+
+  return (
+    <Stack spacing={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}>
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>Reports</Typography>
+          <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
+            <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Reports</Typography>
+          </Breadcrumbs>
+        </Box>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
+            Cashier : {CASHIER.name} ({CASHIER.code})
+          </Typography>
+          <MuiLink
+            component="button"
+            type="button"
+            variant="body2"
+            underline="hover"
+            onClick={handleLogout}
+            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
+          >
+            <LogoutOutlinedIcon fontSize="inherit" /> Logout
+          </MuiLink>
+        </Stack>
+      </Stack>
+
+      <Paper
+        variant="outlined"
+        sx={{
+          borderRadius: 3, p: { xs: 1.75, sm: 2 }, display: 'flex', alignItems: 'flex-start', gap: 1.5,
+          bgcolor: 'rgba(37,99,235,0.06)', borderColor: 'rgba(37,99,235,0.25)',
+        }}
+      >
+        <Box
+          sx={{
+            width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            bgcolor: '#2563EB', color: '#fff',
+          }}
+        >
+          <InfoOutlinedIcon sx={{ fontSize: 18 }} />
+        </Box>
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#2563EB' }}>View Reports</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            View and generate reports across all your outlets and operations.
+          </Typography>
+        </Box>
+      </Paper>
+
+      <Grid container spacing={2}>
+        {REPORT_ITEMS.map((item) => (
+          <Grid key={item.key} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+            <ReportCard item={item} onOpen={handleOpen} />
+          </Grid>
+        ))}
+      </Grid>
+    </Stack>
+  );
+}

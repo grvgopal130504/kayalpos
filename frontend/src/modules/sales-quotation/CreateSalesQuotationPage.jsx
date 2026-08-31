@@ -4,7 +4,7 @@ import { FormProvider, useForm, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
-  Paper, TextField, IconButton, InputAdornment,
+  Paper, TextField, IconButton,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -12,11 +12,11 @@ import AddIcon from '@mui/icons-material/Add';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
-import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
+import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
 
 import QuotationItemsTable from './components/QuotationItemsTable';
@@ -147,18 +147,10 @@ export default function CreateSalesQuotationPage({ onBack }) {
                     <TextField label="Quotation No." value={quotationCode} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormTextField
-                      name="quotationDate"
-                      label="Quotation Date *"
-                      slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                    />
+                    <FormDatePicker name="quotationDate" label="Quotation Date *" />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormTextField
-                      name="validTill"
-                      label="Valid Till *"
-                      slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                    />
+                    <FormDatePicker name="validTill" label="Valid Till *" />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormSelect name="paymentTerms" label="Payment Terms" options={PAYMENT_TERMS_OPTIONS} />
@@ -173,12 +165,7 @@ export default function CreateSalesQuotationPage({ onBack }) {
                     <FormTextField name="referenceNo" label="Reference No." placeholder="Enter Reference No." />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormTextField
-                      name="referenceDate"
-                      label="Reference Date"
-                      placeholder="Select Date"
-                      slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                    />
+                    <FormDatePicker name="referenceDate" label="Reference Date" placeholder="Select Date" />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormSelect name="priceList" label="Price List" options={PRICE_LIST_OPTIONS} />

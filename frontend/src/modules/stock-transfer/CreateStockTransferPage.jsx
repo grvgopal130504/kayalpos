@@ -12,12 +12,12 @@ import AddIcon from '@mui/icons-material/Add';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
-import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
+import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
 
 import TransferItemsTable from './components/TransferItemsTable';
@@ -147,11 +147,7 @@ export default function CreateStockTransferPage({ onBack }) {
                       },
                     }}
                   />
-                  <FormTextField
-                    name="transferDate"
-                    label="Transfer Date *"
-                    slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                  />
+                  <FormDatePicker name="transferDate" label="Transfer Date *" />
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <FormSelect name="stockIndentRef" label="Stock Indent" options={STOCK_INDENT_OPTIONS} />

@@ -1,22 +1,39 @@
-import { StrictMode } from 'react';
+import { StrictMode, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Provider } from 'react-redux';
+import { Provider, useSelector } from 'react-redux';
 import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { store } from './app/store';
-import { theme } from './theme/theme';
+import { getTheme } from './theme/theme';
+import { selectThemeMode, selectAccentThemeKey } from './features/ui/uiSlice';
 import App from './App.jsx';
 import './index.css';
+
+// Builds the MUI theme from the redux `themeMode` + `accentThemeKey` (both
+// persisted to localStorage in uiSlice) so toggling light/dark or picking a
+// new accent color from the Topbar re-themes the whole app instantly. Lives
+// inside <Provider> so it can read the store.
+function AppThemeProvider({ children }) {
+  const themeMode = useSelector(selectThemeMode);
+  const accentThemeKey = useSelector(selectAccentThemeKey);
+  const theme = useMemo(() => getTheme(themeMode, accentThemeKey), [themeMode, accentThemeKey]);
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      {children}
+    </ThemeProvider>
+  );
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <Provider store={store}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <AppThemeProvider>
         <BrowserRouter>
           <App />
         </BrowserRouter>
-      </ThemeProvider>
+      </AppThemeProvider>
     </Provider>
   </StrictMode>,
 );

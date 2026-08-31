@@ -12,12 +12,12 @@ import AddIcon from '@mui/icons-material/Add';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
-import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
+import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
 
 import InvoiceItemsTable from './components/InvoiceItemsTable';
@@ -169,18 +169,10 @@ export default function CreateSalesInvoicePage({ onBack }) {
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <FormTextField
-                      name="invoiceDate"
-                      label="Invoice Date *"
-                      slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                    />
+                    <FormDatePicker name="invoiceDate" label="Invoice Date *" />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <FormTextField
-                      name="dueDate"
-                      label="Due Date"
-                      slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                    />
+                    <FormDatePicker name="dueDate" label="Due Date" />
                   </Grid>
 
                   <Grid size={{ xs: 12, sm: 6, md: 4 }}>
@@ -226,12 +218,7 @@ export default function CreateSalesInvoicePage({ onBack }) {
                   </Grid>
 
                   <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <FormTextField
-                      name="deliveryDate"
-                      label="Delivery Date"
-                      placeholder="Select Delivery Date"
-                      slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                    />
+                    <FormDatePicker name="deliveryDate" label="Delivery Date" placeholder="Select Delivery Date" />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                     <FormTextField name="referenceNo" label="Reference (if any)" placeholder="Enter Reference" />

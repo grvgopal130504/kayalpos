@@ -17,13 +17,12 @@ import KeyboardReturnOutlinedIcon from '@mui/icons-material/KeyboardReturnOutlin
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
-import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined';
 import CloudDoneOutlinedIcon from '@mui/icons-material/CloudDoneOutlined';
 import CloudQueueOutlinedIcon from '@mui/icons-material/CloudQueueOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 
 /**
  * Single source of truth for the sidebar + "Quick Access" grid on Home.
@@ -63,10 +62,9 @@ export const NAV_SECTIONS = [
     key: 'operations',
     items: [
       { key: 'cashier-panel', label: 'Cashier Panel', icon: BadgeOutlinedIcon, path: '/cashier-panel', quickAccess: true },
-      { key: 'shift-open', label: 'Shift Open', icon: LockOpenOutlinedIcon, path: '/shift-open', quickAccess: true },
-      { key: 'shift-close', label: 'Shift Close', icon: LockOutlinedIcon, path: '/shift-close', quickAccess: true },
-      { key: 'expenses-book', label: 'Expenses Book', icon: MenuBookOutlinedIcon, path: '/expenses-book', quickAccess: true },
+      { key: 'expenses-book', label: 'Expense Book', icon: MenuBookOutlinedIcon, path: '/expenses-book', quickAccess: true },
       { key: 'reports', label: 'Reports', icon: BarChartOutlinedIcon, path: '/reports' },
+      { key: 'masters', label: 'Masters', icon: SettingsOutlinedIcon, path: '/masters' },
       { key: 'master-sync', label: 'Master Sync', icon: CloudDoneOutlinedIcon, path: '/master-sync', quickAccess: true },
       { key: 'stock-sync', label: 'Stock Sync', icon: CloudSyncOutlinedIcon, path: '/stock-sync', quickAccess: true },
       { key: 'sap-sync', label: 'SAP Sync', icon: CloudQueueOutlinedIcon, path: '/sap-sync', quickAccess: true },

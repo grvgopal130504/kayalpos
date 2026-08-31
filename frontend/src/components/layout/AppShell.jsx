@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Box, useMediaQuery } from '@mui/material';
+import { Box, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import Sidebar, { SIDEBAR_WIDTH, SIDEBAR_RAIL_WIDTH } from './Sidebar';
 import Topbar from './Topbar';
@@ -42,13 +42,34 @@ export default function AppShell() {
           flexGrow: 1,
           minWidth: 0,
           width: isDesktop ? `calc(100% - ${desktopWidth}px)` : '100%',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         <Topbar onMenuClick={() => (isDesktop ? dispatch(toggleSidebar()) : setMobileNavOpen((v) => !v))} />
-        <Box component="main" sx={{ p: { xs: 1.5, sm: 2, md: 3 } }}>
+        <Box component="main" sx={{ flex: 1, p: { xs: 1.5, sm: 2, md: 3 } }}>
           <Outlet />
         </Box>
+        <Footer />
       </Box>
+    </Box>
+  );
+}
+
+function Footer() {
+  return (
+    <Box
+      component="footer"
+      sx={{
+        px: { xs: 1.5, sm: 2, md: 3 },
+        py: 2,
+        borderTop: '1px solid',
+        borderColor: 'divider',
+      }}
+    >
+      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textAlign: 'center' }}>
+        © 2026 Techconz Nexora Pvt Ltd. All Rights Reserved.
+      </Typography>
     </Box>
   );
 }

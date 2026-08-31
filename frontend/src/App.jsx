@@ -5,10 +5,10 @@ import ManagementDashboardPage from './modules/dashboard/ManagementDashboardPage
 import LineSalePage from './modules/line-sale/LineSalePage';
 import SalesReturnPage from './modules/sales-return/SalesReturnPage';
 import PromotionPage from './modules/promotion/PromotionPage';
-import PromotionOverviewPage from './modules/promotion/PromotionOverviewPage';
-import PromotionStatusPage from './modules/promotion/PromotionStatusPage';
 import CreatePromotionPage from './modules/promotion/CreatePromotionPage';
+import GiftVoucherPage from './modules/gift-voucher/GiftVoucherPage';
 import CreateGiftVoucherPage from './modules/gift-voucher/CreateGiftVoucherPage';
+import LoyaltyPage from './modules/loyalty/LoyaltyPage';
 import CreateLoyaltyProgramPage from './modules/loyalty/CreateLoyaltyProgramPage';
 import CustomerPage from './modules/customer/CustomerPage';
 import SalesQuotationPage from './modules/sales-quotation/SalesQuotationPage';
@@ -35,6 +35,54 @@ import StockTransferPage from './modules/stock-transfer/StockTransferPage';
 import StockTransferOverviewPage from './modules/stock-transfer/StockTransferOverviewPage';
 import StockTransferStatusPage from './modules/stock-transfer/StockTransferStatusPage';
 import CreateStockTransferPage from './modules/stock-transfer/CreateStockTransferPage';
+import StockReceiptPage from './modules/stock-receipt/StockReceiptPage';
+import CreateStockReceiptPage from './modules/stock-receipt/CreateStockReceiptPage';
+import StockReturnPage from './modules/stock-return/StockReturnPage';
+import CreateStockReturnPage from './modules/stock-return/CreateStockReturnPage';
+import StockWastagePage from './modules/stock-wastage/StockWastagePage';
+import CreateStockWastagePage from './modules/stock-wastage/CreateStockWastagePage';
+import StockCountPage from './modules/stock-count/StockCountPage';
+import CreateStockCountPage from './modules/stock-count/CreateStockCountPage';
+import CashierPanelPage from './modules/cashier-panel/CashierPanelPage';
+import CashierLoginPage from './modules/cashier-panel/CashierLoginPage';
+import ShiftOpeningPage from './modules/cashier-panel/ShiftOpeningPage';
+import CashSalesPage from './modules/cashier-panel/CashSalesPage';
+import CardSalesPage from './modules/cashier-panel/CardSalesPage';
+import UpiSalesPage from './modules/cashier-panel/UpiSalesPage';
+import OtherPaymentsPage from './modules/cashier-panel/OtherPaymentsPage';
+import CashWithdrawalPage from './modules/cashier-panel/CashWithdrawalPage';
+import CashDepositPage from './modules/cashier-panel/CashDepositPage';
+import CashTransferPage from './modules/cashier-panel/CashTransferPage';
+import CashDrawerOpeningPage from './modules/cashier-panel/CashDrawerOpeningPage';
+import ShiftClosingPage from './modules/cashier-panel/ShiftClosingPage';
+import CashReconciliationPage from './modules/cashier-panel/CashReconciliationPage';
+import ShortageExcessPage from './modules/cashier-panel/ShortageExcessPage';
+import CashierWiseSalesPage from './modules/cashier-panel/CashierWiseSalesPage';
+import ExpensesBookPage from './modules/expenses-book/ExpensesBookPage';
+import AddExpensePage from './modules/expenses-book/AddExpensePage';
+import ReportsPage from './modules/reports/ReportsPage';
+import SalesReportsPage from './modules/reports/sales/SalesReportsPage';
+import InventoryReportsPage from './modules/reports/inventory/InventoryReportsPage';
+import PurchaseReportsPage from './modules/reports/purchase/PurchaseReportsPage';
+import CashierReportsPage from './modules/reports/cashier/CashierReportsPage';
+import FinancialReportsPage from './modules/reports/financial/FinancialReportsPage';
+import SapReportsPage from './modules/reports/sap/SapReportsPage';
+import MasterSyncPage from './modules/master-sync/MasterSyncPage';
+import StockSyncPage from './modules/stock-sync/StockSyncPage';
+import MastersPage from './modules/masters/MastersPage';
+import CompanyPage from './modules/masters/company/CompanyPage';
+import OutletPage from './modules/masters/outlet/OutletPage';
+import WarehousePage from './modules/masters/warehouse/WarehousePage';
+import ProductPage from './modules/masters/product/ProductPage';
+import BrandPage from './modules/masters/brand/BrandPage';
+import UomPage from './modules/masters/uom/UomPage';
+import TaxCodePage from './modules/masters/tax-code/TaxCodePage';
+import HsnSacPage from './modules/masters/hsn-sac/HsnSacPage';
+import SellingPricePage from './modules/masters/selling-price/SellingPricePage';
+import PriceListPage from './modules/masters/price-list/PriceListPage';
+import BatchSerialPage from './modules/masters/batch-serial/BatchSerialPage';
+import SupplierPage from './modules/masters/supplier/SupplierPage';
+import EmployeePage from './modules/masters/employee/EmployeePage';
 import AddNewCustomerPage from './modules/customer/AddNewCustomerPage';
 import ProtectedRoute from './routes/ProtectedRoute';
 import AppShell from './components/layout/AppShell';
@@ -52,14 +100,10 @@ export default function App() {
             <Route path="/line-sale" element={<LineSalePage />} />
             <Route path="/sales-return" element={<SalesReturnPage />} />
             <Route path="/promotion" element={<PromotionPage />} />
-            <Route path="/promotion/overview" element={<PromotionOverviewPage />} />
-            <Route path="/promotion/active" element={<PromotionStatusPage status="active" />} />
-            <Route path="/promotion/upcoming" element={<PromotionStatusPage status="upcoming" />} />
-            <Route path="/promotion/expired" element={<PromotionStatusPage status="expired" />} />
             <Route path="/promotion/create" element={<CreatePromotionPage />} />
-            <Route path="/gift-voucher" element={<CreateGiftVoucherPage />} />
+            <Route path="/gift-voucher" element={<GiftVoucherPage />} />
             <Route path="/gift-voucher/create" element={<CreateGiftVoucherPage />} />
-            <Route path="/loyalty" element={<CreateLoyaltyProgramPage />} />
+            <Route path="/loyalty" element={<LoyaltyPage />} />
             <Route path="/loyalty/create" element={<CreateLoyaltyProgramPage />} />
             <Route path="/customer" element={<CustomerPage />} />
             <Route path="/customer/add" element={<AddNewCustomerPage />} />
@@ -102,6 +146,54 @@ export default function App() {
             <Route path="/stock-transfer/received" element={<StockTransferStatusPage status="received" />} />
             <Route path="/stock-transfer/cancelled" element={<StockTransferStatusPage status="cancelled" />} />
             <Route path="/stock-transfer/create" element={<CreateStockTransferPage />} />
+            <Route path="/stock-receipt" element={<StockReceiptPage />} />
+            <Route path="/stock-receipt/create" element={<CreateStockReceiptPage />} />
+            <Route path="/stock-return" element={<StockReturnPage />} />
+            <Route path="/stock-return/create" element={<CreateStockReturnPage />} />
+            <Route path="/stock-wastage" element={<StockWastagePage />} />
+            <Route path="/stock-wastage/create" element={<CreateStockWastagePage />} />
+            <Route path="/stock-count" element={<StockCountPage />} />
+            <Route path="/stock-count/create" element={<CreateStockCountPage />} />
+            <Route path="/expenses-book" element={<ExpensesBookPage />} />
+            <Route path="/expenses-book/add" element={<AddExpensePage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/reports/sales" element={<SalesReportsPage />} />
+            <Route path="/reports/inventory" element={<InventoryReportsPage />} />
+            <Route path="/reports/purchase" element={<PurchaseReportsPage />} />
+            <Route path="/reports/cashier" element={<CashierReportsPage />} />
+            <Route path="/reports/financial" element={<FinancialReportsPage />} />
+            <Route path="/reports/sap" element={<SapReportsPage />} />
+            <Route path="/master-sync" element={<MasterSyncPage />} />
+            <Route path="/stock-sync" element={<StockSyncPage />} />
+            <Route path="/masters" element={<MastersPage />} />
+            <Route path="/masters/company" element={<CompanyPage />} />
+            <Route path="/masters/outlet" element={<OutletPage />} />
+            <Route path="/masters/warehouse" element={<WarehousePage />} />
+            <Route path="/masters/product" element={<ProductPage />} />
+            <Route path="/masters/brand" element={<BrandPage />} />
+            <Route path="/masters/uom" element={<UomPage />} />
+            <Route path="/masters/tax-code" element={<TaxCodePage />} />
+            <Route path="/masters/hsn-sac" element={<HsnSacPage />} />
+            <Route path="/masters/selling-price" element={<SellingPricePage />} />
+            <Route path="/masters/price-list" element={<PriceListPage />} />
+            <Route path="/masters/batch-serial" element={<BatchSerialPage />} />
+            <Route path="/masters/supplier" element={<SupplierPage />} />
+            <Route path="/masters/employee" element={<EmployeePage />} />
+            <Route path="/cashier-panel" element={<CashierPanelPage />} />
+            <Route path="/cashier-panel/login" element={<CashierLoginPage />} />
+            <Route path="/cashier-panel/shift-opening" element={<ShiftOpeningPage />} />
+            <Route path="/cashier-panel/cash-sales" element={<CashSalesPage />} />
+            <Route path="/cashier-panel/card-sales" element={<CardSalesPage />} />
+            <Route path="/cashier-panel/upi-sales" element={<UpiSalesPage />} />
+            <Route path="/cashier-panel/other-payments" element={<OtherPaymentsPage />} />
+            <Route path="/cashier-panel/cash-withdrawal" element={<CashWithdrawalPage />} />
+            <Route path="/cashier-panel/cash-deposit" element={<CashDepositPage />} />
+            <Route path="/cashier-panel/cash-transfer" element={<CashTransferPage />} />
+            <Route path="/cashier-panel/cash-drawer-opening" element={<CashDrawerOpeningPage />} />
+            <Route path="/cashier-panel/shift-closing" element={<ShiftClosingPage />} />
+            <Route path="/cashier-panel/cash-reconciliation" element={<CashReconciliationPage />} />
+            <Route path="/cashier-panel/shortage-excess" element={<ShortageExcessPage />} />
+            <Route path="/cashier-panel/cashier-wise-sales" element={<CashierWiseSalesPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/home" replace />} />
