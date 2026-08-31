@@ -38,6 +38,10 @@ function buildPalette(mode, accentKey) {
 }
 
 export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY) {
+  const isDark = mode === 'dark';
+  const scrollbarThumb = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.22)';
+  const scrollbarThumbHover = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+
   return createTheme({
     palette: buildPalette(mode === 'dark' ? 'dark' : 'light', accentKey),
     shape: {
@@ -86,6 +90,22 @@ export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY) {
       MuiPaper: {
         styleOverrides: {
           root: { backgroundImage: 'none' },
+        },
+      },
+      // App-wide thin scrollbar — covers every scrollable table container,
+      // the dashboard panels, etc. (the sidebar keeps its own copy of this
+      // since it needs a fixed light-on-dark thumb regardless of mode).
+      MuiCssBaseline: {
+        styleOverrides: {
+          '*': {
+            scrollbarWidth: 'thin',
+            scrollbarColor: `${scrollbarThumb} transparent`,
+          },
+          '*::-webkit-scrollbar': { width: 6, height: 6 },
+          '*::-webkit-scrollbar-track': { background: 'transparent' },
+          '*::-webkit-scrollbar-button': { display: 'none', height: 0, width: 0 },
+          '*::-webkit-scrollbar-thumb': { backgroundColor: scrollbarThumb, borderRadius: 4 },
+          '*::-webkit-scrollbar-thumb:hover': { backgroundColor: scrollbarThumbHover },
         },
       },
     },

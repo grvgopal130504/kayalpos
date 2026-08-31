@@ -7,6 +7,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
+import AddCustomerDialog from '../../components/common/AddCustomerDialog';
 
 import ItemsPanel from './components/ItemsPanel';
 import CartPanel from './components/CartPanel';
@@ -51,6 +52,8 @@ export default function LineSalePage() {
   const [receivedAmount, setReceivedAmount] = useState(4000);
   const [printSettingsEnabled, setPrintSettingsEnabled] = useState(false);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
+  const [customer, setCustomer] = useState(WALK_IN_CUSTOMER);
+  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
 
   const billNo = useMemo(() => generateBillNo(), []);
   const dateTime = useMemo(
@@ -101,7 +104,12 @@ export default function LineSalePage() {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
-  const handleAddCustomer = () => dispatch(showToast('Add Customer is coming soon', 'info'));
+  const handleAddCustomer = () => setAddCustomerOpen(true);
+  const handleCustomerCreated = (newCustomer) => {
+    setCustomer(newCustomer);
+    setAddCustomerOpen(false);
+    dispatch(showToast('Customer saved successfully', 'success'));
+  };
   const handlePayAndPrint = () => {
     if (cart.length === 0) {
       dispatch(showToast('Add at least one item before taking payment', 'warning'));
@@ -136,7 +144,7 @@ export default function LineSalePage() {
       </Stack>
 
       <BillSummaryRow
-        customerName={WALK_IN_CUSTOMER.name}
+        customerName={customer.name}
         billNo={billNo}
         cashierName={user?.name || 'Admin'}
         dateTime={dateTime}
@@ -167,7 +175,7 @@ export default function LineSalePage() {
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <CustomerDetailsCard customer={WALK_IN_CUSTOMER} onAddCustomer={handleAddCustomer} />
+          <CustomerDetailsCard customer={customer} onAddCustomer={handleAddCustomer} />
         </Grid>
         <Grid size={{ xs: 12, md: 5 }}>
           <PaymentMethodsCard
@@ -191,6 +199,12 @@ export default function LineSalePage() {
           />
         </Grid>
       </Grid>
+
+      <AddCustomerDialog
+        open={addCustomerOpen}
+        onClose={() => setAddCustomerOpen(false)}
+        onCustomerCreated={handleCustomerCreated}
+      />
     </Stack>
   );
 }
