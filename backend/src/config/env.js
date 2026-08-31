@@ -8,6 +8,12 @@ import { z } from 'zod';
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
+  // Comma-separated list of allowed frontend origins, e.g.
+  // "http://localhost:5173,https://nexora-pos.azurestaticapps.net". This lets
+  // the same backend serve the local Vite dev server AND the deployed Azure
+  // Static Web App (and any preview/staging SWA URLs) without code changes —
+  // just add the origin to the env var. Use "*" to allow any origin (no
+  // credentials will be reflected back in that case, per the CORS spec).
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   JWT_SECRET: z
     .string()
@@ -24,3 +30,9 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+// Parsed allowlist derived from CORS_ORIGIN — trimmed, empty entries
+// dropped, so "http://a, http://b ,,http://c" all work.
+export const corsOrigins = env.CORS_ORIGIN.split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);

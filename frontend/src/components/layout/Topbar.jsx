@@ -12,6 +12,8 @@ import {
   showToast, toggleThemeMode, selectThemeMode, setAccentTheme, selectAccentThemeKey,
 } from '../../features/ui/uiSlice';
 import { ACCENT_THEMES, accentCssBackground } from '../../theme/accentThemes';
+import HealthStatusTag from '../common/HealthStatusTag';
+import { useHealthStatus } from '../../hooks/useHealthStatus';
 import GlobalSearch from './GlobalSearch';
 import OutletSwitcher from './OutletSwitcher';
 import UserMenu from './UserMenu';
@@ -71,6 +73,7 @@ export default function Topbar({ onMenuClick }) {
   const dispatch = useAppDispatch();
   const themeMode = useAppSelector(selectThemeMode);
   const isDark = themeMode === 'dark';
+  const { status: healthStatus, services: healthServices } = useHealthStatus();
 
   return (
     <AppBar
@@ -95,6 +98,8 @@ export default function Topbar({ onMenuClick }) {
             the far right corner on every breakpoint instead of trailing the
             search box. */}
         <Box sx={{ flex: 1 }} />
+
+        <HealthStatusTag status={healthStatus} services={healthServices} />
 
         <Tooltip title="Notifications">
           <IconButton onClick={() => dispatch(showToast('Notifications are coming soon', 'info'))}>

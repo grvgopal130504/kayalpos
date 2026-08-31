@@ -1,6 +1,9 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+// Exported so other clients that don't go through RTK Query (e.g. the
+// health-check poller, which needs its own timeout/abort handling) can
+// still point at the same backend without duplicating the env fallback.
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
 
 // Single RTK Query base API. Every domain (auth, items, customers, sales, ...)
 // injects its endpoints into this one instance instead of creating separate

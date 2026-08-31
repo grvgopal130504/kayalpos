@@ -25,6 +25,8 @@ import FormPasswordField from '../../components/form/FormPasswordField';
 import FormSelect from '../../components/form/FormSelect';
 import FormCheckbox from '../../components/form/FormCheckbox';
 import AppLogo from '../../components/common/AppLogo';
+import HealthStatusTag from '../../components/common/HealthStatusTag';
+import { useHealthStatus } from '../../hooks/useHealthStatus';
 import { MOCK_OUTLETS } from '../../constants/outlets';
 import { loginSchema, loginDefaultValues } from './loginSchema';
 import LoginMarketingPanel from './components/LoginMarketingPanel';
@@ -37,6 +39,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [login, { isLoading }] = useLoginMutation();
   const [serverError, setServerError] = useState(null);
+  const { status: healthStatus, services: healthServices } = useHealthStatus();
 
   const methods = useForm({
     resolver: zodResolver(loginSchema),
@@ -185,6 +188,10 @@ export default function LoginPage() {
                     <Button type="submit" variant="contained" size="large" disabled={isLoading} fullWidth>
                       {isLoading ? 'Signing in…' : 'Login'}
                     </Button>
+
+                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                      <HealthStatusTag status={healthStatus} services={healthServices} />
+                    </Box>
 
                     <Divider>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
