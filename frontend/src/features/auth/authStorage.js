@@ -26,10 +26,11 @@ export function persistAuth(authState, rememberMe) {
   }
 }
 
-export function clearPersistedAuth() {
+export function clearPersistedAuth() { 
   try {
     localStorage.removeItem(STORAGE_KEY);
     sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem('nexora_logout_signal', Date.now().toString());
   } catch {
     // ignore
   }

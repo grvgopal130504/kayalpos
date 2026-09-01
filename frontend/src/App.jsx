@@ -103,8 +103,10 @@ import ProfilePage from './modules/settings/ProfilePage';
 import ProtectedRoute from './routes/ProtectedRoute';
 import AppShell from './components/layout/AppShell';
 import GlobalToast from './components/common/GlobalToast';
+import { useAuthSync } from './hooks/useAuthSync';
 
 export default function App() {
+  useAuthSync();
   return (
     <>
       <Routes>
