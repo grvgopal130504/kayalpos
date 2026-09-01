@@ -24,6 +24,7 @@ import { formatCurrency } from '../../../utils/format';
 
 import SellingPriceListTable from './components/SellingPriceListTable';
 import MarginQuickCalculatorTable from './components/MarginQuickCalculatorTable';
+import SellingPriceViewDialog from './components/SellingPriceViewDialog';
 import { CASHIER } from '../mastersMockData';
 import {
   ITEM_OPTIONS, PRICE_LIST_OPTIONS, TAX_CODE_OPTIONS, OUTLET_OPTIONS, ROUNDING_OPTIONS,
@@ -89,6 +90,7 @@ export default function SellingPricePage() {
   const [outletBranch, setOutletBranch] = useState('Main Outlet');
   const [status, setStatus] = useState('Active');
   const [approvalRequired, setApprovalRequired] = useState(false);
+  const [viewRow, setViewRow] = useState(null);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -135,11 +137,45 @@ export default function SellingPricePage() {
     : pricingMethod === 'marginFromCost' ? 'Margin % From Cost' : 'Margin % From MRP';
 
   const handleSearchItem = () => dispatch(showToast('Item search is coming soon', 'info'));
-  const handleNewSellingPrice = () => dispatch(showToast('New Selling Price form is coming soon', 'info'));
+  // "New Selling Price" resets the calculator (below) back to add-mode
+  // defaults for the mocked item — there's only one item in the picker's
+  // mock data, so the calculator itself doubles as this master's add
+  // form rather than a separate dialog duplicating it.
+  const handleNewSellingPrice = () => {
+    handleItemChange(ITEM_OPTIONS[0].value);
+    setPriceList('Main Outlet Price List');
+    setPricingMethod('marginFromMrp');
+    setMarginPercent('10.00');
+    setFixedSellingPrice('270.00');
+    setPriceUpdateReason('');
+    setStatus('Active');
+    dispatch(showToast('Ready to add a new selling price', 'info'));
+  };
   const handleImport = () => dispatch(showToast('Import Selling Prices is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export Selling Prices is coming soon', 'info'));
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEditRow = (row) => dispatch(showToast(`Edit ${row.itemName} is coming soon`, 'info'));
+  const handleViewRow = (row) => setViewRow(row);
+  // Loads the row's values back into the Pricing Calculator above the
+  // list so editing reuses that same live-recalculating form instead of
+  // a second, disconnected dialog.
+  const handleEditRow = (row) => {
+    setViewRow(null);
+    setPriceList(row.priceList);
+    setMrp(row.mrp.toFixed(2));
+    setEffectiveFrom(row.effectiveFrom);
+    setStatus(row.status);
+    if (row.pricingMethod === 'Fixed Selling Price') {
+      setPricingMethod('fixed');
+      setFixedSellingPrice(row.sellingPriceExclTax.toFixed(2));
+    } else if (row.pricingMethod === 'Margin % From Cost') {
+      setPricingMethod('marginFromCost');
+      setMarginPercent(row.marginPercent.toFixed(2));
+    } else {
+      setPricingMethod('marginFromMrp');
+      setMarginPercent(row.marginPercent.toFixed(2));
+    }
+    dispatch(showToast(`Editing ${row.itemName} — update values below and Save`, 'info'));
+  };
   const handleDeleteRow = (row) => setRows((prev) => prev.filter((r) => r.itemCode !== row.itemCode));
 
   const buildRecord = () => ({
@@ -509,7 +545,7 @@ export default function SellingPricePage() {
           </Stack>
         </Stack>
 
-        <SellingPriceListTable rows={rows} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+        <SellingPriceListTable rows={rows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -518,6 +554,13 @@ export default function SellingPricePage() {
           <Pagination count={1} page={page} onChange={(_e, value) => setPage(value)} color="primary" shape="rounded" />
         </Stack>
       </Paper>
+
+      <SellingPriceViewDialog
+        open={Boolean(viewRow)}
+        row={viewRow}
+        onClose={() => setViewRow(null)}
+        onEdit={() => handleEditRow(viewRow)}
+      />
     </Stack>
   );
 }

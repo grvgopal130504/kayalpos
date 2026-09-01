@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -13,6 +13,7 @@ import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SearchIcon from '@mui/icons-material/Search';
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
@@ -22,7 +23,7 @@ import FormSelect from '../../components/form/FormSelect';
 import LabelItemsTable from './components/LabelItemsTable';
 import LabelPrintSummaryCard from './components/LabelPrintSummaryCard';
 import { DEFAULT_TERMS } from './components/LabelTermsAndNotes';
-import { BATCHES } from './barcodeLabelMockData';
+import { BATCHES, getBatchDetails } from './barcodeLabelMockData';
 import {
   createBarcodeLabelSchema, createBarcodeLabelDefaultValues,
   LABEL_TYPE_OPTIONS, LABEL_SIZE_OPTIONS, PRINT_TEMPLATE_OPTIONS,
@@ -33,6 +34,35 @@ import {
 function nextBatchCode() {
   const maxNum = BATCHES.reduce((max, b) => Math.max(max, Number(b.code.slice(4))), 0);
   return `LBL-${String(maxNum + 1).padStart(5, '0')}`;
+}
+
+// The detail record's `labelType`/`labelSize`/`printTemplate`/`itemCategory`
+// are display labels ("Barcode", "50mm x 25mm", "Standard 3-Column",
+// "Grocery"), not the form selects' underlying option values — build
+// label->value lookups from the option lists themselves so edit mode can
+// prefill those selects correctly.
+function labelToValueMap(options) {
+  return Object.fromEntries(options.filter((o) => o.value).map((o) => [o.label, o.value]));
+}
+const LABEL_TYPE_LABEL_TO_VALUE = labelToValueMap(LABEL_TYPE_OPTIONS);
+const LABEL_SIZE_LABEL_TO_VALUE = labelToValueMap(LABEL_SIZE_OPTIONS);
+const PRINT_TEMPLATE_LABEL_TO_VALUE = labelToValueMap(PRINT_TEMPLATE_OPTIONS);
+const ITEM_CATEGORY_LABEL_TO_VALUE = labelToValueMap(ITEM_CATEGORY_OPTIONS);
+
+// Maps a detail record's plain {code, name, hsn, uom, barcode, printQty}
+// item into the create form's item-row shape.
+function itemToRow(item) {
+  return {
+    selected: false,
+    itemCode: item.code,
+    itemName: item.name,
+    hsnCode: item.hsn,
+    uom: item.uom,
+    barcode: item.barcode,
+    printQty: String(item.printQty ?? '1.00'),
+    fromSerialBatch: '',
+    toSerialBatch: '',
+  };
 }
 
 /**
@@ -52,18 +82,34 @@ function nextBatchCode() {
 export default function CreateBarcodeLabelPage({ onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { code } = useParams();
+  const isEditMode = Boolean(code);
+  const existingBatch = isEditMode ? getBatchDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const batchCode = nextBatchCode();
+  const batchCode = useMemo(() => (isEditMode ? code : nextBatchCode()), [isEditMode, code]);
 
   const methods = useForm({
     resolver: zodResolver(createBarcodeLabelSchema),
-    defaultValues: createBarcodeLabelDefaultValues,
+    defaultValues: useMemo(() => {
+      if (!existingBatch) return createBarcodeLabelDefaultValues;
+      return {
+        ...createBarcodeLabelDefaultValues,
+        labelName: existingBatch.labelName,
+        labelType: LABEL_TYPE_LABEL_TO_VALUE[existingBatch.labelType] || createBarcodeLabelDefaultValues.labelType,
+        labelSize: LABEL_SIZE_LABEL_TO_VALUE[existingBatch.labelSize] || '',
+        printTemplate: PRINT_TEMPLATE_LABEL_TO_VALUE[existingBatch.printTemplate] || '',
+        itemCategory: ITEM_CATEGORY_LABEL_TO_VALUE[existingBatch.itemCategory] || '',
+        items: existingBatch.items?.length ? existingBatch.items.map(itemToRow) : createBarcodeLabelDefaultValues.items,
+      };
+    }, [existingBatch]),
     mode: 'onTouched',
   });
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (onBack) onBack(); else navigate('/barcode-label/overview');
+    if (isEditMode) navigate(`/barcode-label/view/${code}`);
+    else if (onBack) onBack();
+    else navigate('/barcode-label/overview');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -77,26 +123,40 @@ export default function CreateBarcodeLabelPage({ onBack }) {
   };
 
   const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(`Barcode & Label batch ${batchCode} saved as draft`, 'success'));
+    dispatch(showToast(isEditMode ? `Barcode & Label batch ${batchCode} updated successfully` : `Barcode & Label batch ${batchCode} saved as draft`, 'success'));
     handleBack();
   });
   const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(`Barcode & Label batch ${batchCode} saved and sent to print queue`, 'success'));
+    dispatch(showToast(isEditMode ? `Barcode & Label batch ${batchCode} updated successfully` : `Barcode & Label batch ${batchCode} saved and sent to print queue`, 'success'));
     handleBack();
   });
+
+  if (isEditMode && !existingBatch) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Batch not found</Typography>
+        <Button variant="outlined" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={() => navigate('/barcode-label')} sx={{ width: 'fit-content' }}>
+          Back to Barcode &amp; Label List
+        </Button>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Barcode &amp; Label (New)</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Barcode & Label (Edit ${batchCode})` : 'Barcode & Label (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/barcode-label" underline="hover" color="text.secondary">Barcode &amp; Label</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>New Barcode &amp; Label</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? 'Edit Batch' : 'New Barcode & Label'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
+          <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={handleBack}>
+            {isEditMode ? 'Back to Batch' : 'Back'}
+          </Button>
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
@@ -113,12 +173,20 @@ export default function CreateBarcodeLabelPage({ onBack }) {
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
           </Menu>
-          <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-            Save as Draft
-          </Button>
-          <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
-            Save &amp; Send
-          </Button>
+          {isEditMode ? (
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              Update Batch
+            </Button>
+          ) : (
+            <>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+                Save as Draft
+              </Button>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+                Save &amp; Send
+              </Button>
+            </>
+          )}
         </Stack>
       </Stack>
 

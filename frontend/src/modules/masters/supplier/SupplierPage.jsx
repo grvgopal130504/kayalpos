@@ -24,6 +24,8 @@ import StatCard from '../../../components/common/StatCard';
 import { formatNumber, formatCurrency } from '../../../utils/format';
 
 import SupplierTable from './components/SupplierTable';
+import SupplierFormDialog from './components/SupplierFormDialog';
+import SupplierViewDialog from './components/SupplierViewDialog';
 import { CASHIER } from '../mastersMockData';
 import {
   SUPPLIERS, SUPPLIER_GROUP_OPTIONS, CITY_OPTIONS, STATE_OPTIONS,
@@ -49,13 +51,15 @@ export default function SupplierPage() {
   const [gstRegistered, setGstRegistered] = useState('All');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
+  const [viewRow, setViewRow] = useState(null);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
 
-  const handleNewSupplier = () => dispatch(showToast('New Supplier form is coming soon', 'info'));
+  const handleNewSupplier = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Suppliers is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export Suppliers is coming soon', 'info'));
   const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
@@ -68,9 +72,10 @@ export default function SupplierPage() {
     setGstRegistered('All');
     setAppliedSearch('');
   };
-  const handleOpenSupplier = (row) => dispatch(showToast(`${row.name} details are coming soon`, 'info'));
-  const handleEditRow = (row) => dispatch(showToast(`Edit ${row.name} is coming soon`, 'info'));
+  const handleOpenSupplier = (row) => setViewRow(row);
+  const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
   const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
 
   const filteredRows = useMemo(() => SUPPLIERS.filter((row) => {
     if (appliedSearch) {
@@ -245,6 +250,18 @@ export default function SupplierPage() {
           <StatCard icon={CurrencyRupeeOutlinedIcon} iconColor="warning" iconShape="circle" label="Total Payable" value={formatCurrency(STATS.totalPayable, { decimals: true })} />
         </Grid>
       </Grid>
+
+      <SupplierFormDialog open={formDialog.open} mode={formDialog.mode} initialValues={formDialog.row} onClose={closeFormDialog} />
+      <SupplierViewDialog
+        open={Boolean(viewRow)}
+        row={viewRow}
+        onClose={() => setViewRow(null)}
+        onEdit={() => {
+          const row = viewRow;
+          setViewRow(null);
+          setFormDialog({ open: true, mode: 'edit', row });
+        }}
+      />
     </Stack>
   );
 }

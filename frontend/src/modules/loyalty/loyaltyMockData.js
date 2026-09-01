@@ -108,3 +108,29 @@ export const PROGRAM_DETAILS = {
   pointsIssuedTillDate: 42500,
   pointsRedeemedTillDate: 18600,
 };
+
+const PROGRAM_BY_CODE = Object.fromEntries(PROGRAMS.map((p) => [p.code, p]));
+
+/**
+ * Full detail shape for a program code, for the View/Edit pages — same
+ * fallback logic LoyaltyPage's own detail panel already uses inline: only
+ * PROGRAM_DETAILS.code (LP-0001) has hand-authored description/points-type/
+ * redemption fields, so every other row reuses that shape with its own
+ * PROGRAMS fields swapped in, since there's no backend yet to hold real
+ * per-program detail records.
+ */
+export function getLoyaltyProgramDetails(code) {
+  const row = PROGRAM_BY_CODE[code];
+  if (!row) return null;
+  if (row.code === PROGRAM_DETAILS.code) return PROGRAM_DETAILS;
+  return {
+    ...PROGRAM_DETAILS,
+    code: row.code,
+    name: row.name,
+    status: row.status,
+    earnPointsOn: PROGRAM_DETAILS.earnPointsOn,
+    redemptionValue: row.redemptionRule,
+    membershipValidity: row.membershipValidity,
+    members: row.members,
+  };
+}

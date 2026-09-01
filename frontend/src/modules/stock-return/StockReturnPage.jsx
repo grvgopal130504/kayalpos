@@ -49,11 +49,15 @@ export default function StockReturnPage() {
       };
 
   const handleSelectReturn = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/stock-return/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/stock-return/edit/${row.code}`);
+    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  };
   const handleImport = () => dispatch(showToast('Import Returns is coming soon', 'info'));
   const handleCreate = () => navigate('/stock-return/create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => dispatch(showToast('Edit Stock Return is coming soon', 'info'));
+  const handleEdit = () => navigate(`/stock-return/edit/${selectedCode}`);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));

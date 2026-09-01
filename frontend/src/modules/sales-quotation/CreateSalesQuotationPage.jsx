@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -12,17 +12,19 @@ import AddIcon from '@mui/icons-material/Add';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
+import { CUSTOMERS } from '../customer/customerMockData';
 
 import QuotationItemsTable from './components/QuotationItemsTable';
 import QuotationTotalsCard from './components/QuotationTotalsCard';
 import QuotationTermsAndNotes from './components/QuotationTermsAndNotes';
-import { QUOTATIONS } from './salesQuotationMockData';
+import { QUOTATIONS, getQuotationDetails } from './salesQuotationMockData';
 import {
   createSalesQuotationSchema, createSalesQuotationDefaultValues,
   CUSTOMER_OPTIONS, CONTACT_PERSON_OPTIONS, PAYMENT_TERMS_OPTIONS, SALES_PERSON_OPTIONS,
@@ -34,28 +36,73 @@ function nextQuotationCode() {
   return `QUO-${String(maxNum + 1).padStart(5, '0')}`;
 }
 
+// The mock detail record only carries the customer's name, not their code —
+// best-effort match it back to a CUSTOMERS row so the Customer select can be
+// prefilled in edit mode; falls back to blank (still selectable manually)
+// when no match is found.
+function findCustomerIdByName(name) {
+  const match = CUSTOMERS.find((c) => c.name === name);
+  return match ? match.code : '';
+}
+
+function itemToRow(item) {
+  const lineTotal = item.qty * item.unitPrice;
+  const discountPercent = lineTotal > 0 ? Math.round((item.discount / lineTotal) * 10000) / 100 : 0;
+  return {
+    itemCode: item.code,
+    itemName: item.name,
+    hsnCode: item.hsn,
+    qty: String(item.qty),
+    unit: '',
+    unitPrice: String(item.unitPrice),
+    discountPercent: discountPercent ? String(discountPercent) : '',
+    taxCode: '',
+  };
+}
+
 /**
- * "New Quotation" screen — matches the reference design's full create form:
- * Customer Details + Quotation Details cards, an editable line-items grid
- * with a live totals summary, and Terms & Conditions / Notes below. Saving
- * is mocked (no Sales Quotation backend module yet), so both "Save as
- * Draft" and "Save & Send" just toast and hand control back to the caller.
+ * "New Quotation" screen, also doubling as the Edit Quotation page when
+ * reached via `/sales-quotation/edit/:code` — the Sales Quotation module has
+ * no backend yet, so "editing" prefills from getQuotationDetails() the same
+ * way the Overview/Status pages' own detail panel does. Matches the
+ * reference design's full create form: Customer Details + Quotation Details
+ * cards, an editable line-items grid with a live totals summary, and Terms &
+ * Conditions / Notes below. Saving is mocked, so both "Save as Draft" and
+ * "Save & Send" just toast and hand control back to the caller.
  */
 export default function CreateSalesQuotationPage({ onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { code } = useParams();
+  const isEditMode = Boolean(code);
+  const existingQuotation = isEditMode ? getQuotationDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const quotationCode = useMemo(() => nextQuotationCode(), []);
+  const quotationCode = useMemo(() => (isEditMode ? code : nextQuotationCode()), [isEditMode, code]);
 
   const methods = useForm({
     resolver: zodResolver(createSalesQuotationSchema),
-    defaultValues: createSalesQuotationDefaultValues,
+    defaultValues: existingQuotation
+      ? {
+          ...createSalesQuotationDefaultValues,
+          customerId: findCustomerIdByName(existingQuotation.customer.name),
+          mobile: existingQuotation.customer.mobile,
+          email: existingQuotation.customer.email,
+          address: existingQuotation.customer.address,
+          quotationDate: existingQuotation.date,
+          validTill: existingQuotation.validTill,
+          paymentTerms: (existingQuotation.paymentTerms || '').toLowerCase(),
+          salesPerson: (existingQuotation.salesPerson || '').toLowerCase(),
+          items: existingQuotation.items?.length ? existingQuotation.items.map(itemToRow) : createSalesQuotationDefaultValues.items,
+        }
+      : createSalesQuotationDefaultValues,
     mode: 'onTouched',
   });
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (onBack) onBack(); else navigate('/sales-quotation/overview');
+    if (isEditMode) navigate(`/sales-quotation/view/${code}`);
+    else if (onBack) onBack();
+    else navigate('/sales-quotation/overview');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -67,26 +114,40 @@ export default function CreateSalesQuotationPage({ onBack }) {
   };
 
   const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(`Quotation ${quotationCode} saved as draft`, 'success'));
+    dispatch(showToast(isEditMode ? `Quotation ${quotationCode} updated successfully` : `Quotation ${quotationCode} saved as draft`, 'success'));
     handleBack();
   });
   const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(`Quotation ${quotationCode} saved and sent`, 'success'));
+    dispatch(showToast(isEditMode ? `Quotation ${quotationCode} updated successfully` : `Quotation ${quotationCode} saved and sent`, 'success'));
     handleBack();
   });
+
+  if (isEditMode && !existingQuotation) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Quotation not found</Typography>
+        <Button variant="outlined" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={() => navigate('/sales-quotation')} sx={{ width: 'fit-content' }}>
+          Back to Sales Quotation List
+        </Button>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Sales Quotation (New)</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Sales Quotation (Edit ${quotationCode})` : 'Sales Quotation (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/sales-quotation" underline="hover" color="text.secondary">Sales Quotation</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>New Quotation</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? 'Edit Quotation' : 'New Quotation'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
+          <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={handleBack}>
+            {isEditMode ? 'Back to Quotation' : 'Back'}
+          </Button>
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
@@ -103,12 +164,20 @@ export default function CreateSalesQuotationPage({ onBack }) {
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
           </Menu>
-          <Button variant="outlined" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-            Save as Draft
-          </Button>
-          <Button variant="contained" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
-            Save &amp; Send
-          </Button>
+          {isEditMode ? (
+            <Button variant="contained" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              Update Quotation
+            </Button>
+          ) : (
+            <>
+              <Button variant="outlined" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+                Save as Draft
+              </Button>
+              <Button variant="contained" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+                Save &amp; Send
+              </Button>
+            </>
+          )}
         </Stack>
       </Stack>
 

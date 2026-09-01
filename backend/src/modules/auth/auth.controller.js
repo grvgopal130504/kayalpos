@@ -8,3 +8,12 @@ export function loginHandler(req, res, next) {
     next(err);
   }
 }
+
+export function changePasswordHandler(req, res, next) {
+  try {
+    const result = authService.changePassword({ username: req.user.username, ...req.body });
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}

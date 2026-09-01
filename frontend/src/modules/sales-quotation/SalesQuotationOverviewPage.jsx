@@ -50,7 +50,11 @@ export default function SalesQuotationOverviewPage({ tab, onTabChange, onCreate 
       };
 
   const handleSelectQuotation = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/sales-quotation/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/sales-quotation/edit/${row.code}`);
+    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleConvertToOrder = () => dispatch(showToast(`Convert "${quotationDetails.code}" to Sales Order is coming soon`, 'info'));
   const handleCreate = () => {

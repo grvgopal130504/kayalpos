@@ -1,6 +1,7 @@
 import {
   Box, Table, TableHead, TableBody, TableRow, TableCell, Chip, IconButton, Stack, Typography,
 } from '@mui/material';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 
@@ -20,7 +21,7 @@ const COLUMNS = [
  * "HSN / SAC List" table — plain rows with a green/grey Status chip and
  * edit/delete row actions, neither wired to a real form yet.
  */
-export default function HsnSacTable({ rows, onEditRow, onDeleteRow }) {
+export default function HsnSacTable({ rows, onViewRow, onEditRow, onDeleteRow }) {
   return (
     <Box sx={{ overflowX: 'auto' }}>
       <Table size="small" sx={{ minWidth: 1200 }}>
@@ -56,6 +57,9 @@ export default function HsnSacTable({ rows, onEditRow, onDeleteRow }) {
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.effectiveFrom}</TableCell>
               <TableCell>
                 <Stack direction="row" spacing={0.5}>
+                  <IconButton size="small" onClick={() => onViewRow?.(row)} aria-label={`View ${row.code}`}>
+                    <VisibilityOutlinedIcon fontSize="small" />
+                  </IconButton>
                   <IconButton size="small" color="primary" onClick={() => onEditRow?.(row)} aria-label={`Edit ${row.code}`}>
                     <EditOutlinedIcon fontSize="small" />
                   </IconButton>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -13,6 +13,7 @@ import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
@@ -23,7 +24,7 @@ import FormSelect from '../../components/form/FormSelect';
 import TransferItemsTable from './components/TransferItemsTable';
 import TransferSummaryTotals from './components/TransferSummaryTotals';
 import { DEFAULT_TERMS } from './components/TransferTermsAndNotes';
-import { TRANSFERS } from './stockTransferMockData';
+import { TRANSFERS, getTransferDetails } from './stockTransferMockData';
 import {
   createStockTransferSchema, createStockTransferDefaultValues,
   STOCK_INDENT_OPTIONS, OUTLET_OPTIONS, TO_OUTLET_OPTIONS, DEPARTMENT_OPTIONS,
@@ -33,6 +34,20 @@ import {
 function nextTransferCode() {
   const maxNum = TRANSFERS.reduce((max, t) => Math.max(max, Number(t.code.slice(4))), 0);
   return `TRF-${String(maxNum + 1).padStart(5, '0')}`;
+}
+
+// The mock detail record's items don't carry the create form's exact field
+// shape (uom is a raw label here, not an option value) — best effort
+// prefill, still fully editable.
+function itemToRow(item) {
+  return {
+    itemCode: item.code,
+    itemName: item.name,
+    hsnCode: item.hsn,
+    uom: '',
+    transferQty: String(item.transferQty),
+    remarks: '',
+  };
 }
 
 /**
@@ -54,19 +69,31 @@ function nextTransferCode() {
 export default function CreateStockTransferPage({ onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { code } = useParams();
+  const isEditMode = Boolean(code);
+  const existingTransfer = isEditMode ? getTransferDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [attachmentName, setAttachmentName] = useState('');
-  const transferCode = useMemo(() => nextTransferCode(), []);
+  const transferCode = useMemo(() => (isEditMode ? code : nextTransferCode()), [isEditMode, code]);
 
   const methods = useForm({
     resolver: zodResolver(createStockTransferSchema),
-    defaultValues: createStockTransferDefaultValues,
+    defaultValues: existingTransfer
+      ? {
+          ...createStockTransferDefaultValues,
+          transferDate: existingTransfer.date,
+          stockIndentRef: '',
+          items: existingTransfer.items?.length ? existingTransfer.items.map(itemToRow) : createStockTransferDefaultValues.items,
+        }
+      : createStockTransferDefaultValues,
     mode: 'onTouched',
   });
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (onBack) onBack(); else navigate('/stock-transfer/overview');
+    if (isEditMode) navigate(`/stock-transfer/view/${code}`);
+    else if (onBack) onBack();
+    else navigate('/stock-transfer/overview');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -83,26 +110,40 @@ export default function CreateStockTransferPage({ onBack }) {
   };
 
   const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(`Transfer ${transferCode} saved as draft`, 'success'));
+    dispatch(showToast(isEditMode ? `Transfer ${transferCode} updated successfully` : `Transfer ${transferCode} saved as draft`, 'success'));
     handleBack();
   });
   const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(`Transfer ${transferCode} saved and sent`, 'success'));
+    dispatch(showToast(isEditMode ? `Transfer ${transferCode} updated successfully` : `Transfer ${transferCode} saved and sent`, 'success'));
     handleBack();
   });
+
+  if (isEditMode && !existingTransfer) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Transfer not found</Typography>
+        <Button variant="outlined" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={() => navigate('/stock-transfer')} sx={{ width: 'fit-content' }}>
+          Back to Stock Transfer List
+        </Button>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Stock Transfer (New)</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Transfer (Edit ${transferCode})` : 'Stock Transfer (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/stock-transfer" underline="hover" color="text.secondary">Stock Transfer</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>New Stock Transfer</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? 'Edit Transfer' : 'New Stock Transfer'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
+          <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={handleBack}>
+            {isEditMode ? 'Back to Transfer' : 'Back'}
+          </Button>
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
@@ -119,12 +160,20 @@ export default function CreateStockTransferPage({ onBack }) {
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
           </Menu>
-          <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-            Save as Draft
-          </Button>
-          <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
-            Save &amp; Send
-          </Button>
+          {isEditMode ? (
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              Update Transfer
+            </Button>
+          ) : (
+            <>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+                Save as Draft
+              </Button>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+                Save &amp; Send
+              </Button>
+            </>
+          )}
         </Stack>
       </Stack>
 

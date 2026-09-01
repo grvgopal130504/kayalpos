@@ -49,7 +49,11 @@ export default function GiftVoucherPage() {
       };
 
   const handleSelectVoucher = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/gift-voucher/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/gift-voucher/edit/${row.code}`);
+    return dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
+  };
   const handleImport = () => dispatch(showToast('Import Vouchers is coming soon', 'info'));
   const handleCreate = () => navigate('/gift-voucher/create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));

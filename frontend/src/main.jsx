@@ -5,7 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { store } from './app/store';
 import { getTheme } from './theme/theme';
-import { selectThemeMode, selectAccentThemeKey } from './features/ui/uiSlice';
+import { selectThemeMode, selectAccentThemeKey, selectBodyFont, selectBodyFontStyle } from './features/ui/uiSlice';
 import App from './App.jsx';
 import './index.css';
 
@@ -16,7 +16,12 @@ import './index.css';
 function AppThemeProvider({ children }) {
   const themeMode = useSelector(selectThemeMode);
   const accentThemeKey = useSelector(selectAccentThemeKey);
-  const theme = useMemo(() => getTheme(themeMode, accentThemeKey), [themeMode, accentThemeKey]);
+  const bodyFont = useSelector(selectBodyFont);
+  const bodyFontStyle = useSelector(selectBodyFontStyle);
+  const theme = useMemo(
+    () => getTheme(themeMode, accentThemeKey, bodyFont, bodyFontStyle),
+    [themeMode, accentThemeKey, bodyFont, bodyFontStyle],
+  );
 
   return (
     <ThemeProvider theme={theme}>

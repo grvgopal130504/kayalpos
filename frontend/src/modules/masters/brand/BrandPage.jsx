@@ -24,6 +24,8 @@ import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
 
 import BrandTable from './components/BrandTable';
+import BrandFormDialog from './components/BrandFormDialog';
+import BrandViewDialog from './components/BrandViewDialog';
 import { CASHIER } from '../mastersMockData';
 import { BRANDS, CATEGORY_OPTIONS, STATS } from './brandMockData';
 
@@ -57,13 +59,15 @@ export default function BrandPage() {
   const [page, setPage] = useState(1);
   const createdFromNativeRef = useRef(null);
   const createdToNativeRef = useRef(null);
+  const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
+  const [viewRow, setViewRow] = useState(null);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
 
-  const handleNewBrand = () => dispatch(showToast('New Brand form is coming soon', 'info'));
+  const handleNewBrand = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Brands is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export Brands is coming soon', 'info'));
   const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
@@ -75,8 +79,10 @@ export default function BrandPage() {
     setCreatedTo('');
     setAppliedSearch('');
   };
-  const handleEditRow = (row) => dispatch(showToast(`Edit ${row.name} is coming soon`, 'info'));
+  const handleViewRow = (row) => setViewRow(row);
+  const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
   const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
 
   const filteredRows = useMemo(() => BRANDS.filter((row) => {
     if (appliedSearch) {
@@ -254,7 +260,7 @@ export default function BrandPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Brand List</Typography>
-        <BrandTable rows={filteredRows} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+        <BrandTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -284,6 +290,18 @@ export default function BrandPage() {
           <StatCard icon={Inventory2OutlinedIcon} iconColor="warning" iconShape="circle" label="Total Items Under Brands" value={formatNumber(STATS.totalItemsUnderBrands)} />
         </Grid>
       </Grid>
+
+      <BrandFormDialog open={formDialog.open} mode={formDialog.mode} initialValues={formDialog.row} onClose={closeFormDialog} />
+      <BrandViewDialog
+        open={Boolean(viewRow)}
+        row={viewRow}
+        onClose={() => setViewRow(null)}
+        onEdit={() => {
+          const row = viewRow;
+          setViewRow(null);
+          setFormDialog({ open: true, mode: 'edit', row });
+        }}
+      />
     </Stack>
   );
 }

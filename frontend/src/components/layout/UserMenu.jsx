@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, Box, Menu, MenuItem, Stack, Typography, ListItemIcon } from '@mui/material';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { logout, selectCurrentUser } from '../../features/auth/authSlice';
 
@@ -24,6 +25,11 @@ export default function UserMenu() {
     setAnchorEl(null);
     dispatch(logout());
     navigate('/login', { replace: true });
+  };
+
+  const handleSettings = () => {
+    setAnchorEl(null);
+    navigate('/settings');
   };
 
   return (
@@ -52,6 +58,12 @@ export default function UserMenu() {
             <LogoutOutlinedIcon fontSize="small" />
           </ListItemIcon>
           Log out
+        </MenuItem>
+        <MenuItem onClick={handleSettings}>
+          <ListItemIcon>
+            <SettingsOutlinedIcon fontSize="small" />
+          </ListItemIcon>
+          Settings
         </MenuItem>
       </Menu>
     </Box>

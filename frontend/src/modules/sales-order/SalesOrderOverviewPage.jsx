@@ -48,7 +48,11 @@ export default function SalesOrderOverviewPage({ tab, onTabChange, onCreate }) {
       };
 
   const handleSelectOrder = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/sales-order/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/sales-order/edit/${row.code}`);
+    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleConvertToInvoice = () => dispatch(showToast(`Convert "${orderDetails.code}" to Sales Invoice is coming soon`, 'info'));
   const handleCreate = () => {

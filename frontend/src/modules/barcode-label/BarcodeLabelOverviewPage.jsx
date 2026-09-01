@@ -47,7 +47,11 @@ export default function BarcodeLabelOverviewPage({ tab, onTabChange, onCreate })
       };
 
   const handleSelectBatch = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/barcode-label/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/barcode-label/edit/${row.code}`);
+    return dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleCreate = () => {
     if (onCreate) onCreate(); else navigate('/barcode-label/create');

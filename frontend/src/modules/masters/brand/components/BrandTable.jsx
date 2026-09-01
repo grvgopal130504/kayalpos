@@ -1,6 +1,7 @@
 import {
   Box, Table, TableHead, TableBody, TableRow, TableCell, Chip, IconButton, Stack, Typography,
 } from '@mui/material';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 
@@ -23,7 +24,7 @@ const COLUMNS = [
  * action is wired to a real form yet, so both surface a toast via the
  * handlers passed in.
  */
-export default function BrandTable({ rows, onEditRow, onDeleteRow }) {
+export default function BrandTable({ rows, onViewRow, onEditRow, onDeleteRow }) {
   return (
     <Box sx={{ overflowX: 'auto' }}>
       <Table size="small" sx={{ minWidth: 1100 }}>
@@ -58,6 +59,9 @@ export default function BrandTable({ rows, onEditRow, onDeleteRow }) {
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.createdOn}</TableCell>
               <TableCell>
                 <Stack direction="row" spacing={0.5}>
+                  <IconButton size="small" onClick={() => onViewRow?.(row)} aria-label={`View ${row.name}`}>
+                    <VisibilityOutlinedIcon fontSize="small" />
+                  </IconButton>
                   <IconButton size="small" color="primary" onClick={() => onEditRow?.(row)} aria-label={`Edit ${row.name}`}>
                     <EditOutlinedIcon fontSize="small" />
                   </IconButton>

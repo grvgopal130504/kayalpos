@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -12,6 +12,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AddIcon from '@mui/icons-material/Add';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
@@ -22,19 +23,71 @@ import FormCheckbox from '../../components/form/FormCheckbox';
 
 import PromotionFormSection from './components/PromotionFormSection';
 import PromotionPreviewPanel from './components/PromotionPreviewPanel';
+import { getPromotionDetails } from './promotionMockData';
 import {
   createPromotionSchema, createPromotionDefaultValues,
   PROMOTION_TYPE_OPTIONS, APPLIES_TO_OPTIONS, DISCOUNT_TYPE_OPTIONS, DISCOUNT_UNIT_OPTIONS, MAXIMUM_USAGE_OPTIONS,
 } from './createPromotionSchema';
 
+// The PROMOTIONS list row only carries `appliesTo` as a display label
+// ('Item'/'Category'/'Bill'), not the form's radio value — map it back so
+// edit mode can prefill the "Applies To" radio group correctly.
+const APPLIES_TO_LABEL_TO_VALUE = { Item: 'specific', Category: 'category', Bill: 'all' };
+
+// The list row's `type` matches PROMOTION_TYPE_OPTIONS directly, but the
+// form also has a separate Discount Type field the list doesn't carry —
+// derive a plausible one from the promotion type since there's no backend
+// record with the real value.
+const PROMOTION_TYPE_TO_DISCOUNT_TYPE = {
+  'Percentage Off': 'Percentage',
+  'Amount Off': 'Flat Amount',
+  'Buy X Get Y': 'Free Item',
+  'Bundle Offer': 'Special Price',
+};
+
+// Splits a display discount string ("10%", "₹100.00", "Free", "—") into the
+// form's separate value/unit fields.
+function parseDiscount(discount) {
+  if (typeof discount === 'string' && discount.endsWith('%')) {
+    return { discountValue: discount.slice(0, -1), discountUnit: '%' };
+  }
+  if (typeof discount === 'string' && discount.startsWith('₹')) {
+    return { discountValue: discount.slice(1), discountUnit: '₹' };
+  }
+  return { discountValue: '', discountUnit: '%' };
+}
+
+/**
+ * "Create Promotion" screen, also doubling as the Edit Promotion page when
+ * reached via `/promotion/edit/:code` — the Promotion module has no backend
+ * yet, so "editing" prefills from getPromotionDetails() the same best-effort
+ * way the list/status pages' own detail panel does.
+ */
 export default function CreatePromotionPage({ embedded = false, onCreated, onCancel }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { code } = useParams();
+  const isEditMode = Boolean(code);
+  const existingPromotion = isEditMode ? getPromotionDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
 
   const methods = useForm({
     resolver: zodResolver(createPromotionSchema),
-    defaultValues: createPromotionDefaultValues,
+    defaultValues: useMemo(() => {
+      if (!existingPromotion) return createPromotionDefaultValues;
+      const { discountValue, discountUnit } = parseDiscount(existingPromotion.discount);
+      return {
+        ...createPromotionDefaultValues,
+        promotionName: existingPromotion.name,
+        promotionType: existingPromotion.type,
+        appliesTo: APPLIES_TO_LABEL_TO_VALUE[existingPromotion.appliesTo] || 'all',
+        discountType: PROMOTION_TYPE_TO_DISCOUNT_TYPE[existingPromotion.type] || '',
+        discountValue,
+        discountUnit,
+        startDate: existingPromotion.startDate,
+        endDate: existingPromotion.endDate,
+      };
+    }, [existingPromotion]),
     mode: 'onTouched',
   });
   const { watch, setValue, handleSubmit } = methods;
@@ -42,9 +95,17 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
   const usageLimitEnabled = watch('usageLimitEnabled');
   const appliesTo = watch('appliesTo');
 
+  const handleBack = () => {
+    if (isEditMode) navigate(`/promotion/view/${code}`);
+    else if (embedded && onCancel) onCancel();
+    else navigate('/promotion');
+  };
+
   const onSubmit = () => {
-    dispatch(showToast('Promotion created as a draft', 'success'));
-    if (embedded && onCreated) {
+    dispatch(showToast(isEditMode ? `Promotion ${code} updated successfully` : 'Promotion created as a draft', 'success'));
+    if (isEditMode) {
+      navigate(`/promotion/view/${code}`);
+    } else if (embedded && onCreated) {
       onCreated();
     } else {
       navigate('/promotion');
@@ -52,18 +113,23 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
   };
 
   const handleImport = () => dispatch(showToast('Import Promotion is coming soon', 'info'));
-  const handleCancel = () => {
-    if (embedded && onCancel) {
-      onCancel();
-    } else {
-      navigate('/promotion');
-    }
-  };
+  const handleCancel = handleBack;
   const handleSelectItems = () => dispatch(showToast('Item/category picker is coming soon', 'info'));
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
+
+  if (isEditMode && !existingPromotion) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Promotion not found</Typography>
+        <Button variant="outlined" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={() => navigate('/promotion')} sx={{ width: 'fit-content' }}>
+          Back to Promotion List
+        </Button>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
@@ -74,16 +140,18 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
             <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
               <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
               <MuiLink component={RouterLink} to="/promotion" underline="hover" color="text.secondary">Promotion</MuiLink>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>Create Promotion</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? `Edit ${code}` : 'Create Promotion'}</Typography>
             </Breadcrumbs>
           </Box>
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" color="inherit" startIcon={<FileUploadOutlinedIcon fontSize="small" />} onClick={handleImport}>
-              Import Promotion
+            <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={handleBack}>
+              Back
             </Button>
-            <Button variant="contained" startIcon={<AddIcon />}>
-              Create Promotion
-            </Button>
+            {!isEditMode && (
+              <Button variant="outlined" color="inherit" startIcon={<FileUploadOutlinedIcon fontSize="small" />} onClick={handleImport}>
+                Import Promotion
+              </Button>
+            )}
             <Button
               variant="outlined"
               color="inherit"
@@ -107,7 +175,7 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
             <Grid size={{ xs: 12, lg: 7 }}>
               <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2.5, sm: 3 } }}>
                 <Stack spacing={3.5}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Create Promotion</Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{isEditMode ? `Edit Promotion (${code})` : 'Create Promotion'}</Typography>
 
                   <PromotionFormSection number={1} title="Promotion Information">
                     <Grid container spacing={2}>
@@ -223,7 +291,7 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
 
                   <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end', pt: 1 }}>
                     <Button variant="outlined" color="inherit" onClick={handleCancel}>Cancel</Button>
-                    <Button type="submit" variant="contained">Save Promotion</Button>
+                    <Button type="submit" variant="contained">{isEditMode ? 'Update Promotion' : 'Save Promotion'}</Button>
                   </Stack>
                 </Stack>
               </Paper>

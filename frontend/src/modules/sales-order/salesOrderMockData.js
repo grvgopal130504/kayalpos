@@ -62,6 +62,8 @@ const filler = Array.from({ length: 35 }, (_, i) => {
 export const ORDERS = [...HAND_AUTHORED, ...filler]
   .sort((a, b) => Number(b.code.slice(3)) - Number(a.code.slice(3)));
 
+const ORDER_BY_CODE = Object.fromEntries(ORDERS.map((o) => [o.code, o]));
+
 // Full detail record for the selected order, matching the Sales Quotation
 // module's QUOTATION_DETAILS shape/pattern.
 export const ORDER_DETAILS = {
@@ -179,6 +181,29 @@ export const STATUS_DETAILS = {
     terms: DEFAULT_TERMS,
   },
 };
+
+/**
+ * Full detail shape for an order code, for the View/Edit pages — same
+ * fallback logic SalesOrderOverviewPage/SalesOrderStatusPage already use
+ * inline: only ORDER_DETAILS.code (SO-00045) has hand-authored items/totals,
+ * so every other row reuses that shape with its own ORDERS fields swapped
+ * in, since there's no backend yet to hold real per-order detail records.
+ */
+export function getOrderDetails(code) {
+  const row = ORDER_BY_CODE[code];
+  if (!row) return null;
+  if (code === ORDER_DETAILS.code) return ORDER_DETAILS;
+  return {
+    ...ORDER_DETAILS,
+    code: row.code,
+    date: row.date,
+    status: row.status,
+    totalAmount: row.amount,
+    deliveryDate: row.deliveryDate,
+    customer: { ...ORDER_DETAILS.customer, name: row.customer },
+    ...(row.status === 'delivered' ? { deliveredOn: row.deliveryDate } : {}),
+  };
+}
 
 // 4-tile summary strip per status page.
 export const STATUS_STATS = {

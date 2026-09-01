@@ -89,6 +89,8 @@ const filler = Array.from({ length: 76 }, (_, i) => {
 export const QUOTATIONS = [...HAND_AUTHORED, ...DRAFT_EXTRA, ...filler]
   .sort((a, b) => Number(b.code.slice(4)) - Number(a.code.slice(4)));
 
+const QUOTATION_BY_CODE = Object.fromEntries(QUOTATIONS.map((q) => [q.code, q]));
+
 // Full detail record for the selected quotation, matching the "All
 // Quotations" reference screenshot exactly. SalesQuotationOverviewPage
 // falls back to reusing this shape (swapping in the clicked row's fields)
@@ -217,6 +219,30 @@ export const STATUS_DETAILS = {
     terms: DEFAULT_TERMS,
   },
 };
+
+/**
+ * Full detail shape for a quotation code, for the View/Edit pages — same
+ * fallback logic SalesQuotationOverviewPage/SalesQuotationStatusPage already
+ * use inline: only QUOTATION_DETAILS.code (QUO-00086) has hand-authored
+ * items/totals, so every other row reuses that shape with its own
+ * QUOTATIONS fields swapped in, since there's no backend yet to hold real
+ * per-quotation detail records.
+ */
+export function getQuotationDetails(code) {
+  const row = QUOTATION_BY_CODE[code];
+  if (!row) return null;
+  if (code === QUOTATION_DETAILS.code) return QUOTATION_DETAILS;
+  return {
+    ...QUOTATION_DETAILS,
+    code: row.code,
+    date: row.date,
+    status: row.status,
+    totalAmount: row.amount,
+    validTill: row.validTill,
+    customer: { ...QUOTATION_DETAILS.customer, name: row.customer },
+    ...(row.convertedOn ? { convertedOn: row.convertedOn, convertedTo: row.convertedTo } : {}),
+  };
+}
 
 // 4-tile summary strip per status page, matching the Draft status page
 // reference for `draft`. Converted/Expired use plausible analogous figures

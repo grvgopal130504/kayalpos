@@ -7,11 +7,18 @@ import { Stack, Typography } from '@mui/material';
  */
 export default function LabeledRow({ label, value, emphasize = false, valueColor }) {
   return (
-    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', py: 0.65 }}>
-      <Typography variant="body2" sx={{ color: emphasize ? 'text.primary' : 'text.secondary', fontWeight: emphasize ? 700 : 400 }}>
+    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', py: 0.65, gap: 1, minHeight: '2.6em' }}>
+      <Typography
+        variant="body2"
+        sx={{ color: emphasize ? 'text.primary' : 'text.secondary', fontWeight: emphasize ? 700 : 400 }}
+      >
         {label}
       </Typography>
-      <Typography variant="body2" sx={{ fontWeight: emphasize ? 800 : 600, color: valueColor || 'text.primary' }}>
+      <Typography
+        variant="body2"
+        noWrap
+        sx={{ fontWeight: emphasize ? 800 : 600, color: valueColor || 'text.primary', flexShrink: 0, pt: '1px' }}
+      >
         {value}
       </Typography>
     </Stack>

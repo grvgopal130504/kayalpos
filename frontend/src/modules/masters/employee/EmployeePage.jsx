@@ -25,6 +25,8 @@ import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
 
 import EmployeeTable from './components/EmployeeTable';
+import EmployeeFormDialog from './components/EmployeeFormDialog';
+import EmployeeViewDialog from './components/EmployeeViewDialog';
 import { CASHIER } from '../mastersMockData';
 import {
   EMPLOYEES, EMPLOYEE_TYPE_OPTIONS, LOCATION_OPTIONS,
@@ -50,13 +52,15 @@ export default function EmployeePage() {
   const [status, setStatus] = useState('All');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
+  const [viewRow, setViewRow] = useState(null);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
 
-  const handleNewEmployee = () => dispatch(showToast('New Employee form is coming soon', 'info'));
+  const handleNewEmployee = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Employees is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export Employees is coming soon', 'info'));
   const handleMoreAction = (label) => {
@@ -71,9 +75,10 @@ export default function EmployeePage() {
     setStatus('All');
     setAppliedSearch('');
   };
-  const handleOpenEmployee = (row) => dispatch(showToast(`${row.name} details are coming soon`, 'info'));
-  const handleEditRow = (row) => dispatch(showToast(`Edit ${row.name} is coming soon`, 'info'));
+  const handleOpenEmployee = (row) => setViewRow(row);
+  const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
   const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
 
   const filteredRows = useMemo(() => EMPLOYEES.filter((row) => {
     if (appliedSearch) {
@@ -242,6 +247,18 @@ export default function EmployeePage() {
           <StatCard icon={StorefrontIcon} iconColor="#F26B21" iconShape="circle" label="Sales Employees" value={formatNumber(STATS.salesEmployees)} />
         </Grid>
       </Grid>
+
+      <EmployeeFormDialog open={formDialog.open} mode={formDialog.mode} initialValues={formDialog.row} onClose={closeFormDialog} />
+      <EmployeeViewDialog
+        open={Boolean(viewRow)}
+        row={viewRow}
+        onClose={() => setViewRow(null)}
+        onEdit={() => {
+          const row = viewRow;
+          setViewRow(null);
+          setFormDialog({ open: true, mode: 'edit', row });
+        }}
+      />
     </Stack>
   );
 }

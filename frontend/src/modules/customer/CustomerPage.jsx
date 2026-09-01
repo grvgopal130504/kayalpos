@@ -18,9 +18,8 @@ import CustomerTransactionsCard from './components/CustomerTransactionsCard';
 import CustomerLoyaltySummary from './components/CustomerLoyaltySummary';
 import {
   SUMMARY, CUSTOMERS, TOTAL_CUSTOMER_COUNT, CUSTOMER_DETAILS, RECENT_TRANSACTIONS, LOYALTY_SUMMARY,
+  getCustomerDetails,
 } from './customerMockData';
-
-const CUSTOMER_BY_CODE = Object.fromEntries(CUSTOMERS.map((c) => [c.code, c]));
 
 /**
  * Customer List / dashboard page — summary tiles, the customer table with a
@@ -37,28 +36,18 @@ export default function CustomerPage() {
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(CUSTOMER_DETAILS.code);
 
-  const selectedRow = CUSTOMER_BY_CODE[selectedCode];
-  const customerDetails = selectedCode === CUSTOMER_DETAILS.code
-    ? CUSTOMER_DETAILS
-    : {
-        ...CUSTOMER_DETAILS,
-        code: selectedRow.code,
-        name: selectedRow.name,
-        initials: selectedRow.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase(),
-        status: selectedRow.status,
-        mobile: selectedRow.mobile,
-        email: selectedRow.email,
-        loyaltyPoints: selectedRow.loyaltyPoints,
-        totalPurchase: selectedRow.totalPurchase,
-        outstandingAmount: selectedRow.outstanding,
-      };
+  const customerDetails = getCustomerDetails(selectedCode);
 
   const handleSelectCustomer = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/customer/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/customer/edit/${row.code}`);
+    dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
+  };
   const handleImport = () => dispatch(showToast('Import Customers is coming soon', 'info'));
   const handleAddCustomer = () => navigate('/customer/add');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => dispatch(showToast('Edit Customer is coming soon', 'info'));
+  const handleEdit = () => navigate(`/customer/edit/${selectedCode}`);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
@@ -71,8 +60,7 @@ export default function CustomerPage() {
           <Typography variant="h6" sx={{ fontWeight: 800 }}>Customer</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
-            <MuiLink component={RouterLink} to="/customer" underline="hover" color="text.secondary">Customer</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Customer List</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Customer</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -114,11 +102,14 @@ export default function CustomerPage() {
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <Stack spacing={2}>
-            <CustomerDetailsCard customer={customerDetails} onEdit={handleEdit} />
-            <CustomerTransactionsCard transactions={RECENT_TRANSACTIONS} />
-            <CustomerLoyaltySummary summary={LOYALTY_SUMMARY} />
-          </Stack>
+          <CustomerDetailsCard customer={customerDetails} onEdit={handleEdit} />
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 7 }}>
+          <CustomerLoyaltySummary summary={LOYALTY_SUMMARY} />
+        </Grid>
+        <Grid size={{ xs: 12, lg: 5 }}>
+          <CustomerTransactionsCard transactions={RECENT_TRANSACTIONS} />
         </Grid>
       </Grid>
     </Stack>

@@ -311,6 +311,37 @@ export const PROMOTION_DETAILS = {
   usageSummary: STATUS_DETAILS.active.usageSummary,
 };
 
+const PROMOTION_BY_CODE = Object.fromEntries(PROMOTIONS.map((p) => [p.code, p]));
+
+/**
+ * Full detail shape for a promotion code, for the View/Edit pages — reuses
+ * the same fallback logic PromotionPage/PromotionStatusPage already use
+ * inline: only one hand-authored detail record exists per status (the
+ * Promotion backend doesn't exist yet), so every other row reuses that
+ * status's STATUS_DETAILS shape with its own name/code/status swapped in.
+ * Also carries over the raw PROMOTIONS list-row fields (type, appliesTo,
+ * discount, startDate, endDate, usage) alongside the detail template, since
+ * CreatePromotionPage's edit mode needs those flat values to prefill the
+ * create form, while PromotionDetailsCard only reads the template fields.
+ */
+export function getPromotionDetails(code) {
+  const row = PROMOTION_BY_CODE[code];
+  if (!row) return null;
+  const template = STATUS_DETAILS[row.status] || PROMOTION_DETAILS;
+  const base = row.code === template.code
+    ? template
+    : { ...template, code: row.code, name: row.name, status: row.status };
+  return {
+    ...base,
+    type: row.type,
+    appliesTo: row.appliesTo,
+    discount: row.discount,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    usage: row.usage,
+  };
+}
+
 export const PROMOTION_PERFORMANCE = [
   { id: 'buy-x-get-y', label: 'Buy X Get Y', value: 18450, color: '#22A06B' },
   { id: 'percentage-off', label: 'Percentage Off', value: 16250, color: '#2563EB' },

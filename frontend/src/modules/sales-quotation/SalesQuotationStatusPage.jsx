@@ -90,7 +90,11 @@ export default function SalesQuotationStatusPage({ status, tab, onTabChange, onC
       };
 
   const handleSelectQuotation = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/sales-quotation/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/sales-quotation/edit/${row.code}`);
+    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleConvertToOrder = () => dispatch(showToast(`Convert "${quotationDetails.code}" to Sales Order is coming soon`, 'info'));
   const handleCreate = () => {
@@ -178,7 +182,7 @@ export default function SalesQuotationStatusPage({ status, tab, onTabChange, onC
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <Box sx={{ height: { lg: 560 }, overflow: 'auto' }}>
+          <Box sx={{ height: '100%', overflow: 'auto' }}>
             <QuotationDetailsCard quotation={quotationDetails} title={`Quotation Details (${meta.pageTitle})`} showConvertedFields={status === 'converted'} />
           </Box>
         </Grid>

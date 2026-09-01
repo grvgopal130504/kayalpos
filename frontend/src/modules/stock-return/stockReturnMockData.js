@@ -63,6 +63,32 @@ export const RETURNS = [
 
 export const TOTAL_RETURN_COUNT = 30;
 
+const RETURN_BY_CODE = Object.fromEntries(RETURNS.map((r) => [r.code, r]));
+
+/**
+ * Full detail shape for a return code, for the View/Edit pages — same
+ * fallback logic StockReturnPage already uses inline: only
+ * RETURN_DETAILS.code (RRT-00030) has the full hand-authored fields, so
+ * every other row reuses that shape with its own RETURNS fields swapped
+ * in, since there's no backend yet to hold real per-return detail records.
+ */
+export function getReturnDetails(code) {
+  const row = RETURN_BY_CODE[code];
+  if (!row) return null;
+  if (code === RETURN_DETAILS.code) return RETURN_DETAILS;
+  return {
+    ...RETURN_DETAILS,
+    code: row.code,
+    date: row.date,
+    supplier: row.supplier,
+    returnType: row.returnType,
+    referenceNo: row.referenceNo,
+    items: row.items,
+    totalValue: row.totalValue,
+    status: row.status,
+  };
+}
+
 export const RETURN_DETAILS = {
   code: 'RRT-00030',
   date: '25 May 2026',

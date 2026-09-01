@@ -137,6 +137,35 @@ export const STATUS_DETAILS = {
   },
 };
 
+const TRANSFER_BY_CODE = Object.fromEntries(TRANSFERS.map((t) => [t.code, t]));
+
+/**
+ * Full detail shape for a transfer code, for the View/Edit pages — same
+ * fallback logic StockTransferOverviewPage/StockTransferStatusPage already
+ * use inline: only TRANSFER_DETAILS.code (TRF-00031) has hand-authored
+ * items, so every other row reuses that shape with its own TRANSFERS
+ * fields swapped in, since there's no backend yet to hold real
+ * per-transfer detail records.
+ */
+export function getTransferDetails(code) {
+  const row = TRANSFER_BY_CODE[code];
+  if (!row) return null;
+  if (code === TRANSFER_DETAILS.code) return TRANSFER_DETAILS;
+  return {
+    ...TRANSFER_DETAILS,
+    code: row.code,
+    date: row.date,
+    status: row.status,
+    fromOutlet: row.fromOutlet,
+    toOutlet: row.toOutlet,
+    indentRef: row.indentRef,
+    requiredBy: row.requiredBy,
+    estimatedValue: row.estimatedValue,
+    createdBy: row.createdBy,
+    ...(row.status === 'received' ? { receivedOn: row.date, receivedBy: 'Admin' } : { receivedOn: undefined, receivedBy: undefined }),
+  };
+}
+
 // 4-tile summary strip per status page.
 export const STATUS_STATS = {
   draft: {

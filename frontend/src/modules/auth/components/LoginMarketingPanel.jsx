@@ -25,9 +25,10 @@ const STATS = [
 
 /**
  * Full-bleed left half of the login screen (desktop only — LoginPage hides it
- * below `md`). Plain light background with the copy up top, the tenant's
- * product photo centered in the middle as its own image (not a cropped
- * background), and the stats bar + copyright anchored at the bottom.
+ * below `md`). The product photo fills the entire panel edge-to-edge as a
+ * background layer; the headline, feature icons, stats bar and copyright sit
+ * on top of it (each on its own translucent/blurred card) so the text stays
+ * readable no matter what part of the image is behind it.
  */
 export default function LoginMarketingPanel() {
   return (
@@ -40,17 +41,35 @@ export default function LoginMarketingPanel() {
         bgcolor: 'background.paper',
       }}
     >
+      {/* Background photo — full panel, cropped (never letterboxed) so it
+          always fills the width and height with no gaps. */}
+      <Box
+        component="img"
+        src={loginImage}
+        alt="Kayal Agro Foods products"
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          objectPosition: 'center',
+          zIndex: 0,
+        }}
+      />
+
+      {/* Content — layered above the photo. */}
       <Stack
         sx={{
           position: 'relative',
+          zIndex: 1,
           height: '100%',
           width: '100%',
           justifyContent: 'space-between',
-          py: { md: 3, lg: 4.5 },
+          py: { md: 2, lg: 3 },
         }}
       >
-        {/* Copy — kept to the same comfortable column width as the form on
-            the other side of the screen */}
+        {/* Copy */}
         <Box
           sx={{
             width: '100%',
@@ -59,49 +78,71 @@ export default function LoginMarketingPanel() {
             px: { md: 4, lg: 6 },
           }}
         >
-          <Typography
+          <Box
             sx={{
-              fontWeight: 800,
-              color: 'text.primary',
-              lineHeight: 1.2,
-              fontSize: { md: '1.6rem', lg: '2rem' },
+              display: 'inline-block',
+              // bgcolor: 'rgba(255, 255, 255, 0)',
+              // backdropFilter: 'blur(6px)',
+              borderRadius: 1,
+              px: 1.75,
+              py: 1.25,
+              borderColor: 'divider',
+              // boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
             }}
           >
-            Empowering Your Business
-          </Typography>
-          <Typography
-            sx={{
-              fontWeight: 800,
-              color: 'primary.main',
-              lineHeight: 1.2,
-              fontSize: { md: '1.6rem', lg: '2rem' },
-            }}
-          >
-            Every Sale. Every Day.
-          </Typography>
-          <Typography
-            sx={{
-              mt: 1.25,
-              color: 'text.secondary',
-              maxWidth: 470,
-              fontSize: { md: '0.875rem', lg: '0.95rem' },
-            }}
-          >
-            Smart POS solutions to simplify billing, inventory and grow your business.
-          </Typography>
+            <Typography
+              sx={{
+                fontWeight: 800,
+                color: 'text.primary',
+                lineHeight: 1.2,
+                fontSize: { md: '1.3rem', lg: '1.5rem' },
+              }}
+            >
+              Empowering Your Business
+            </Typography>
+            <Typography
+              sx={{
+                fontWeight: 800,
+                color: 'primary.main',
+                lineHeight: 1.2,
+                fontSize: { md: '1.3rem', lg: '1.5rem' },
+              }}
+            >
+              Every Sale. Every Day.
+            </Typography>
+            <Typography
+              sx={{
+                mt: 0.75,
+                color: 'text.secondary',
+                maxWidth: 470,
+                fontSize: { md: '0.8rem', lg: '0.875rem' },
+              }}
+            >
+              Smart POS solutions to simplify billing,
+            </Typography>
+            <Typography
+              sx={{
+                color: 'text.secondary',
+                maxWidth: 470,
+                fontSize: { md: '0.8rem', lg: '0.875rem' },
+              }}
+            >
+              inventory and grow your business.
+            </Typography>
+          </Box>
 
           <Stack
             direction="row"
-            spacing={{ md: 2.5, lg: 3 }}
+            spacing={{ md: 2, lg: 2.5 }}
             useFlexGap
-            sx={{ mt: { md: 2, lg: 2.5 }, flexWrap: 'wrap' }}
+            sx={{ mt: { md: 1.25, lg: 1.5 }, flexWrap: 'wrap' }}
           >
             {FEATURES.map(({ icon: Icon, label }) => (
-              <Stack key={label} spacing={0.75} sx={{ width: 84, alignItems: 'center' }}>
+              <Stack key={label} spacing={0.5} sx={{ width: 50, alignItems: 'center', mt: "-5px" }}>
                 <Box
                   sx={{
-                    width: 46,
-                    height: 46,
+                    width: 38,
+                    height: 38,
                     borderRadius: '50%',
                     border: '2px solid',
                     borderColor: 'primary.main',
@@ -109,7 +150,8 @@ export default function LoginMarketingPanel() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: 'primary.main',
-                    bgcolor: 'background.paper',
+                    bgcolor: 'rgba(255,255,255,0.9)',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
                   }}
                 >
                   <Icon fontSize="small" />
@@ -117,7 +159,14 @@ export default function LoginMarketingPanel() {
                 <Typography
                   variant="caption"
                   align="center"
-                  sx={{ color: 'text.secondary', fontWeight: 500, lineHeight: 1.25, fontSize: 11.5 }}
+                  sx={{
+                    color: '#313030',
+                    fontWeight: 600,
+                    lineHeight: 1.2,
+                    fontSize: 11,
+                    borderRadius: 0.75,
+                    px: 0.5,
+                  }}
                 >
                   {label}
                 </Typography>
@@ -126,37 +175,9 @@ export default function LoginMarketingPanel() {
           </Stack>
         </Box>
 
-        {/* Product photo — breaks out to the full panel width (wider than the
-            text column above/below it) so it renders as large as possible.
-            `contain`, not `cover`, so the whole photo — including the KAYAL
-            logo near the top — always stays fully visible with no cropping. */}
-        <Box
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            px: { md: 2, lg: 3 },
-            py: { md: 1, lg: 1.5 },
-          }}
-        >
-          <Box
-            component="img"
-            src={loginImage}
-            alt="Kayal Agro Foods products"
-            sx={{
-              maxWidth: '100%',
-              maxHeight: '100%',
-              width: 'auto',
-              height: 'auto',
-              objectFit: 'contain',
-              display: 'block',
-              mx: 'auto',
-            }}
-          />
-        </Box>
+        {/* Spacer so the copy stays pinned to the top and the stats bar to
+            the bottom, with the photo showing through the middle. */}
+        <Box sx={{ flex: 1, minHeight: 0 }} />
 
         {/* Stats bar + copyright */}
         <Box
@@ -173,27 +194,44 @@ export default function LoginMarketingPanel() {
               display: 'flex',
               justifyContent: 'space-between',
               px: { md: 2, lg: 3 },
-              py: { md: 1.25, lg: 1.75 },
+              py: { md: 1, lg: 1.25 },
               borderRadius: 3,
-              bgcolor: 'background.paper',
+              bgcolor: 'rgba(255, 255, 255, 0)',
+              backdropFilter: 'blur(2px)',
               border: '1px solid',
               borderColor: 'divider',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
             }}
           >
             {STATS.map(({ icon: Icon, value, label }) => (
-              <Stack key={label} spacing={0.25} sx={{ alignItems: 'center' }}>
-                <Icon sx={{ color: 'primary.main', fontSize: 18 }} />
-                <Typography sx={{ fontWeight: 700, fontSize: 14.5, lineHeight: 1.3 }}>{value}</Typography>
-                <Typography
-                  variant="caption"
-                  sx={{ color: 'text.secondary', textAlign: 'center', fontSize: 10.5, lineHeight: 1.2 }}
-                >
-                  {label}
-                </Typography>
+              <Stack key={label} direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                <Icon sx={{ color: 'red', fontSize: 23 }} />
+                <Stack spacing={0}>
+                  <Typography sx={{ fontWeight: 700, fontSize: 14, lineHeight: 1.3, color: 'black' }}>{value}</Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: 'black', textAlign: 'left', fontSize: 10, lineHeight: 1.2 }}
+                  >
+                    {label}
+                  </Typography>
+                </Stack>
               </Stack>
             ))}
           </Paper>
+          <Typography
+            variant="caption"
+            align="center"
+            sx={{
+              display: 'block',
+              color: '#302e2e',
+              mt: 1,
+              fontSize: 11,
+              fontWeight: 500,
+              textShadow: '0 1px 4px rgba(255,255,255,0.9), 0 1px 4px rgba(255,255,255,0.9)',
+            }}
+          >
+            © 2026 Techconz Nexora Pvt Ltd. All Rights Reserved.
+          </Typography>
         </Box>
       </Stack>
     </Box>

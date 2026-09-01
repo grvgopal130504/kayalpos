@@ -27,6 +27,8 @@ import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
 
 import BatchSerialTable from './components/BatchSerialTable';
+import BatchSerialFormDialog from './components/BatchSerialFormDialog';
+import BatchSerialViewDialog from './components/BatchSerialViewDialog';
 import { CASHIER } from '../mastersMockData';
 import {
   BATCH_SERIALS, BATCH_SERIAL_TYPE_OPTIONS, WAREHOUSE_OPTIONS, DEFAULT_DATE_RANGE,
@@ -55,13 +57,15 @@ export default function BatchSerialPage() {
   const [dateTo, setDateTo] = useState(DEFAULT_DATE_RANGE.to);
   const [appliedSearch, setAppliedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
+  const [viewRow, setViewRow] = useState(null);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
 
-  const handleNewBatchSerial = () => dispatch(showToast('New Batch/Serial form is coming soon', 'info'));
+  const handleNewBatchSerial = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Batch/Serial records is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export Batch/Serial records is coming soon', 'info'));
   const handleMoreAction = (label) => {
@@ -78,9 +82,10 @@ export default function BatchSerialPage() {
     setDateTo(DEFAULT_DATE_RANGE.to);
     setAppliedSearch('');
   };
-  const handleOpenRow = (row) => dispatch(showToast(`${row.number} details are coming soon`, 'info'));
-  const handleEditRow = (row) => dispatch(showToast(`Edit ${row.number} is coming soon`, 'info'));
+  const handleOpenRow = (row) => setViewRow(row);
+  const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
   const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.number} is coming soon`, 'info'));
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
 
   const filteredRows = useMemo(() => BATCH_SERIALS.filter((row) => {
     if (appliedSearch) {
@@ -275,6 +280,18 @@ export default function BatchSerialPage() {
           <StatCard icon={SellOutlinedIcon} iconColor="#F26B21" iconShape="circle" label="Total Available Qty" value={STATS.totalAvailableQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
         </Grid>
       </Grid>
+
+      <BatchSerialFormDialog open={formDialog.open} mode={formDialog.mode} initialValues={formDialog.row} onClose={closeFormDialog} />
+      <BatchSerialViewDialog
+        open={Boolean(viewRow)}
+        row={viewRow}
+        onClose={() => setViewRow(null)}
+        onEdit={() => {
+          const row = viewRow;
+          setViewRow(null);
+          setFormDialog({ open: true, mode: 'edit', row });
+        }}
+      />
     </Stack>
   );
 }

@@ -51,7 +51,7 @@ export default function QuotationDetailsCard({ quotation, title = 'Quotation Det
   ];
 
   return (
-    <Paper variant="outlined" sx={{ borderRadius: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Paper variant="outlined" sx={{ borderRadius: 3, minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ p: { xs: 2, sm: 2.5 }, pb: 2 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>{title}</Typography>
 
