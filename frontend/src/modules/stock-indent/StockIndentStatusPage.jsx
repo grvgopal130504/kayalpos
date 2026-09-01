@@ -93,7 +93,11 @@ export default function StockIndentStatusPage({ status, tab, onTabChange, onCrea
       };
 
   const handleSelectIndent = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/stock-indent/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/stock-indent/edit/${row.code}`);
+    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleCreate = () => {
     if (onCreate) onCreate(); else navigate('/stock-indent/create');

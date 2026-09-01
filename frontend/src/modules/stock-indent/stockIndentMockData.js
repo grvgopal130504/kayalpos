@@ -147,6 +147,34 @@ export const STATUS_DETAILS = {
   },
 };
 
+const INDENT_BY_CODE = Object.fromEntries(INDENTS.map((ind) => [ind.code, ind]));
+
+/**
+ * Full detail shape for an indent code, for the View/Edit pages — same
+ * fallback logic StockIndentOverviewPage/StockIndentStatusPage already use
+ * inline: only INDENT_DETAILS.code (IND-00031) has hand-authored items,
+ * so every other row reuses that shape with its own INDENTS fields swapped
+ * in, since there's no backend yet to hold real per-indent detail records.
+ */
+export function getIndentDetails(code) {
+  const row = INDENT_BY_CODE[code];
+  if (!row) return null;
+  if (code === INDENT_DETAILS.code) return INDENT_DETAILS;
+  return {
+    ...INDENT_DETAILS,
+    code: row.code,
+    date: row.date,
+    status: row.status,
+    department: row.department,
+    fromOutlet: row.fromOutlet,
+    toOutlet: row.toOutlet,
+    requiredDate: row.requiredDate,
+    estimatedValue: row.estimatedValue,
+    createdBy: row.createdBy,
+    ...(row.status === 'approved' ? { approvedOn: row.date, approvedBy: 'Admin' } : { approvedOn: undefined, approvedBy: undefined }),
+  };
+}
+
 // 4-tile summary strip per status page.
 export const STATUS_STATS = {
   draft: {

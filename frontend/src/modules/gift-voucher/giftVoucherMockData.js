@@ -109,3 +109,30 @@ export const VOUCHER_DETAILS = {
   redemptionsTillDate: 312,
   valueRedeemed: 78000,
 };
+
+const VOUCHER_BY_CODE = Object.fromEntries(VOUCHERS.map((v) => [v.code, v]));
+
+/**
+ * Full detail shape for a voucher code, for the View/Edit pages — same
+ * fallback logic GiftVoucherPage's own detail panel already uses inline:
+ * only VOUCHER_DETAILS.code (GV-0001) has hand-authored description/
+ * minimum-bill/applicable-to fields, so every other row reuses that shape
+ * with its own VOUCHERS fields swapped in, since there's no backend yet to
+ * hold real per-voucher detail records.
+ */
+export function getGiftVoucherDetails(code) {
+  const row = VOUCHER_BY_CODE[code];
+  if (!row) return null;
+  if (row.code === VOUCHER_DETAILS.code) return VOUCHER_DETAILS;
+  return {
+    ...VOUCHER_DETAILS,
+    code: row.code,
+    name: row.name,
+    type: row.type,
+    value: row.value,
+    status: row.status,
+    validFrom: row.validFrom,
+    validTill: row.validTill,
+    redemptionsTillDate: row.usage,
+  };
+}

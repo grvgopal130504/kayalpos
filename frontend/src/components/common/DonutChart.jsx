@@ -10,11 +10,14 @@ import { PieChart } from '@mui/x-charts/PieChart';
  * `data`: [{ id, label, value, color }]
  * `centerLabel` / `centerValue`: text shown in the donut's empty middle.
  */
-export default function DonutChart({ data, centerLabel, centerValue, formatValue = (v) => v, size = 160 }) {
+export default function DonutChart({
+  data, centerLabel, centerValue, formatValue = (v) => v, size = 160, legendPosition = 'bottom',
+}) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
+  const stacked = legendPosition === 'bottom';
 
   return (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
+    <Stack direction={stacked ? 'column' : { xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
       <Box sx={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
         <PieChart
           series={[
@@ -59,21 +62,52 @@ export default function DonutChart({ data, centerLabel, centerValue, formatValue
         </Box>
       </Box>
 
-      <Stack spacing={0.75} sx={{ width: '100%', minWidth: 0 }}>
-        {data.map((slice) => (
-          <Stack key={slice.id} direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
-              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: slice.color, flexShrink: 0 }} />
-              <Typography variant="caption" noWrap title={slice.label} sx={{ color: 'text.secondary' }}>
-                {slice.label}
+      {stacked ? (
+        // Grid (not a Stack-per-row) so the label column and the value
+        // column each line up straight across every slice, instead of
+        // every row centering itself independently.
+        <Box
+          sx={{
+            display: 'inline-grid',
+            gridTemplateColumns: 'auto auto',
+            columnGap: 1.5,
+            rowGap: 0.75,
+            alignItems: 'center',
+            justifyContent: 'center',
+            mx: 'auto',
+          }}
+        >
+          {data.map((slice) => (
+            <Box key={slice.id} sx={{ display: 'contents' }}>
+              <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: slice.color, flexShrink: 0 }} />
+                <Typography variant="caption" title={slice.label} sx={{ color: 'text.secondary' }}>
+                  {slice.label}
+                </Typography>
+              </Stack>
+              <Typography variant="caption" sx={{ fontWeight: 700, flexShrink: 0, textAlign: 'right' }}>
+                {formatValue(slice.value)} ({total ? Math.round((slice.value / total) * 100) : 0}%)
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      ) : (
+        <Stack spacing={0.75} sx={{ width: '100%', minWidth: 0 }}>
+          {data.map((slice) => (
+            <Stack key={slice.id} direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: slice.color, flexShrink: 0 }} />
+                <Typography variant="caption" noWrap title={slice.label} sx={{ color: 'text.secondary' }}>
+                  {slice.label}
+                </Typography>
+              </Stack>
+              <Typography variant="caption" sx={{ fontWeight: 700, flexShrink: 0 }}>
+                {formatValue(slice.value)} ({total ? Math.round((slice.value / total) * 100) : 0}%)
               </Typography>
             </Stack>
-            <Typography variant="caption" sx={{ fontWeight: 700, flexShrink: 0 }}>
-              {formatValue(slice.value)} ({total ? Math.round((slice.value / total) * 100) : 0}%)
-            </Typography>
-          </Stack>
-        ))}
-      </Stack>
+          ))}
+        </Stack>
+      )}
     </Stack>
   );
 }

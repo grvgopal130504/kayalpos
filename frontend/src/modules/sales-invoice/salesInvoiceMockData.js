@@ -62,6 +62,8 @@ const filler = Array.from({ length: 47 }, (_, i) => {
 export const INVOICES = [...HAND_AUTHORED, ...filler]
   .sort((a, b) => Number(b.code.slice(4)) - Number(a.code.slice(4)));
 
+const INVOICE_BY_CODE = Object.fromEntries(INVOICES.map((inv) => [inv.code, inv]));
+
 // Full detail record for the selected invoice, matching the Sales
 // Quotation/Sales Order modules' *_DETAILS shape/pattern.
 export const INVOICE_DETAILS = {
@@ -207,6 +209,30 @@ export const STATUS_DETAILS = {
     terms: DEFAULT_TERMS,
   },
 };
+
+/**
+ * Full detail shape for an invoice code, for the View/Edit pages — same
+ * fallback logic SalesInvoiceOverviewPage/SalesInvoiceStatusPage already
+ * use inline: only INVOICE_DETAILS.code (INV-00056) has hand-authored
+ * items/totals, so every other row reuses that shape with its own INVOICES
+ * fields swapped in, since there's no backend yet to hold real per-invoice
+ * detail records.
+ */
+export function getInvoiceDetails(code) {
+  const row = INVOICE_BY_CODE[code];
+  if (!row) return null;
+  if (code === INVOICE_DETAILS.code) return INVOICE_DETAILS;
+  return {
+    ...INVOICE_DETAILS,
+    code: row.code,
+    date: row.date,
+    status: row.status,
+    totalAmount: row.amount,
+    dueDate: row.dueDate,
+    customer: { ...INVOICE_DETAILS.customer, name: row.customer },
+    ...(row.status === 'paid' ? { paidOn: row.dueDate } : {}),
+  };
+}
 
 // 4-tile summary strip per status page.
 export const STATUS_STATS = {

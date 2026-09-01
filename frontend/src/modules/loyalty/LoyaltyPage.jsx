@@ -46,7 +46,11 @@ export default function LoyaltyPage() {
       };
 
   const handleSelectProgram = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/loyalty/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/loyalty/edit/${row.code}`);
+    return dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
+  };
   const handleImport = () => dispatch(showToast('Import Programs is coming soon', 'info'));
   const handleCreate = () => navigate('/loyalty/create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -13,6 +13,7 @@ import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
@@ -23,7 +24,7 @@ import FormSelect from '../../components/form/FormSelect';
 import IndentItemsTable from './components/IndentItemsTable';
 import IndentSummaryTotals from './components/IndentSummaryTotals';
 import { DEFAULT_TERMS } from './components/IndentTermsAndNotes';
-import { INDENTS } from './stockIndentMockData';
+import { INDENTS, getIndentDetails } from './stockIndentMockData';
 import {
   createStockIndentSchema, createStockIndentDefaultValues,
   DEPARTMENT_OPTIONS, OUTLET_OPTIONS, TO_OUTLET_OPTIONS, REQUESTOR_OPTIONS,
@@ -33,6 +34,21 @@ import {
 function nextIndentCode() {
   const maxNum = INDENTS.reduce((max, ind) => Math.max(max, Number(ind.code.slice(4))), 0);
   return `IND-${String(maxNum + 1).padStart(5, '0')}`;
+}
+
+// The mock detail record's items don't carry the create form's exact field
+// shape (uom/issueWarehouse are raw labels here, not option values) — best
+// effort prefill, still fully editable.
+function itemToRow(item) {
+  return {
+    itemCode: item.code,
+    itemName: item.name,
+    hsnCode: item.hsn,
+    uom: '',
+    requiredQty: String(item.requiredQty),
+    issueWarehouse: '',
+    remarks: item.remarks || '',
+  };
 }
 
 /**
@@ -54,19 +70,32 @@ function nextIndentCode() {
 export default function CreateStockIndentPage({ onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { code } = useParams();
+  const isEditMode = Boolean(code);
+  const existingIndent = isEditMode ? getIndentDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [attachmentName, setAttachmentName] = useState('');
-  const indentCode = useMemo(() => nextIndentCode(), []);
+  const indentCode = useMemo(() => (isEditMode ? code : nextIndentCode()), [isEditMode, code]);
 
   const methods = useForm({
     resolver: zodResolver(createStockIndentSchema),
-    defaultValues: createStockIndentDefaultValues,
+    defaultValues: existingIndent
+      ? {
+          ...createStockIndentDefaultValues,
+          indentDate: existingIndent.date,
+          requiredDate: existingIndent.requiredDate,
+          purposeRemarks: '',
+          items: existingIndent.items?.length ? existingIndent.items.map(itemToRow) : createStockIndentDefaultValues.items,
+        }
+      : createStockIndentDefaultValues,
     mode: 'onTouched',
   });
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (onBack) onBack(); else navigate('/stock-indent/overview');
+    if (isEditMode) navigate(`/stock-indent/view/${code}`);
+    else if (onBack) onBack();
+    else navigate('/stock-indent/overview');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -84,26 +113,40 @@ export default function CreateStockIndentPage({ onBack }) {
   };
 
   const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(`Indent ${indentCode} saved as draft`, 'success'));
+    dispatch(showToast(isEditMode ? `Indent ${indentCode} updated successfully` : `Indent ${indentCode} saved as draft`, 'success'));
     handleBack();
   });
   const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(`Indent ${indentCode} saved and sent for approval`, 'success'));
+    dispatch(showToast(isEditMode ? `Indent ${indentCode} updated successfully` : `Indent ${indentCode} saved and sent for approval`, 'success'));
     handleBack();
   });
+
+  if (isEditMode && !existingIndent) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Indent not found</Typography>
+        <Button variant="outlined" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={() => navigate('/stock-indent')} sx={{ width: 'fit-content' }}>
+          Back to Stock Indent List
+        </Button>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Stock Indent (New)</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Indent (Edit ${indentCode})` : 'Stock Indent (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/stock-indent" underline="hover" color="text.secondary">Stock Indent</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>New Stock Indent</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? 'Edit Indent' : 'New Stock Indent'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
+          <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={handleBack}>
+            {isEditMode ? 'Back to Indent' : 'Back'}
+          </Button>
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
@@ -120,12 +163,20 @@ export default function CreateStockIndentPage({ onBack }) {
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
           </Menu>
-          <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-            Save as Draft
-          </Button>
-          <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
-            Save &amp; Send
-          </Button>
+          {isEditMode ? (
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              Update Indent
+            </Button>
+          ) : (
+            <>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+                Save as Draft
+              </Button>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+                Save &amp; Send
+              </Button>
+            </>
+          )}
         </Stack>
       </Stack>
 

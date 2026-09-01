@@ -90,7 +90,11 @@ export default function PromotionPage() {
     setSelectedCode(nextTab === 'all' ? PROMOTION_DETAILS.code : STATUS_DETAILS[nextTab].code);
   };
   const handleSelectPromotion = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/promotion/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/promotion/edit/${row.code}`);
+    return dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
+  };
   const handleImport = () => dispatch(showToast('Import Promotion is coming soon', 'info'));
   const handleCreate = () => navigate('/promotion/create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));

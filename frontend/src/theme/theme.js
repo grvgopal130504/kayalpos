@@ -37,7 +37,7 @@ function buildPalette(mode, accentKey) {
   };
 }
 
-export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY) {
+export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY, bodyFont = 'Inter', bodyFontStyle = {}) {
   const isDark = mode === 'dark';
   const scrollbarThumb = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.22)';
   const scrollbarThumbHover = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
@@ -62,7 +62,12 @@ export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY) {
       },
     },
     typography: {
-      fontFamily: ['"Inter"', '"Roboto"', '"Helvetica"', '"Arial"', 'sans-serif'].join(','),
+      fontFamily: [`"${bodyFont}"`, '"Inter"', '"Roboto"', '"Helvetica"', '"Arial"', 'sans-serif'].join(','),
+      allVariants: {
+        ...(bodyFontStyle.bold ? { fontWeight: 700 } : null),
+        ...(bodyFontStyle.italic ? { fontStyle: 'italic' } : null),
+        ...(bodyFontStyle.underline ? { textDecoration: 'underline' } : null),
+      },
       h1: { fontWeight: 700 },
       h2: { fontWeight: 700 },
       h3: { fontWeight: 700 },

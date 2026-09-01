@@ -27,3 +27,23 @@ export function login({ username, password, outletId }) {
 
   return { user, token };
 }
+
+/**
+ * Dev-only password change: verifies the current password against the same
+ * hardcoded DEV_USER used by login(), then mutates it in memory — so the
+ * new password is effective immediately but resets on server restart, same
+ * caveat as the rest of devAuth.js. Replace with a Prisma-backed
+ * bcrypt.compare + hash + update once the User table exists.
+ */
+export function changePassword({ username, currentPassword, newPassword }) {
+  if (username !== DEV_USER.username) {
+    throw new ApiError(401, 'Authentication required');
+  }
+  if (currentPassword !== DEV_USER.password) {
+    throw new ApiError(400, 'Current password is incorrect');
+  }
+
+  DEV_USER.password = newPassword;
+
+  return { success: true };
+}

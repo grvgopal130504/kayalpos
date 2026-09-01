@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -14,6 +14,7 @@ import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
@@ -23,11 +24,21 @@ import FormSelect from '../../components/form/FormSelect';
 
 import CountItemsTable from './components/CountItemsTable';
 import CountSummaryTotals from './components/CountSummaryTotals';
-import { COUNTS } from './stockCountMockData';
+import { COUNTS, getCountDetails } from './stockCountMockData';
 import {
   createStockCountSchema, createStockCountDefaultValues,
   WAREHOUSE_OPTIONS, DEPARTMENT_OPTIONS, COST_CENTER_OPTIONS, COUNT_REASON_OPTIONS,
 } from './createStockCountSchema';
+
+// The mock detail record's countType/countBy are display labels ("Complete
+// Count", "Item Wise Count"), not the create form's radio option values —
+// map them back so the radios prefill correctly in edit mode.
+function countTypeToValue(label) {
+  return (label || '').toLowerCase().startsWith('partial') ? 'partial' : 'complete';
+}
+function countByToValue(label) {
+  return (label || '').toLowerCase().startsWith('location') ? 'location-wise' : 'item-wise';
+}
 
 const DEFAULT_TERMS = [
   'Ensure accurate counting of all items.',
@@ -66,13 +77,32 @@ function nextCountCode() {
 export default function CreateStockCountPage({ onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { code } = useParams();
+  const isEditMode = Boolean(code);
+  const existingCount = isEditMode ? getCountDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [attachmentName, setAttachmentName] = useState('');
-  const countCode = useMemo(() => nextCountCode(), []);
+  const countCode = useMemo(() => (isEditMode ? code : nextCountCode()), [isEditMode, code]);
 
   const methods = useForm({
     resolver: zodResolver(createStockCountSchema),
-    defaultValues: createStockCountDefaultValues,
+    defaultValues: existingCount
+      ? {
+          ...createStockCountDefaultValues,
+          countDate: existingCount.date,
+          warehouse: '',
+          department: '',
+          costCenter: '',
+          countReason: '',
+          countType: countTypeToValue(existingCount.countType),
+          countBy: countByToValue(existingCount.countBy),
+          binRack: existingCount.binRack && existingCount.binRack !== '—' ? existingCount.binRack : '',
+          startCountTime: existingCount.startCountTime || '',
+          endCountTime: existingCount.endCountTime || '',
+          preparedBy: existingCount.preparedBy || '',
+          approvedBy: existingCount.approvedBy && existingCount.approvedBy !== '—' ? existingCount.approvedBy : '',
+        }
+      : createStockCountDefaultValues,
     mode: 'onTouched',
   });
   const { handleSubmit, watch, setValue } = methods;
@@ -80,7 +110,9 @@ export default function CreateStockCountPage({ onBack }) {
   const countBy = watch('countBy');
 
   const handleBack = () => {
-    if (onBack) onBack(); else navigate('/stock-count');
+    if (isEditMode) navigate(`/stock-count/view/${code}`);
+    else if (onBack) onBack();
+    else navigate('/stock-count');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -95,26 +127,40 @@ export default function CreateStockCountPage({ onBack }) {
   };
 
   const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(`Count ${countCode} saved as draft`, 'success'));
+    dispatch(showToast(isEditMode ? `Count ${countCode} updated successfully` : `Count ${countCode} saved as draft`, 'success'));
     handleBack();
   });
   const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(`Count ${countCode} saved and sent`, 'success'));
+    dispatch(showToast(isEditMode ? `Count ${countCode} updated successfully` : `Count ${countCode} saved and sent`, 'success'));
     handleBack();
   });
+
+  if (isEditMode && !existingCount) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Count not found</Typography>
+        <Button variant="outlined" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={() => navigate('/stock-count')} sx={{ width: 'fit-content' }}>
+          Back to Stock Count List
+        </Button>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Stock Count (New)</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Count (Edit ${countCode})` : 'Stock Count (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/stock-count" underline="hover" color="text.secondary">Stock Count</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>New Stock Count</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? 'Edit Count' : 'New Stock Count'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
+          <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={handleBack}>
+            {isEditMode ? 'Back to Count' : 'Back'}
+          </Button>
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
@@ -131,12 +177,20 @@ export default function CreateStockCountPage({ onBack }) {
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
           </Menu>
-          <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-            Save as Draft
-          </Button>
-          <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
-            Save &amp; Send
-          </Button>
+          {isEditMode ? (
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              Update Count
+            </Button>
+          ) : (
+            <>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+                Save as Draft
+              </Button>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+                Save &amp; Send
+              </Button>
+            </>
+          )}
         </Stack>
       </Stack>
 

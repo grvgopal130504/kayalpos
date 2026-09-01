@@ -1,6 +1,7 @@
 import {
   Box, Table, TableHead, TableBody, TableRow, TableCell, Chip, IconButton, Stack, Typography,
 } from '@mui/material';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 
@@ -24,7 +25,7 @@ const COLUMNS = [
  * "Price List" table — plain rows with a green/red Status chip and
  * edit/delete row actions, neither wired to a real form yet.
  */
-export default function PriceListTable({ rows, onEditRow, onDeleteRow }) {
+export default function PriceListTable({ rows, onViewRow, onEditRow, onDeleteRow }) {
   return (
     <Box sx={{ overflowX: 'auto' }}>
       <Table size="small" sx={{ minWidth: 1350 }}>
@@ -62,6 +63,9 @@ export default function PriceListTable({ rows, onEditRow, onDeleteRow }) {
               <TableCell>{formatNumber(row.itemCount)}</TableCell>
               <TableCell>
                 <Stack direction="row" spacing={0.5}>
+                  <IconButton size="small" onClick={() => onViewRow?.(row)} aria-label={`View ${row.name}`}>
+                    <VisibilityOutlinedIcon fontSize="small" />
+                  </IconButton>
                   <IconButton size="small" color="primary" onClick={() => onEditRow?.(row)} aria-label={`Edit ${row.name}`}>
                     <EditOutlinedIcon fontSize="small" />
                   </IconButton>

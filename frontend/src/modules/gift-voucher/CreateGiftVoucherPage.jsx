@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -12,6 +12,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AddIcon from '@mui/icons-material/Add';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
@@ -22,36 +23,92 @@ import FormCheckbox from '../../components/form/FormCheckbox';
 
 import VoucherFormSection from './components/VoucherFormSection';
 import VoucherPreviewPanel from './components/VoucherPreviewPanel';
+import { getGiftVoucherDetails } from './giftVoucherMockData';
 import {
   createGiftVoucherSchema, createGiftVoucherDefaultValues,
   VOUCHER_TYPE_OPTIONS, MAXIMUM_USAGE_OPTIONS, YES_NO_OPTIONS,
 } from './createGiftVoucherSchema';
 
+// The voucher's list/detail `type` label ('Amount Off'/'Percentage Off')
+// doesn't match VOUCHER_TYPE_OPTIONS' values — map it back so edit mode can
+// prefill the Voucher Type select correctly.
+const VOUCHER_TYPE_LABEL_TO_VALUE = {
+  'Amount Off': 'Fixed Amount',
+  'Percentage Off': 'Percentage Discount',
+};
+
+// Splits a display value string ("₹250.00", "10%") into just the numeric
+// amount the form's plain "Voucher Value (₹)" text field expects.
+function parseVoucherValue(value) {
+  if (typeof value !== 'string') return '';
+  return value.replace(/[₹%]/g, '').trim();
+}
+
+/**
+ * "Create Gift Voucher" screen, also doubling as the Edit Gift Voucher page
+ * when reached via `/gift-voucher/edit/:code` — the Gift Voucher module has
+ * no backend yet, so "editing" prefills from getGiftVoucherDetails() the
+ * same best-effort way GiftVoucherPage's own detail panel does.
+ */
 export default function CreateGiftVoucherPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { code } = useParams();
+  const isEditMode = Boolean(code);
+  const existingVoucher = isEditMode ? getGiftVoucherDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
 
   const methods = useForm({
     resolver: zodResolver(createGiftVoucherSchema),
-    defaultValues: createGiftVoucherDefaultValues,
+    defaultValues: useMemo(() => {
+      if (!existingVoucher) return createGiftVoucherDefaultValues;
+      return {
+        ...createGiftVoucherDefaultValues,
+        voucherName: existingVoucher.name,
+        voucherType: VOUCHER_TYPE_LABEL_TO_VALUE[existingVoucher.type] || '',
+        voucherValue: parseVoucherValue(existingVoucher.value),
+        description: existingVoucher.description || '',
+        validFrom: existingVoucher.validFrom,
+        validTill: existingVoucher.validTill,
+        minimumBillAmount: parseVoucherValue(existingVoucher.minimumBillAmount),
+        applicableTo: existingVoucher.applicableTo === 'All Items' ? 'all' : (existingVoucher.applicableTo || 'all'),
+        active: existingVoucher.status === 'active',
+      };
+    }, [existingVoucher]),
     mode: 'onTouched',
   });
   const { watch, setValue, handleSubmit } = methods;
   const noExpiry = watch('noExpiry');
   const applicableTo = watch('applicableTo');
 
+  const handleBack = () => {
+    if (isEditMode) navigate(`/gift-voucher/view/${code}`);
+    else navigate('/gift-voucher');
+  };
+
   const onSubmit = () => {
-    dispatch(showToast('Gift voucher created as a draft', 'success'));
-    navigate('/gift-voucher');
+    dispatch(showToast(isEditMode ? `Gift voucher ${code} updated successfully` : 'Gift voucher created as a draft', 'success'));
+    if (isEditMode) navigate(`/gift-voucher/view/${code}`);
+    else navigate('/gift-voucher');
   };
 
   const handleHistory = () => dispatch(showToast('Gift Voucher History is coming soon', 'info'));
-  const handleCancel = () => navigate('/gift-voucher');
+  const handleCancel = handleBack;
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
+
+  if (isEditMode && !existingVoucher) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Gift voucher not found</Typography>
+        <Button variant="outlined" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={() => navigate('/gift-voucher')} sx={{ width: 'fit-content' }}>
+          Back to Gift Voucher List
+        </Button>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
@@ -61,16 +118,18 @@ export default function CreateGiftVoucherPage() {
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/gift-voucher" underline="hover" color="text.secondary">Gift Voucher</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Create Gift Voucher</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? `Edit ${code}` : 'Create Gift Voucher'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" color="inherit" startIcon={<HistoryOutlinedIcon fontSize="small" />} onClick={handleHistory}>
-            Gift Voucher History
+          <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={handleBack}>
+            Back
           </Button>
-          <Button variant="contained" startIcon={<AddIcon />}>
-            Create Gift Voucher
-          </Button>
+          {!isEditMode && (
+            <Button variant="outlined" color="inherit" startIcon={<HistoryOutlinedIcon fontSize="small" />} onClick={handleHistory}>
+              Gift Voucher History
+            </Button>
+          )}
           <Button
             variant="outlined"
             color="inherit"
@@ -93,14 +152,14 @@ export default function CreateGiftVoucherPage() {
             <Grid size={{ xs: 12, lg: 7 }}>
               <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2.5, sm: 3 } }}>
                 <Stack spacing={3.5}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Create Gift Voucher</Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{isEditMode ? `Edit Gift Voucher (${code})` : 'Create Gift Voucher'}</Typography>
 
                   <VoucherFormSection number={1} title="Voucher Information">
                     <Grid container spacing={2}>
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           label="Voucher Code"
-                          value="Auto generated"
+                          value={isEditMode ? code : 'Auto generated'}
                           disabled
                           fullWidth
                           slotProps={{ input: { readOnly: true } }}
@@ -189,7 +248,7 @@ export default function CreateGiftVoucherPage() {
 
                   <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end', pt: 1 }}>
                     <Button variant="outlined" color="inherit" onClick={handleCancel}>Cancel</Button>
-                    <Button type="submit" variant="contained">Save Voucher</Button>
+                    <Button type="submit" variant="contained">{isEditMode ? 'Update Voucher' : 'Save Voucher'}</Button>
                   </Stack>
                 </Stack>
               </Paper>

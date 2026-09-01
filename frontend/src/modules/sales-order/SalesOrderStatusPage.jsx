@@ -86,7 +86,11 @@ export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreat
       };
 
   const handleSelectOrder = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/sales-order/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/sales-order/edit/${row.code}`);
+    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleConvertToInvoice = () => dispatch(showToast(`Convert "${orderDetails.code}" to Sales Invoice is coming soon`, 'info'));
   const handleCreate = () => {
@@ -173,7 +177,7 @@ export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreat
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <Box sx={{ height: { lg: 560 }, overflow: 'auto' }}>
+          <Box sx={{ height: '100%', overflow: 'auto' }}>
             <OrderDetailsCard order={orderDetails} title={`Order Details (${meta.pageTitle})`} showDeliveredFields={status === 'delivered'} />
           </Box>
         </Grid>

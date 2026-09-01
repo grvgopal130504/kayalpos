@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -13,17 +13,19 @@ import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
+import { CUSTOMERS } from '../customer/customerMockData';
 
 import InvoiceItemsTable from './components/InvoiceItemsTable';
 import InvoiceTotalsCard from './components/InvoiceTotalsCard';
 import InvoiceTermsAndNotes, { DEFAULT_TERMS } from './components/InvoiceTermsAndNotes';
-import { INVOICES } from './salesInvoiceMockData';
+import { INVOICES, getInvoiceDetails } from './salesInvoiceMockData';
 import {
   createSalesInvoiceSchema, createSalesInvoiceDefaultValues,
   CUSTOMER_OPTIONS, CONTACT_PERSON_OPTIONS, PAYMENT_TERMS_OPTIONS, SALES_PERSON_OPTIONS,
@@ -35,14 +37,42 @@ function nextInvoiceCode() {
   return `INV-${String(maxNum + 1).padStart(5, '0')}`;
 }
 
+// The mock detail record only carries the customer's name, not their code —
+// best-effort match it back to a CUSTOMERS row so the Customer select can be
+// prefilled in edit mode; falls back to blank (still selectable manually)
+// when no match is found.
+function findCustomerIdByName(name) {
+  const match = CUSTOMERS.find((c) => c.name === name);
+  return match ? match.code : '';
+}
+
+function itemToRow(item) {
+  const lineTotal = item.qty * item.unitPrice;
+  const discountPercent = lineTotal > 0 ? Math.round((item.discount / lineTotal) * 10000) / 100 : 0;
+  return {
+    itemCode: item.code,
+    itemName: item.name,
+    hsnCode: item.hsn,
+    qty: String(item.qty),
+    unit: '',
+    unitPrice: String(item.unitPrice),
+    discountPercent: discountPercent ? String(discountPercent) : '',
+    taxCode: '',
+  };
+}
+
 /**
- * "New Sales Invoice" screen — matches the reference design's full create
- * form: Customer Details (narrower left card) + Invoice Details (wider
- * right card, laid out 3-fields-per-row instead of the 2-per-row used on
- * the Quotation/Order forms), a full-width editable line-items grid, and
- * a 3-column row below it (Terms & Conditions / Notes / Summary totals) —
- * unlike Quotation/Order, the totals card sits beside Terms & Notes here
- * rather than beside the items grid, matching the reference layout.
+ * "New Sales Invoice" screen, also doubling as the Edit Invoice page when
+ * reached via `/sales-invoice/edit/:code` — the Sales Invoice module has no
+ * backend yet, so "editing" prefills from getInvoiceDetails() the same way
+ * the Overview/Status pages' own detail panel does. Matches the reference
+ * design's full create form: Customer Details (narrower left card) +
+ * Invoice Details (wider right card, laid out 3-fields-per-row instead of
+ * the 2-per-row used on the Quotation/Order forms), a full-width editable
+ * line-items grid, and a 3-column row below it (Terms & Conditions / Notes /
+ * Summary totals) — unlike Quotation/Order, the totals card sits beside
+ * Terms & Notes here rather than beside the items grid, matching the
+ * reference layout.
  *
  * Two fields in the reference get an inline "+" add button (Sales Order,
  * Quotation Reference), same pattern as the Customer field. Invoice No.
@@ -53,18 +83,37 @@ function nextInvoiceCode() {
 export default function CreateSalesInvoicePage({ onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { code } = useParams();
+  const isEditMode = Boolean(code);
+  const existingInvoice = isEditMode ? getInvoiceDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const invoiceCode = useMemo(() => nextInvoiceCode(), []);
+  const invoiceCode = useMemo(() => (isEditMode ? code : nextInvoiceCode()), [isEditMode, code]);
 
   const methods = useForm({
     resolver: zodResolver(createSalesInvoiceSchema),
-    defaultValues: createSalesInvoiceDefaultValues,
+    defaultValues: existingInvoice
+      ? {
+          ...createSalesInvoiceDefaultValues,
+          customerId: findCustomerIdByName(existingInvoice.customer.name),
+          mobile: existingInvoice.customer.mobile,
+          email: existingInvoice.customer.email,
+          address: existingInvoice.customer.address,
+          invoiceDate: existingInvoice.date,
+          dueDate: existingInvoice.dueDate,
+          salesOrderRef: existingInvoice.ref && existingInvoice.ref.startsWith('SO-') ? existingInvoice.ref : '',
+          paymentTerms: (existingInvoice.paymentTerms || '').toLowerCase(),
+          salesPerson: (existingInvoice.salesPerson || '').toLowerCase(),
+          items: existingInvoice.items?.length ? existingInvoice.items.map(itemToRow) : createSalesInvoiceDefaultValues.items,
+        }
+      : createSalesInvoiceDefaultValues,
     mode: 'onTouched',
   });
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (onBack) onBack(); else navigate('/sales-invoice/overview');
+    if (isEditMode) navigate(`/sales-invoice/view/${code}`);
+    else if (onBack) onBack();
+    else navigate('/sales-invoice/overview');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -78,26 +127,40 @@ export default function CreateSalesInvoicePage({ onBack }) {
   };
 
   const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(`Invoice ${invoiceCode} saved as draft`, 'success'));
+    dispatch(showToast(isEditMode ? `Invoice ${invoiceCode} updated successfully` : `Invoice ${invoiceCode} saved as draft`, 'success'));
     handleBack();
   });
   const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(`Invoice ${invoiceCode} saved and sent`, 'success'));
+    dispatch(showToast(isEditMode ? `Invoice ${invoiceCode} updated successfully` : `Invoice ${invoiceCode} saved and sent`, 'success'));
     handleBack();
   });
+
+  if (isEditMode && !existingInvoice) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Invoice not found</Typography>
+        <Button variant="outlined" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={() => navigate('/sales-invoice')} sx={{ width: 'fit-content' }}>
+          Back to Sales Invoice List
+        </Button>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Sales Invoice (New)</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Sales Invoice (Edit ${invoiceCode})` : 'Sales Invoice (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/sales-invoice" underline="hover" color="text.secondary">Sales Invoice</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>New Sales Invoice</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? 'Edit Invoice' : 'New Sales Invoice'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
+          <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={handleBack}>
+            {isEditMode ? 'Back to Invoice' : 'Back'}
+          </Button>
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
@@ -114,12 +177,20 @@ export default function CreateSalesInvoicePage({ onBack }) {
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
           </Menu>
-          <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-            Save as Draft
-          </Button>
-          <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
-            Save &amp; Send
-          </Button>
+          {isEditMode ? (
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              Update Invoice
+            </Button>
+          ) : (
+            <>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+                Save as Draft
+              </Button>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+                Save &amp; Send
+              </Button>
+            </>
+          )}
         </Stack>
       </Stack>
 

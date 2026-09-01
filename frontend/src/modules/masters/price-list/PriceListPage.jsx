@@ -24,6 +24,8 @@ import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
 
 import PriceListTable from './components/PriceListTable';
+import PriceListFormDialog from './components/PriceListFormDialog';
+import PriceListViewDialog from './components/PriceListViewDialog';
 import { CASHIER } from '../mastersMockData';
 import { PRICE_LISTS, PRICE_LIST_TYPE_OPTIONS, APPLICABLE_TO_OPTIONS, STATS } from './priceListMockData';
 
@@ -57,13 +59,15 @@ export default function PriceListPage() {
   const [page, setPage] = useState(1);
   const effectiveFromNativeRef = useRef(null);
   const effectiveToNativeRef = useRef(null);
+  const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
+  const [viewRow, setViewRow] = useState(null);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
 
-  const handleNewPriceList = () => dispatch(showToast('New Price List form is coming soon', 'info'));
+  const handleNewPriceList = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Price Lists is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export Price Lists is coming soon', 'info'));
   const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
@@ -76,8 +80,10 @@ export default function PriceListPage() {
     setEffectiveTo('');
     setAppliedSearch('');
   };
-  const handleEditRow = (row) => dispatch(showToast(`Edit ${row.name} is coming soon`, 'info'));
+  const handleViewRow = (row) => setViewRow(row);
+  const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
   const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
 
   const filteredRows = useMemo(() => PRICE_LISTS.filter((row) => {
     if (appliedSearch) {
@@ -270,7 +276,7 @@ export default function PriceListPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Price List</Typography>
-        <PriceListTable rows={filteredRows} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+        <PriceListTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -294,6 +300,18 @@ export default function PriceListPage() {
           <StatCard icon={ReceiptLongOutlinedIcon} iconColor="warning" iconShape="circle" label="Total Items in Price Lists" value={formatNumber(STATS.totalItemsInPriceLists)} />
         </Grid>
       </Grid>
+
+      <PriceListFormDialog open={formDialog.open} mode={formDialog.mode} initialValues={formDialog.row} onClose={closeFormDialog} />
+      <PriceListViewDialog
+        open={Boolean(viewRow)}
+        row={viewRow}
+        onClose={() => setViewRow(null)}
+        onEdit={() => {
+          const row = viewRow;
+          setViewRow(null);
+          setFormDialog({ open: true, mode: 'edit', row });
+        }}
+      />
     </Stack>
   );
 }

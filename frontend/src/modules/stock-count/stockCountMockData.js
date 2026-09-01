@@ -63,6 +63,31 @@ export const COUNTS = [
 
 export const TOTAL_COUNT_COUNT = 30;
 
+const COUNT_BY_CODE = Object.fromEntries(COUNTS.map((c) => [c.code, c]));
+
+/**
+ * Full detail shape for a count code, for the View/Edit pages — same
+ * fallback logic StockCountPage already uses inline: only
+ * COUNT_DETAILS.code (CNT-00030) has the full hand-authored fields, so
+ * every other row reuses that shape with its own COUNTS fields swapped
+ * in, since there's no backend yet to hold real per-count detail records.
+ */
+export function getCountDetails(code) {
+  const row = COUNT_BY_CODE[code];
+  if (!row) return null;
+  if (code === COUNT_DETAILS.code) return COUNT_DETAILS;
+  return {
+    ...COUNT_DETAILS,
+    code: row.code,
+    date: row.date,
+    warehouse: row.warehouse,
+    countType: row.countType,
+    items: row.items,
+    varianceValue: row.varianceValue,
+    status: row.status,
+  };
+}
+
 export const COUNT_DETAILS = {
   code: 'CNT-00030',
   date: '25 May 2026',

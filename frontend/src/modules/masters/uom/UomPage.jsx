@@ -25,6 +25,10 @@ import { formatNumber } from '../../../utils/format';
 
 import UomGroupTable from './components/UomGroupTable';
 import UomTable from './components/UomTable';
+import UomGroupFormDialog from './components/UomGroupFormDialog';
+import UomGroupViewDialog from './components/UomGroupViewDialog';
+import UomFormDialog from './components/UomFormDialog';
+import UomViewDialog from './components/UomViewDialog';
 import { CASHIER } from '../mastersMockData';
 import {
   UOM_GROUPS, UOMS, BASE_UOM_OPTIONS, STATS, uomTotalRecords, uomTotalPages,
@@ -50,20 +54,28 @@ export default function UomPage() {
   const [baseUom, setBaseUom] = useState('All');
   const [uomAppliedSearch, setUomAppliedSearch] = useState('');
   const [uomPage, setUomPage] = useState(1);
+  const [groupFormDialog, setGroupFormDialog] = useState({ open: false, mode: 'add', row: null });
+  const [viewGroupRow, setViewGroupRow] = useState(null);
+  const [uomFormDialog, setUomFormDialog] = useState({ open: false, mode: 'add', row: null });
+  const [viewUomRow, setViewUomRow] = useState(null);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
 
-  const handleNewUom = () => dispatch(showToast('New UOM form is coming soon', 'info'));
-  const handleNewUomGroup = () => dispatch(showToast('New UOM Group form is coming soon', 'info'));
+  const handleNewUom = () => setUomFormDialog({ open: true, mode: 'add', row: null });
+  const handleNewUomGroup = () => setGroupFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import UOMs is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export UOMs is coming soon', 'info'));
-  const handleEditGroupRow = (row) => dispatch(showToast(`Edit ${row.name} is coming soon`, 'info'));
+  const handleViewGroupRow = (row) => setViewGroupRow(row);
+  const handleEditGroupRow = (row) => setGroupFormDialog({ open: true, mode: 'edit', row });
   const handleDeleteGroupRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
-  const handleEditUomRow = (row) => dispatch(showToast(`Edit ${row.name} is coming soon`, 'info'));
+  const handleViewUomRow = (row) => setViewUomRow(row);
+  const handleEditUomRow = (row) => setUomFormDialog({ open: true, mode: 'edit', row });
   const handleDeleteUomRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
+  const closeGroupFormDialog = () => setGroupFormDialog((prev) => ({ ...prev, open: false }));
+  const closeUomFormDialog = () => setUomFormDialog((prev) => ({ ...prev, open: false }));
   const handleUomSearch = () => setUomAppliedSearch('');
   const handleUomReset = () => {
     setUomGroupFilter('All');
@@ -179,7 +191,7 @@ export default function UomPage() {
               />
             </Stack>
 
-            <UomGroupTable rows={filteredGroups} onEditRow={handleEditGroupRow} onDeleteRow={handleDeleteGroupRow} />
+            <UomGroupTable rows={filteredGroups} onViewRow={handleViewGroupRow} onEditRow={handleEditGroupRow} onDeleteRow={handleDeleteGroupRow} />
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -226,7 +238,7 @@ export default function UomPage() {
               </Grid>
             </Grid>
 
-            <UomTable rows={filteredUoms} onEditRow={handleEditUomRow} onDeleteRow={handleDeleteUomRow} />
+            <UomTable rows={filteredUoms} onViewRow={handleViewUomRow} onEditRow={handleEditUomRow} onDeleteRow={handleDeleteUomRow} />
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -259,6 +271,29 @@ export default function UomPage() {
           <StatCard icon={KeyboardReturnOutlinedIcon} iconColor="warning" iconShape="circle" label="Active UOMs" value={formatNumber(STATS.activeUomsAlt)} />
         </Grid>
       </Grid>
+
+      <UomGroupFormDialog open={groupFormDialog.open} mode={groupFormDialog.mode} initialValues={groupFormDialog.row} onClose={closeGroupFormDialog} />
+      <UomGroupViewDialog
+        open={Boolean(viewGroupRow)}
+        row={viewGroupRow}
+        onClose={() => setViewGroupRow(null)}
+        onEdit={() => {
+          const row = viewGroupRow;
+          setViewGroupRow(null);
+          setGroupFormDialog({ open: true, mode: 'edit', row });
+        }}
+      />
+      <UomFormDialog open={uomFormDialog.open} mode={uomFormDialog.mode} initialValues={uomFormDialog.row} onClose={closeUomFormDialog} />
+      <UomViewDialog
+        open={Boolean(viewUomRow)}
+        row={viewUomRow}
+        onClose={() => setViewUomRow(null)}
+        onEdit={() => {
+          const row = viewUomRow;
+          setViewUomRow(null);
+          setUomFormDialog({ open: true, mode: 'edit', row });
+        }}
+      />
     </Stack>
   );
 }

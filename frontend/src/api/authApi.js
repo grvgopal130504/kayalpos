@@ -11,7 +11,15 @@ export const authApi = baseApi.injectEndpoints({
       // Unwrap the { success, data } envelope so callers get { user, token } directly.
       transformResponse: (response) => response.data,
     }),
+    changePassword: builder.mutation({
+      query: ({ currentPassword, newPassword }) => ({
+        url: '/auth/change-password',
+        method: 'POST',
+        body: { currentPassword, newPassword },
+      }),
+      transformResponse: (response) => response.data,
+    }),
   }),
 });
 
-export const { useLoginMutation } = authApi;
+export const { useLoginMutation, useChangePasswordMutation } = authApi;

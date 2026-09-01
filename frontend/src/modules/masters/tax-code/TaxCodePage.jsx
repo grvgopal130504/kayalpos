@@ -23,6 +23,8 @@ import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
 
 import TaxCodeTable from './components/TaxCodeTable';
+import TaxCodeFormDialog from './components/TaxCodeFormDialog';
+import TaxCodeViewDialog from './components/TaxCodeViewDialog';
 import { CASHIER } from '../mastersMockData';
 import {
   TAX_CODES, TAX_TYPE_OPTIONS, TAX_CATEGORY_OPTIONS, STATS, taxCodeTotalRecords, taxCodeTotalPages,
@@ -45,13 +47,15 @@ export default function TaxCodePage() {
   const [status, setStatus] = useState('All');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
+  const [viewRow, setViewRow] = useState(null);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
 
-  const handleNewTaxCode = () => dispatch(showToast('New Tax Code form is coming soon', 'info'));
+  const handleNewTaxCode = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Tax Codes is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export Tax Codes is coming soon', 'info'));
   const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
@@ -62,8 +66,10 @@ export default function TaxCodePage() {
     setStatus('All');
     setAppliedSearch('');
   };
-  const handleEditRow = (row) => dispatch(showToast(`Edit ${row.name} is coming soon`, 'info'));
+  const handleViewRow = (row) => setViewRow(row);
+  const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
   const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
   const handlePageChange = (value) => {
     setPage(value);
     if (value !== 1) dispatch(showToast('Loading further pages is coming soon', 'info'));
@@ -195,7 +201,7 @@ export default function TaxCodePage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Tax Code List</Typography>
-        <TaxCodeTable rows={filteredRows} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+        <TaxCodeTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -223,6 +229,18 @@ export default function TaxCodePage() {
           <StatCard icon={CurrencyRupeeOutlinedIcon} iconColor="warning" iconShape="circle" label="Average Tax Rate" value={`${STATS.averageTaxRate.toFixed(2)}%`} />
         </Grid>
       </Grid>
+
+      <TaxCodeFormDialog open={formDialog.open} mode={formDialog.mode} initialValues={formDialog.row} onClose={closeFormDialog} />
+      <TaxCodeViewDialog
+        open={Boolean(viewRow)}
+        row={viewRow}
+        onClose={() => setViewRow(null)}
+        onEdit={() => {
+          const row = viewRow;
+          setViewRow(null);
+          setFormDialog({ open: true, mode: 'edit', row });
+        }}
+      />
     </Stack>
   );
 }

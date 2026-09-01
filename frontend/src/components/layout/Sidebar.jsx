@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom';
 import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Divider, Tooltip } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { NAV_SECTIONS } from './navConfig';
 import AppLogo from '../common/AppLogo';
 import { useAppSelector } from '../../app/hooks';
-import { selectAccentThemeKey } from '../../features/ui/uiSlice';
+import { selectAccentThemeKey, selectSidebarFont, selectSidebarFontStyle } from '../../features/ui/uiSlice';
 import { getAccentTheme, accentCssBackground } from '../../theme/accentThemes';
 
 export const SIDEBAR_WIDTH = 264;
@@ -14,7 +15,7 @@ export const SIDEBAR_RAIL_WIDTH = 70;
 const NAV_ITEM_HEIGHT = 0;
 const NAV_ITEM_PADDING_TOP = 1;
 const NAV_ITEM_PADDING_BOTTOM = 1;
-const NAV_ITEM_GAP = 1;
+const NAV_ITEM_GAP = 0;
 const NAV_ITEM_RADIUS = 0;
 const NAV_ITEM_PADDING_X = 16;
 const NAV_ITEM_PADDING_X_COLLAPSED = 12;
@@ -22,7 +23,13 @@ const NAV_ICON_WIDTH = 40;
 const NAV_ICON_FONT_SIZE = 20;
 const NAV_LABEL_FONT_SIZE = 13;
 
-function NavList({ collapsed, onNavigate, activeBackground }) {
+function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebarFontStyle, isDark }) {
+  const itemColor = isDark ? 'rgba(255,255,255,0.75)' : 'text.secondary';
+  const hoverBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+  const dividerColor = isDark ? 'rgba(255,255,255,0.08)' : 'divider';
+  const scrollbarThumb = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)';
+  const scrollbarThumbHover = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)';
+
   return (
     <Box
       sx={{
@@ -33,20 +40,20 @@ function NavList({ collapsed, onNavigate, activeBackground }) {
         // full-size track + arrow buttons, which look oversized against the
         // narrow sidebar.
         scrollbarWidth: 'thin',
-        scrollbarColor: 'rgba(255,255,255,0.25) transparent',
+        scrollbarColor: `${scrollbarThumb} transparent`,
         '&::-webkit-scrollbar': { width: 6 },
         '&::-webkit-scrollbar-button': { display: 'none', height: 0, width: 0 },
         '&::-webkit-scrollbar-track': { background: 'transparent' },
         '&::-webkit-scrollbar-thumb': {
-          backgroundColor: 'rgba(255,255,255,0.25)',
+          backgroundColor: scrollbarThumb,
           borderRadius: 4,
         },
-        '&::-webkit-scrollbar-thumb:hover': { backgroundColor: 'rgba(255,255,255,0.4)' },
+        '&::-webkit-scrollbar-thumb:hover': { backgroundColor: scrollbarThumbHover },
       }}
     >
       {NAV_SECTIONS.map((section, sectionIndex) => (
         <Box key={section.key}>
-          {sectionIndex > 0 && <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', my: 1, mx: 2 }} />}
+          {sectionIndex > 0 && <Divider sx={{ borderColor: dividerColor, my: 1, mx: 2 }} />}
           <List disablePadding sx={{ px: 1.25 }}>
             {section.items.map((item) => {
               const Icon = item.icon;
@@ -64,13 +71,14 @@ function NavList({ collapsed, onNavigate, activeBackground }) {
                     pb: `${NAV_ITEM_PADDING_BOTTOM}px`,
                     justifyContent: collapsed ? 'center' : 'flex-start',
                     px: `${collapsed ? NAV_ITEM_PADDING_X_COLLAPSED : NAV_ITEM_PADDING_X}px`,
-                    color: 'rgba(255,255,255,0.75)',
+                    color: itemColor,
                     '&.active': {
                       background: activeBackground,
                       color: '#fff',
                       '& .MuiListItemIcon-root': { color: '#fff' },
                     },
-                    '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' },
+                    '&:hover': { bgcolor: hoverBg },
+                    '&.active:hover': { background: activeBackground },
                   }}
                 >
                   <ListItemIcon
@@ -85,7 +93,18 @@ function NavList({ collapsed, onNavigate, activeBackground }) {
                   {!collapsed && (
                     <ListItemText
                       primary={item.label}
-                      slotProps={{ primary: { fontSize: NAV_LABEL_FONT_SIZE, fontWeight: 500, noWrap: true } }}
+                      slotProps={{
+                        primary: {
+                          fontSize: NAV_LABEL_FONT_SIZE,
+                          fontWeight: sidebarFontStyle?.bold ? 700 : 500,
+                          noWrap: true,
+                          sx: {
+                            fontFamily: `"${sidebarFont}", "Inter", "Roboto", "Helvetica", "Arial", sans-serif`,
+                            fontStyle: sidebarFontStyle?.italic ? 'italic' : 'normal',
+                            textDecoration: sidebarFontStyle?.underline ? 'underline' : 'none',
+                          },
+                        },
+                      }}
                     />
                   )}
                 </ListItemButton>
@@ -114,6 +133,10 @@ function NavList({ collapsed, onNavigate, activeBackground }) {
 export default function Sidebar({ variant, collapsed = false, open, onClose, onNavigate }) {
   const width = collapsed ? SIDEBAR_RAIL_WIDTH : SIDEBAR_WIDTH;
   const accentThemeKey = useAppSelector(selectAccentThemeKey);
+  const sidebarFont = useAppSelector(selectSidebarFont);
+  const sidebarFontStyle = useAppSelector(selectSidebarFontStyle);
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   // Solid accent presets already flow into the active nav item via
   // `primary.main` (see theme.js), but MUI's palette can only hold one flat
   // color there — so a gradient preset is applied directly as a CSS
@@ -126,7 +149,10 @@ export default function Sidebar({ variant, collapsed = false, open, onClose, onN
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        bgcolor: 'secondary.main',
+        bgcolor: isDark ? 'secondary.main' : 'background.paper',
+        borderRight: isDark ? 'none' : '1px solid',
+        borderColor: 'divider',
+        fontFamily: `"${sidebarFont}", "Inter", "Roboto", "Helvetica", "Arial", sans-serif`,
       }}
     >
       <Box
@@ -144,11 +170,18 @@ export default function Sidebar({ variant, collapsed = false, open, onClose, onN
           iconSize={collapsed ? 28 : 34}
           titleFontSize="1.05rem"
           subtitleFontSize="0.6rem"
-          titleColor="#fff"
-          subtitleColor="rgba(255,255,255,0.65)"
+          titleColor={isDark ? '#fff' : 'text.primary'}
+          subtitleColor={isDark ? 'rgba(255,255,255,0.65)' : 'text.secondary'}
         />
       </Box>
-      <NavList collapsed={collapsed} onNavigate={onNavigate} activeBackground={activeBackground} />
+      <NavList
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+        activeBackground={activeBackground}
+        sidebarFont={sidebarFont}
+        sidebarFontStyle={sidebarFontStyle}
+        isDark={isDark}
+      />
     </Box>
   );
 

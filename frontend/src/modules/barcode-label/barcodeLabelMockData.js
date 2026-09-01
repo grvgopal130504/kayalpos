@@ -122,6 +122,33 @@ export const STATUS_DETAILS = {
   printed: BATCH_DETAILS,
 };
 
+const BATCH_BY_CODE = Object.fromEntries(BATCHES.map((b) => [b.code, b]));
+
+/**
+ * Full detail shape for a batch code, for the View/Edit pages — same
+ * fallback logic BarcodeLabelOverviewPage/BarcodeLabelStatusPage already
+ * use inline: only BATCH_DETAILS.code (LBL-00038) has hand-authored
+ * items/terms, so every other row reuses that shape with its own BATCHES
+ * fields swapped in, since there's no backend yet to hold real per-batch
+ * detail records.
+ */
+export function getBatchDetails(code) {
+  const row = BATCH_BY_CODE[code];
+  if (!row) return null;
+  if (row.code === BATCH_DETAILS.code) return BATCH_DETAILS;
+  return {
+    ...BATCH_DETAILS,
+    code: row.code,
+    date: row.date,
+    status: row.status,
+    labelName: row.labelName,
+    itemCategory: row.itemCategory,
+    totalLabels: row.totalLabels,
+    createdBy: row.createdBy,
+    ...(row.status === 'printed' ? { printedOn: row.date } : { printedOn: undefined }),
+  };
+}
+
 // 4-tile summary strip per status page.
 export const STATUS_STATS = {
   draft: {

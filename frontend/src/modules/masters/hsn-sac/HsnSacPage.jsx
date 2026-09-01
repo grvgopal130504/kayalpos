@@ -24,6 +24,8 @@ import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
 
 import HsnSacTable from './components/HsnSacTable';
+import HsnSacFormDialog from './components/HsnSacFormDialog';
+import HsnSacViewDialog from './components/HsnSacViewDialog';
 import { CASHIER } from '../mastersMockData';
 import {
   HSN_SAC_CODES, TYPE_OPTIONS, CHAPTER_OPTIONS, TAX_RATE_OPTIONS, STATS,
@@ -48,13 +50,15 @@ export default function HsnSacPage() {
   const [status, setStatus] = useState('All');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
+  const [viewRow, setViewRow] = useState(null);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
 
-  const handleNewHsnSac = () => dispatch(showToast('New HSN / SAC form is coming soon', 'info'));
+  const handleNewHsnSac = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import HSN / SAC codes is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export HSN / SAC codes is coming soon', 'info'));
   const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
@@ -66,8 +70,10 @@ export default function HsnSacPage() {
     setStatus('All');
     setAppliedSearch('');
   };
-  const handleEditRow = (row) => dispatch(showToast(`Edit ${row.code} is coming soon`, 'info'));
+  const handleViewRow = (row) => setViewRow(row);
+  const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
   const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.code} is coming soon`, 'info'));
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
   const handlePageChange = (value) => {
     setPage(value);
     if (value !== 1) dispatch(showToast('Loading further pages is coming soon', 'info'));
@@ -208,7 +214,7 @@ export default function HsnSacPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>HSN / SAC List</Typography>
-        <HsnSacTable rows={filteredRows} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+        <HsnSacTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -239,6 +245,18 @@ export default function HsnSacPage() {
           <StatCard icon={CurrencyRupeeOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Average Tax Rate" value={`${STATS.averageTaxRate.toFixed(2)}%`} />
         </Grid>
       </Grid>
+
+      <HsnSacFormDialog open={formDialog.open} mode={formDialog.mode} initialValues={formDialog.row} onClose={closeFormDialog} />
+      <HsnSacViewDialog
+        open={Boolean(viewRow)}
+        row={viewRow}
+        onClose={() => setViewRow(null)}
+        onEdit={() => {
+          const row = viewRow;
+          setViewRow(null);
+          setFormDialog({ open: true, mode: 'edit', row });
+        }}
+      />
     </Stack>
   );
 }

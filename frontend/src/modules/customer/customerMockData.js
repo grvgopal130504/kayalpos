@@ -53,6 +53,8 @@ export const CUSTOMERS = [
 
 export const TOTAL_CUSTOMER_COUNT = 1248;
 
+export const CUSTOMER_BY_CODE = Object.fromEntries(CUSTOMERS.map((c) => [c.code, c]));
+
 export const CUSTOMER_DETAILS = {
   code: 'CUS-0001',
   name: 'Ramesh Kumar',
@@ -81,3 +83,28 @@ export const LOYALTY_SUMMARY = {
   totalRedeemedPoints: 750,
   transactions: 25,
 };
+
+/**
+ * Full detail shape for a customer code, for the View/Edit pages and
+ * CustomerPage's own detail panel. Only CUS-0001 has hand-authored extras
+ * (address, dateOfJoining) in CUSTOMER_DETAILS — every other row falls back
+ * to reusing that shape with its own CUSTOMERS fields swapped in, since
+ * there's no backend yet to hold real per-customer detail records.
+ */
+export function getCustomerDetails(code) {
+  const row = CUSTOMER_BY_CODE[code];
+  if (!row) return null;
+  if (code === CUSTOMER_DETAILS.code) return CUSTOMER_DETAILS;
+  return {
+    ...CUSTOMER_DETAILS,
+    code: row.code,
+    name: row.name,
+    initials: row.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase(),
+    status: row.status,
+    mobile: row.mobile,
+    email: row.email,
+    loyaltyPoints: row.loyaltyPoints,
+    totalPurchase: row.totalPurchase,
+    outstandingAmount: row.outstanding,
+  };
+}

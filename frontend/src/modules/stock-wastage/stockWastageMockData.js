@@ -63,6 +63,32 @@ export const WASTAGES = [
 
 export const TOTAL_WASTAGE_COUNT = 30;
 
+const WASTAGE_BY_CODE = Object.fromEntries(WASTAGES.map((w) => [w.code, w]));
+
+/**
+ * Full detail shape for a wastage code, for the View/Edit pages — same
+ * fallback logic StockWastagePage already uses inline: only
+ * WASTAGE_DETAILS.code (WST-00030) has the full hand-authored fields, so
+ * every other row reuses that shape with its own WASTAGES fields swapped
+ * in, since there's no backend yet to hold real per-wastage detail
+ * records.
+ */
+export function getWastageDetails(code) {
+  const row = WASTAGE_BY_CODE[code];
+  if (!row) return null;
+  if (code === WASTAGE_DETAILS.code) return WASTAGE_DETAILS;
+  return {
+    ...WASTAGE_DETAILS,
+    code: row.code,
+    date: row.date,
+    outletLocation: row.outlet,
+    wastageType: row.wastageType,
+    items: row.items,
+    wastageValue: row.wastageValue,
+    status: row.status,
+  };
+}
+
 export const WASTAGE_DETAILS = {
   code: 'WST-00030',
   date: '25 May 2026',

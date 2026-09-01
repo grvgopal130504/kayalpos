@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -22,37 +22,69 @@ import {
   CUSTOMER_TYPE_OPTIONS, GROUP_OPTIONS, PRICE_CATEGORY_OPTIONS,
   OPENING_BALANCE_TYPE_OPTIONS, SALES_REP_OPTIONS, TERRITORY_OPTIONS, SAVE_OPTION_VALUES,
 } from './createCustomerSchema';
+import { getCustomerDetails } from './customerMockData';
 
+/**
+ * Add New Customer form, also doubling as the Edit Customer page when
+ * reached via `/customer/edit/:code` — the Customer module has no backend
+ * yet, so "editing" prefills from getCustomerDetails() the same way
+ * CustomerPage's own detail panel does (only name/mobile/email/address are
+ * real per-row mock data; the rest of the form falls back to its normal
+ * create defaults since there's nothing to prefill them from).
+ */
 export default function AddNewCustomerPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { code } = useParams();
+  const isEditMode = Boolean(code);
+  const existingCustomer = isEditMode ? getCustomerDetails(code) : null;
 
   const methods = useForm({
     resolver: zodResolver(createCustomerSchema),
-    defaultValues: createCustomerDefaultValues,
+    defaultValues: existingCustomer
+      ? {
+          ...createCustomerDefaultValues,
+          customerName: existingCustomer.name,
+          mobileNumber: existingCustomer.mobile,
+          email: existingCustomer.email,
+          address: existingCustomer.address,
+          activeCustomer: existingCustomer.status === 'active',
+        }
+      : createCustomerDefaultValues,
     mode: 'onTouched',
   });
   const { watch, setValue, handleSubmit } = methods;
   const saveOption = watch('saveOption');
 
   const onSubmit = (values) => {
-    dispatch(showToast('Customer saved successfully', 'success'));
+    dispatch(showToast(isEditMode ? 'Customer updated successfully' : 'Customer saved successfully', 'success'));
     if (values.saveOption === 'close') {
-      navigate('/customer');
+      navigate(isEditMode ? `/customer/view/${code}` : '/customer');
     }
   };
 
   const handleBackToList = () => navigate('/customer');
 
+  if (isEditMode && !existingCustomer) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Customer not found</Typography>
+        <Button variant="outlined" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={handleBackToList} sx={{ width: 'fit-content' }}>
+          Back to Customer List
+        </Button>
+      </Stack>
+    );
+  }
+
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Add New Customer</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Edit Customer — ${existingCustomer.code}` : 'Add New Customer'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/customer" underline="hover" color="text.secondary">Customer</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Add New Customer</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? 'Edit Customer' : 'Add New Customer'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -60,7 +92,7 @@ export default function AddNewCustomerPage() {
             Back to Customer List
           </Button>
           <Button variant="contained" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={handleSubmit(onSubmit)}>
-            Save Customer
+            {isEditMode ? 'Update Customer' : 'Save Customer'}
           </Button>
         </Stack>
       </Stack>
@@ -79,7 +111,7 @@ export default function AddNewCustomerPage() {
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           label="Customer Code *"
-                          value="Auto generated"
+                          value={isEditMode ? existingCustomer.code : 'Auto generated'}
                           disabled
                           fullWidth
                           slotProps={{ input: { readOnly: true } }}

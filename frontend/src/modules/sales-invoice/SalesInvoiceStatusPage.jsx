@@ -94,7 +94,11 @@ export default function SalesInvoiceStatusPage({ status, tab, onTabChange, onCre
       };
 
   const handleSelectInvoice = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/sales-invoice/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/sales-invoice/edit/${row.code}`);
+    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleRecordPayment = () => dispatch(showToast(`Record Payment for "${invoiceDetails.code}" is coming soon`, 'info'));
   const handleCreate = () => {
@@ -181,7 +185,7 @@ export default function SalesInvoiceStatusPage({ status, tab, onTabChange, onCre
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <Box sx={{ height: { lg: 560 }, overflow: 'auto' }}>
+          <Box sx={{ height: '100%', overflow: 'auto' }}>
             <InvoiceDetailsCard invoice={invoiceDetails} title={`Invoice Details (${meta.pageTitle})`} showPaidFields={status === 'paid'} />
           </Box>
         </Grid>

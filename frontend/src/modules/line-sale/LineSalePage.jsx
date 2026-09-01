@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import {
-  Stack, Box, Typography, Button, Menu, MenuItem, Grid,
+  Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../features/auth/authSlice';
@@ -123,7 +125,13 @@ export default function LineSalePage() {
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}>
-        <Typography variant="h6" sx={{ fontWeight: 800 }}>Line Sale</Typography>
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>Line Sale</Typography>
+          <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
+            <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Line Sale</Typography>
+          </Breadcrumbs>
+        </Box>
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" color="warning" onClick={handleHoldBill}>Hold Bill</Button>
           <Button variant="outlined" color="error" onClick={handleClear}>Clear</Button>

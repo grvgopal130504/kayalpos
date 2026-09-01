@@ -25,7 +25,7 @@ export default function RefundAdjustmentCard({
           onChange={(e) => onRefundToChange(e.target.value)}
           fullWidth
           disabled={refundMode !== 'refund'}
-          slotProps={{ select: { displayEmpty: true } }}
+          slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
         >
           <MenuItem value="">
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>Select Payment Method</Typography>

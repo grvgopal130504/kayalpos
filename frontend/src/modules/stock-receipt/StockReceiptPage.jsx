@@ -49,11 +49,15 @@ export default function StockReceiptPage() {
       };
 
   const handleSelectReceipt = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  const handleRowAction = (label, row) => {
+    if (label === 'View') return navigate(`/stock-receipt/view/${row.code}`);
+    if (label === 'Edit') return navigate(`/stock-receipt/edit/${row.code}`);
+    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+  };
   const handleImport = () => dispatch(showToast('Import Receipts is coming soon', 'info'));
   const handleCreate = () => navigate('/stock-receipt/create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => dispatch(showToast('Edit Stock Receipt is coming soon', 'info'));
+  const handleEdit = () => navigate(`/stock-receipt/edit/${selectedCode}`);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));

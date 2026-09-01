@@ -63,6 +63,33 @@ export const RECEIPTS = [
 
 export const TOTAL_RECEIPT_COUNT = 30;
 
+const RECEIPT_BY_CODE = Object.fromEntries(RECEIPTS.map((r) => [r.code, r]));
+
+/**
+ * Full detail shape for a receipt code, for the View/Edit pages — same
+ * fallback logic StockReceiptPage already uses inline: only
+ * RECEIPT_DETAILS.code (RCPT-00030) has the full hand-authored fields, so
+ * every other row reuses that shape with its own RECEIPTS fields swapped
+ * in, since there's no backend yet to hold real per-receipt detail
+ * records.
+ */
+export function getReceiptDetails(code) {
+  const row = RECEIPT_BY_CODE[code];
+  if (!row) return null;
+  if (code === RECEIPT_DETAILS.code) return RECEIPT_DETAILS;
+  return {
+    ...RECEIPT_DETAILS,
+    code: row.code,
+    date: row.date,
+    supplier: row.supplier,
+    purchaseType: row.purchaseType,
+    invoiceNo: row.invoiceNo,
+    items: row.items,
+    totalValue: row.totalValue,
+    status: row.status,
+  };
+}
+
 export const RECEIPT_DETAILS = {
   code: 'RCPT-00030',
   date: '25 May 2026',

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -13,6 +13,7 @@ import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
@@ -22,7 +23,7 @@ import FormSelect from '../../components/form/FormSelect';
 
 import ReceiptItemsTable from './components/ReceiptItemsTable';
 import ReceiptSummaryTotals from './components/ReceiptSummaryTotals';
-import { RECEIPTS } from './stockReceiptMockData';
+import { RECEIPTS, getReceiptDetails } from './stockReceiptMockData';
 import {
   createStockReceiptSchema, createStockReceiptDefaultValues,
   PURCHASE_TYPE_OPTIONS, SUPPLIER_OPTIONS, OUTLET_OPTIONS, COST_CENTER_OPTIONS,
@@ -60,19 +61,37 @@ function nextReceiptCode() {
 export default function CreateStockReceiptPage({ onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { code } = useParams();
+  const isEditMode = Boolean(code);
+  const existingReceipt = isEditMode ? getReceiptDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [attachmentName, setAttachmentName] = useState('');
-  const receiptCode = useMemo(() => nextReceiptCode(), []);
+  const receiptCode = useMemo(() => (isEditMode ? code : nextReceiptCode()), [isEditMode, code]);
 
   const methods = useForm({
     resolver: zodResolver(createStockReceiptSchema),
-    defaultValues: createStockReceiptDefaultValues,
+    defaultValues: existingReceipt
+      ? {
+          ...createStockReceiptDefaultValues,
+          receiptDate: existingReceipt.date,
+          purchaseType: existingReceipt.purchaseType,
+          purchaseInvoiceNo: existingReceipt.invoiceNo || '',
+          purchaseInvoiceDate: existingReceipt.invoiceDate || '',
+          grnDcNo: existingReceipt.grnDcNo || '',
+          contactPerson: existingReceipt.contactPerson || '',
+          mobileNo: existingReceipt.mobileNo || '',
+          vehicleNo: existingReceipt.vehicleNo || '',
+          transporter: existingReceipt.transporter || '',
+        }
+      : createStockReceiptDefaultValues,
     mode: 'onTouched',
   });
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (onBack) onBack(); else navigate('/stock-receipt');
+    if (isEditMode) navigate(`/stock-receipt/view/${code}`);
+    else if (onBack) onBack();
+    else navigate('/stock-receipt');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -87,26 +106,40 @@ export default function CreateStockReceiptPage({ onBack }) {
   };
 
   const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(`Receipt ${receiptCode} saved as draft`, 'success'));
+    dispatch(showToast(isEditMode ? `Receipt ${receiptCode} updated successfully` : `Receipt ${receiptCode} saved as draft`, 'success'));
     handleBack();
   });
   const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(`Receipt ${receiptCode} saved and sent`, 'success'));
+    dispatch(showToast(isEditMode ? `Receipt ${receiptCode} updated successfully` : `Receipt ${receiptCode} saved and sent`, 'success'));
     handleBack();
   });
+
+  if (isEditMode && !existingReceipt) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Receipt not found</Typography>
+        <Button variant="outlined" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={() => navigate('/stock-receipt')} sx={{ width: 'fit-content' }}>
+          Back to Stock Receipt List
+        </Button>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Stock Receipt (New)</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Receipt (Edit ${receiptCode})` : 'Stock Receipt (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/stock-receipt" underline="hover" color="text.secondary">Stock Receipt</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>New Stock Receipt</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? 'Edit Receipt' : 'New Stock Receipt'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' }, justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
+          <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlinedIcon fontSize="small" />} onClick={handleBack}>
+            {isEditMode ? 'Back to Receipt' : 'Back'}
+          </Button>
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
@@ -123,12 +156,20 @@ export default function CreateStockReceiptPage({ onBack }) {
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
           </Menu>
-          <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-            Save as Draft
-          </Button>
-          <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
-            Save &amp; Send
-          </Button>
+          {isEditMode ? (
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              Update Receipt
+            </Button>
+          ) : (
+            <>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+                Save as Draft
+              </Button>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+                Save &amp; Send
+              </Button>
+            </>
+          )}
         </Stack>
       </Stack>
 
