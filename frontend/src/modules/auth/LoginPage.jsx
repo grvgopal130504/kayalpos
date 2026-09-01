@@ -50,6 +50,9 @@ export default function LoginPage() {
     mode: 'onTouched',
   });
 
+  const [username, password, outletId] = methods.watch(['username','password','outletId']);
+  const isFormComplete = Boolean(username?.trim() && password?.trim() && outletId?.trim());
+
   const onSubmit = async (values) => {
     setServerError(null);
     try {
@@ -185,7 +188,7 @@ export default function LoginPage() {
                       </Link>
                     </Stack>
 
-                    <Button type="submit" variant="contained" size="large" disabled={isLoading} fullWidth>
+                    <Button type="submit" variant="contained" size="large" disabled={isLoading || !isFormComplete } fullWidth>
                       {isLoading ? 'Signing in…' : 'Login'}
                     </Button>
 
