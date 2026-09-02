@@ -104,9 +104,11 @@ import ProtectedRoute from './routes/ProtectedRoute';
 import AppShell from './components/layout/AppShell';
 import GlobalToast from './components/common/GlobalToast';
 import { useAuthSync } from './hooks/useAuthSync';
+import { useInactivityTimeout } from './hooks/useInactivityTimeout';
 
 export default function App() {
   useAuthSync();
+  useInactivityTimeout();
   return (
     <>
       <Routes>
