@@ -33,41 +33,45 @@ import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
  * `section` groups items visually (a divider is drawn between groups in the
  * sidebar), matching the spacing break seen in the reference between
  * "Stock Count" and "Cashier Panel".
+ *
+ * `color` is each item's unique icon color, shown when the "Sidebar Icon
+ * Colors" toggle in Settings (see uiSlice.js's sidebarIconColorsEnabled) is
+ * on; turning it off falls back to the sidebar's plain single-tone icons.
  */
 export const NAV_SECTIONS = [
   {
     key: 'main',
     items: [
-      { key: 'home', label: 'Home', icon: HomeOutlinedIcon, path: '/home' },
-      { key: 'management-dashboard', label: 'Dashboard', icon: SpaceDashboardOutlinedIcon, path: '/dashboard' },
-      { key: 'line-sale', label: 'Line Sale', icon: PointOfSaleOutlinedIcon, path: '/line-sale', quickAccess: true },
-      { key: 'sales-return', label: 'Sales Return', icon: AssignmentReturnOutlinedIcon, path: '/sales-return', quickAccess: true },
-      { key: 'promotion', label: 'Promotion', icon: CampaignOutlinedIcon, path: '/promotion', quickAccess: true },
-      { key: 'gift-voucher', label: 'Gift Voucher', icon: CardGiftcardOutlinedIcon, path: '/gift-voucher', quickAccess: true },
-      { key: 'loyalty', label: 'Loyalty', icon: FavoriteBorderOutlinedIcon, path: '/loyalty', quickAccess: true },
-      { key: 'customer', label: 'Customer', icon: PeopleAltOutlinedIcon, path: '/customer', quickAccess: true },
-      { key: 'sales-quotation', label: 'Sales Quotation', icon: DescriptionOutlinedIcon, path: '/sales-quotation', quickAccess: true },
-      { key: 'sales-order', label: 'Sales Order', icon: ReceiptLongOutlinedIcon, path: '/sales-order', quickAccess: true },
-      { key: 'sales-invoice', label: 'Sales Invoice', icon: ReceiptOutlinedIcon, path: '/sales-invoice', quickAccess: true },
-      { key: 'barcode-label', label: 'Barcode & Lable', icon: QrCode2OutlinedIcon, path: '/barcode-label', quickAccess: true },
-      { key: 'stock-indent', label: 'Stock Indent', icon: PlaylistAddCheckOutlinedIcon, path: '/stock-indent', quickAccess: true },
-      { key: 'stock-transfer', label: 'Stock Transfer', icon: LocalShippingOutlinedIcon, path: '/stock-transfer', quickAccess: true },
-      { key: 'stock-receipt', label: 'Stock Receipt', icon: MoveToInboxOutlinedIcon, path: '/stock-receipt', quickAccess: true },
-      { key: 'stock-return', label: 'Stock Return', icon: KeyboardReturnOutlinedIcon, path: '/stock-return', quickAccess: true },
-      { key: 'stock-wastage', label: 'Stock Wastage', icon: DeleteOutlineOutlinedIcon, path: '/stock-wastage', quickAccess: true },
-      { key: 'stock-count', label: 'Stock Count', icon: FactCheckOutlinedIcon, path: '/stock-count', quickAccess: true },
+      { key: 'home', label: 'Home', icon: HomeOutlinedIcon, path: '/home', color: '#1E40AF' },
+      { key: 'management-dashboard', label: 'Dashboard', icon: SpaceDashboardOutlinedIcon, path: '/dashboard', color: '#5B21B6' },
+      { key: 'line-sale', label: 'Line Sale', icon: PointOfSaleOutlinedIcon, path: '/line-sale', quickAccess: true, color: '#C2410C' },
+      { key: 'sales-return', label: 'Sales Return', icon: AssignmentReturnOutlinedIcon, path: '/sales-return', quickAccess: true, color: '#991B1B' },
+      { key: 'promotion', label: 'Promotion', icon: CampaignOutlinedIcon, path: '/promotion', quickAccess: true, color: '#9D174D' },
+      { key: 'gift-voucher', label: 'Gift Voucher', icon: CardGiftcardOutlinedIcon, path: '/gift-voucher', quickAccess: true, color: '#86198F' },
+      { key: 'loyalty', label: 'Loyalty', icon: FavoriteBorderOutlinedIcon, path: '/loyalty', quickAccess: true, color: '#9F1239' },
+      { key: 'customer', label: 'Customer', icon: PeopleAltOutlinedIcon, path: '/customer', quickAccess: true, color: '#0369A1' },
+      { key: 'sales-quotation', label: 'Sales Quotation', icon: DescriptionOutlinedIcon, path: '/sales-quotation', quickAccess: true, color: '#115E59' },
+      { key: 'sales-order', label: 'Sales Order', icon: ReceiptLongOutlinedIcon, path: '/sales-order', quickAccess: true, color: '#065F46' },
+      { key: 'sales-invoice', label: 'Sales Invoice', icon: ReceiptOutlinedIcon, path: '/sales-invoice', quickAccess: true, color: '#166534' },
+      { key: 'barcode-label', label: 'Barcode & Lable', icon: QrCode2OutlinedIcon, path: '/barcode-label', quickAccess: true, color: '#3F6212' },
+      { key: 'stock-indent', label: 'Stock Indent', icon: PlaylistAddCheckOutlinedIcon, path: '/stock-indent', quickAccess: true, color: '#854D0E' },
+      { key: 'stock-transfer', label: 'Stock Transfer', icon: LocalShippingOutlinedIcon, path: '/stock-transfer', quickAccess: true, color: '#92400E' },
+      { key: 'stock-receipt', label: 'Stock Receipt', icon: MoveToInboxOutlinedIcon, path: '/stock-receipt', quickAccess: true, color: '#155E75' },
+      { key: 'stock-return', label: 'Stock Return', icon: KeyboardReturnOutlinedIcon, path: '/stock-return', quickAccess: true, color: '#6B21A8' },
+      { key: 'stock-wastage', label: 'Stock Wastage', icon: DeleteOutlineOutlinedIcon, path: '/stock-wastage', quickAccess: true, color: '#7F1D1D' },
+      { key: 'stock-count', label: 'Stock Count', icon: FactCheckOutlinedIcon, path: '/stock-count', quickAccess: true, color: '#3730A3' },
     ],
   },
   {
     key: 'operations',
     items: [
-      { key: 'cashier-panel', label: 'Cashier Panel', icon: BadgeOutlinedIcon, path: '/cashier-panel', quickAccess: true },
-      { key: 'expenses-book', label: 'Expense Book', icon: MenuBookOutlinedIcon, path: '/expenses-book', quickAccess: true },
-      { key: 'reports', label: 'Reports', icon: BarChartOutlinedIcon, path: '/reports' },
-      { key: 'masters', label: 'Masters', icon: SettingsOutlinedIcon, path: '/masters' },
-      { key: 'master-sync', label: 'Master Sync', icon: CloudDoneOutlinedIcon, path: '/master-sync', quickAccess: true },
-      { key: 'stock-sync', label: 'Stock Sync', icon: CloudSyncOutlinedIcon, path: '/stock-sync', quickAccess: true },
-      { key: 'sap-sync', label: 'SAP Sync', icon: CloudQueueOutlinedIcon, path: '/sap-sync', quickAccess: true },
+      { key: 'cashier-panel', label: 'Cashier Panel', icon: BadgeOutlinedIcon, path: '/cashier-panel', quickAccess: true, color: '#78350F' },
+      { key: 'expenses-book', label: 'Expense Book', icon: MenuBookOutlinedIcon, path: '/expenses-book', quickAccess: true, color: '#451A03' },
+      { key: 'reports', label: 'Reports', icon: BarChartOutlinedIcon, path: '/reports', color: '#1E3A8A' },
+      { key: 'masters', label: 'Masters', icon: SettingsOutlinedIcon, path: '/masters', color: '#1E293B' },
+      { key: 'master-sync', label: 'Master Sync', icon: CloudDoneOutlinedIcon, path: '/master-sync', quickAccess: true, color: '#0C4A6E' },
+      { key: 'stock-sync', label: 'Stock Sync', icon: CloudSyncOutlinedIcon, path: '/stock-sync', quickAccess: true, color: '#14532D' },
+      { key: 'sap-sync', label: 'SAP Sync', icon: CloudQueueOutlinedIcon, path: '/sap-sync', quickAccess: true, color: '#4C1D95' },
     ],
   },
 ];

@@ -1,6 +1,6 @@
 // Nexora POS — Prisma schema
-// NOTE: No models yet. Models are added incrementally, module by module,
-// as each module is approved and implemented (see docs/architecture-proposal.md).
+// Models are added incrementally, module by module, as each module is
+// approved and implemented (see docs/architecture-proposal.md).
 //
 // Prisma 7: the connection string is no longer set here. The CLI (generate/
 // migrate/studio) reads it from ../prisma.config.ts, and the running app
@@ -14,4 +14,78 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Foundation (Phase 1): Tenant, Outlet, User, auth.
+// Single-role for now (ADMIN) — Cashier/Outlet Manager roles are a later,
+// separate task per the build-order decision.
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outlets Outlet[]
+  users   User[]
+  brands  Brand[]
+}
+
+model Outlet {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  code      String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, code])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  username     String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(ADMIN)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Masters (Phase 2, module by module). Brand is the pilot module for the
+// generic CRUD pattern — every later master follows this same shape:
+// tenant-scoped, auto-generated code, RecordStatus, createdAt/updatedAt.
+// ---------------------------------------------------------------------------
+
+model Brand {
+  id          String       @id @default(cuid())
+  tenantId    String
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  code        String
+  name        String
+  description String?
+  category    String
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([tenantId, code])
 }

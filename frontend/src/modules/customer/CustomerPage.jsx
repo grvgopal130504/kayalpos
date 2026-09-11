@@ -16,6 +16,8 @@ import CustomerTable from './components/CustomerTable';
 import CustomerDetailsCard from './components/CustomerDetailsCard';
 import CustomerTransactionsCard from './components/CustomerTransactionsCard';
 import CustomerLoyaltySummary from './components/CustomerLoyaltySummary';
+import AddNewCustomerPage from './AddNewCustomerPage';
+import CustomerViewPage from './CustomerViewPage';
 import {
   SUMMARY, CUSTOMERS, TOTAL_CUSTOMER_COUNT, CUSTOMER_DETAILS, RECENT_TRANSACTIONS, LOYALTY_SUMMARY,
   getCustomerDetails,
@@ -28,26 +30,46 @@ import {
  * everything is driven by customerMockData.js — selecting a row other than
  * CUS-0001 falls back to reusing CUSTOMER_DETAILS' shape (only
  * name/code/status/contact fields differ) since we don't have full mock
- * detail records for every generated row.
+ * detail records for every generated row. Add/Edit/View swap in via local
+ * state instead of separate /add, /edit/:code, /view/:code routes.
  */
 export default function CustomerPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [tab, setTab] = useState('list');
+  const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(CUSTOMER_DETAILS.code);
+
+  const goToList = () => { setActiveCode(null); setTab('list'); };
+  const openEdit = (code) => { setActiveCode(code); setTab('edit'); };
+  const openView = (code) => { setActiveCode(code); setTab('view'); };
+
+  if (tab === 'create' || tab === 'edit') {
+    return (
+      <AddNewCustomerPage
+        code={tab === 'edit' ? activeCode : undefined}
+        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+      />
+    );
+  }
+
+  if (tab === 'view') {
+    return <CustomerViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+  }
 
   const customerDetails = getCustomerDetails(selectedCode);
 
   const handleSelectCustomer = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/customer/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/customer/edit/${row.code}`);
+    if (label === 'View') return openView(row.code);
+    if (label === 'Edit') return openEdit(row.code);
     dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Customers is coming soon', 'info'));
-  const handleAddCustomer = () => navigate('/customer/add');
+  const handleAddCustomer = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => navigate(`/customer/edit/${selectedCode}`);
+  const handleEdit = () => openEdit(selectedCode);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));

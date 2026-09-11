@@ -65,7 +65,7 @@ const EXTRA_TILE_STYLE = {
  * "All Transfers" overview page, scoped by `status`. Mirrors
  * StockIndentStatusPage.
  */
-export default function StockTransferStatusPage({ status, tab, onTabChange, onCreate }) {
+export default function StockTransferStatusPage({ status, tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const meta = STATUS_META[status];
@@ -94,8 +94,8 @@ export default function StockTransferStatusPage({ status, tab, onTabChange, onCr
 
   const handleSelectTransfer = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/stock-transfer/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/stock-transfer/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.code) : navigate(`/stock-transfer/view/${row.code}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/stock-transfer/edit/${row.code}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typog
  * [{ key, label, align, render(row, index) }]. Horizontal scroll on narrow
  * screens instead of a bespoke mobile layout, per the responsive rules.
  */
-export default function DataTable({ columns, rows, getRowKey, emptyMessage = 'No records found', dense = false }) {
+export default function DataTable({ columns, rows, getRowKey, emptyMessage = 'No records found', dense = false, onRowClick }) {
   if (!rows || rows.length === 0) {
     return (
       <Box sx={{ py: 4, textAlign: 'center' }}>
@@ -36,9 +36,19 @@ export default function DataTable({ columns, rows, getRowKey, emptyMessage = 'No
         </TableHead>
         <TableBody>
           {rows.map((row, rowIndex) => (
-            <TableRow key={getRowKey ? getRowKey(row) : rowIndex} hover>
+            <TableRow
+              key={getRowKey ? getRowKey(row) : rowIndex}
+              hover
+              onClick={onRowClick ? () => onRowClick(row, rowIndex) : undefined}
+              sx={onRowClick ? { cursor: 'pointer' } : undefined}
+            >
               {columns.map((col) => (
-                <TableCell key={col.key} align={col.align || 'left'} sx={{ fontSize: 13.5, borderBottomColor: 'divider' }}>
+                <TableCell
+                  key={col.key}
+                  align={col.align || 'left'}
+                  sx={{ fontSize: 13.5, borderBottomColor: 'divider' }}
+                  onClick={col.stopRowClick ? (e) => e.stopPropagation() : undefined}
+                >
                   {col.render ? col.render(row, rowIndex) : row[col.key]}
                 </TableCell>
               ))}

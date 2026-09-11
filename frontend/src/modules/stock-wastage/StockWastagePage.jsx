@@ -14,15 +14,18 @@ import { showToast } from '../../features/ui/uiSlice';
 import StockWastageSummaryCards from './components/StockWastageSummaryCards';
 import StockWastageTable from './components/StockWastageTable';
 import StockWastageDetailsCard from './components/StockWastageDetailsCard';
+import CreateStockWastagePage from './CreateStockWastagePage';
+import WastageViewPage from './WastageViewPage';
 import { SUMMARY, WASTAGES, TOTAL_WASTAGE_COUNT, WASTAGE_DETAILS } from './stockWastageMockData';
 
 const WASTAGE_BY_CODE = Object.fromEntries(WASTAGES.map((w) => [w.code, w]));
 
 /**
  * Landing page for the sidebar's Stock Wastage item — summary tiles, the
- * wastage list with a detail panel for whichever row is selected. "Create
- * Wastage" navigates to its own dedicated page. The Stock Wastage backend
- * module doesn't exist yet, so everything is driven by
+ * wastage list with a detail panel for whichever row is selected, plus the
+ * create/edit form and the read-only view, all swapped in via local state
+ * instead of separate /create, /edit/:code, /view/:code routes. The Stock
+ * Wastage backend module doesn't exist yet, so everything is driven by
  * stockWastageMockData.js — selecting a row other than WST-00030 falls
  * back to reusing WASTAGE_DETAILS' shape (only the top-level fields
  * differ) since we don't have full mock detail records for every row.
@@ -30,8 +33,36 @@ const WASTAGE_BY_CODE = Object.fromEntries(WASTAGES.map((w) => [w.code, w]));
 export default function StockWastagePage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [tab, setTab] = useState('list');
+  const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(WASTAGE_DETAILS.code);
+
+  const goToList = () => {
+    setActiveCode(null);
+    setTab('list');
+  };
+  const openEdit = (code) => {
+    setActiveCode(code);
+    setTab('edit');
+  };
+  const openView = (code) => {
+    setActiveCode(code);
+    setTab('view');
+  };
+
+  if (tab === 'create' || tab === 'edit') {
+    return (
+      <CreateStockWastagePage
+        code={tab === 'edit' ? activeCode : undefined}
+        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+      />
+    );
+  }
+
+  if (tab === 'view') {
+    return <WastageViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+  }
 
   const selectedRow = WASTAGE_BY_CODE[selectedCode];
   const wastageDetails = selectedCode === WASTAGE_DETAILS.code
@@ -49,14 +80,14 @@ export default function StockWastagePage() {
 
   const handleSelectWastage = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/stock-wastage/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/stock-wastage/edit/${row.code}`);
+    if (label === 'View') return openView(row.code);
+    if (label === 'Edit') return openEdit(row.code);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Wastages is coming soon', 'info'));
-  const handleCreate = () => navigate('/stock-wastage/create');
+  const handleCreate = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => navigate(`/stock-wastage/edit/${selectedCode}`);
+  const handleEdit = () => openEdit(selectedCode);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));

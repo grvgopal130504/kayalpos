@@ -3,28 +3,60 @@ import { useState } from 'react';
 import SalesQuotationOverviewPage from './SalesQuotationOverviewPage';
 import SalesQuotationStatusPage from './SalesQuotationStatusPage';
 import CreateSalesQuotationPage from './CreateSalesQuotationPage';
+import QuotationViewPage from './QuotationViewPage';
 
 /**
- * Landing page for the sidebar's Sales Quotation item. Previously this was
- * a card grid linking out to separate Sales Quotation/Draft/Converted/
- * Expired/New Quotation routes; now it's a thin state holder with no
- * chrome of its own — it just tracks which one is active and renders that
- * page's full header + content (title, breadcrumb, and that page's own
- * action buttons, which differ between the list views and the create
- * form). The single All/Draft/Converted/Expired tab row lives inside
- * SalesQuotationTable itself (matching the reference design), and is
- * lifted here via `tab`/`onTabChange` so clicking it swaps the whole page
- * body instead of just filtering the table's rows.
+ * Landing page for the sidebar's Sales Quotation item — a single page that
+ * hosts the list (All/Draft/Converted/Expired), the create/edit form, and
+ * the read-only view, all swapped in place via local state instead of
+ * separate /create, /edit/:code, /view/:code routes. Clicking "New
+ * Quotation", a row's "View", or a row's "Edit" just swaps which body
+ * renders here — the browser stays on /sales-quotation throughout.
  */
 export default function SalesQuotationPage() {
   const [tab, setTab] = useState('all');
+  const [activeCode, setActiveCode] = useState(null);
 
-  if (tab === 'create') {
-    return <CreateSalesQuotationPage onBack={() => setTab('all')} />;
+  const goToList = () => {
+    setActiveCode(null);
+    setTab('all');
+  };
+  const openCreate = () => {
+    setActiveCode(null);
+    setTab('create');
+  };
+  const openEdit = (code) => {
+    setActiveCode(code);
+    setTab('edit');
+  };
+  const openView = (code) => {
+    setActiveCode(code);
+    setTab('view');
+  };
+
+  if (tab === 'create' || tab === 'edit') {
+    return (
+      <CreateSalesQuotationPage
+        code={tab === 'edit' ? activeCode : undefined}
+        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+      />
+    );
+  }
+
+  if (tab === 'view') {
+    return <QuotationViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
   }
 
   if (tab === 'all') {
-    return <SalesQuotationOverviewPage tab={tab} onTabChange={setTab} onCreate={() => setTab('create')} />;
+    return (
+      <SalesQuotationOverviewPage
+        tab={tab}
+        onTabChange={setTab}
+        onCreate={openCreate}
+        onView={openView}
+        onEdit={openEdit}
+      />
+    );
   }
 
   return (
@@ -32,7 +64,9 @@ export default function SalesQuotationPage() {
       status={tab}
       tab={tab}
       onTabChange={setTab}
-      onCreate={() => setTab('create')}
+      onCreate={openCreate}
+      onView={openView}
+      onEdit={openEdit}
     />
   );
 }

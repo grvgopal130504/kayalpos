@@ -5,6 +5,8 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 import healthRoutes from './modules/health/health.routes.js';
+import outletRoutes from './modules/outlet/outlet.routes.js';
+import brandRoutes from './modules/brand/brand.routes.js';
 
 export const app = express();
 
@@ -40,6 +42,8 @@ app.use('/api/health', healthRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/outlets', outletRoutes);
+app.use('/api/masters/brand', brandRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

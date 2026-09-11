@@ -27,7 +27,7 @@ const ORDER_BY_CODE = Object.fromEntries(ORDERS.map((o) => [o.code, o]));
  * Sales Order backend module doesn't exist yet so everything is driven by
  * salesOrderMockData.js.
  */
-export default function SalesOrderOverviewPage({ tab, onTabChange, onCreate }) {
+export default function SalesOrderOverviewPage({ tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -49,8 +49,8 @@ export default function SalesOrderOverviewPage({ tab, onTabChange, onCreate }) {
 
   const handleSelectOrder = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/sales-order/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/sales-order/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.code) : navigate(`/sales-order/view/${row.code}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/sales-order/edit/${row.code}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

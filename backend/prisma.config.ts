@@ -10,6 +10,9 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
+    // Lets `npx prisma migrate dev` / `npx prisma db seed` run
+    // prisma/seed.js (creates the dev Tenant, Outlets, and Admin user).
+    seed: 'node prisma/seed.js',
   },
   datasource: {
     url: env('DATABASE_URL'),

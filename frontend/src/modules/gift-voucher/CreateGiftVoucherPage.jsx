@@ -50,10 +50,11 @@ function parseVoucherValue(value) {
  * no backend yet, so "editing" prefills from getGiftVoucherDetails() the
  * same best-effort way GiftVoucherPage's own detail panel does.
  */
-export default function CreateGiftVoucherPage() {
+export default function CreateGiftVoucherPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingVoucher = isEditMode ? getGiftVoucherDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -82,13 +83,15 @@ export default function CreateGiftVoucherPage() {
   const applicableTo = watch('applicableTo');
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/gift-voucher/view/${code}`);
-    else navigate('/gift-voucher');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/gift-voucher/view/${code}`);
+    navigate('/gift-voucher');
   };
 
   const onSubmit = () => {
     dispatch(showToast(isEditMode ? `Gift voucher ${code} updated successfully` : 'Gift voucher created as a draft', 'success'));
-    if (isEditMode) navigate(`/gift-voucher/view/${code}`);
+    if (onBack) onBack();
+    else if (isEditMode) navigate(`/gift-voucher/view/${code}`);
     else navigate('/gift-voucher');
   };
 

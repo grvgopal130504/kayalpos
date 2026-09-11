@@ -1,17 +1,17 @@
 import * as authService from './auth.service.js';
 
-export function loginHandler(req, res, next) {
+export async function loginHandler(req, res, next) {
   try {
-    const result = authService.login(req.body);
+    const result = await authService.login(req.body);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
 }
 
-export function changePasswordHandler(req, res, next) {
+export async function changePasswordHandler(req, res, next) {
   try {
-    const result = authService.changePassword({ username: req.user.username, ...req.body });
+    const result = await authService.changePassword({ userId: req.user.id, ...req.body });
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);

@@ -14,15 +14,18 @@ import { showToast } from '../../features/ui/uiSlice';
 import StockReceiptSummaryCards from './components/StockReceiptSummaryCards';
 import StockReceiptTable from './components/StockReceiptTable';
 import StockReceiptDetailsCard from './components/StockReceiptDetailsCard';
+import CreateStockReceiptPage from './CreateStockReceiptPage';
+import ReceiptViewPage from './ReceiptViewPage';
 import { SUMMARY, RECEIPTS, TOTAL_RECEIPT_COUNT, RECEIPT_DETAILS } from './stockReceiptMockData';
 
 const RECEIPT_BY_CODE = Object.fromEntries(RECEIPTS.map((r) => [r.code, r]));
 
 /**
  * Landing page for the sidebar's Stock Receipt item — summary tiles, the
- * receipt list with a detail panel for whichever row is selected. "Create
- * Receipt" navigates to its own dedicated page. The Stock Receipt backend
- * module doesn't exist yet, so everything is driven by
+ * receipt list with a detail panel for whichever row is selected, plus the
+ * create/edit form and the read-only view, all swapped in via local state
+ * instead of separate /create, /edit/:code, /view/:code routes. The Stock
+ * Receipt backend module doesn't exist yet, so everything is driven by
  * stockReceiptMockData.js — selecting a row other than RCPT-00030 falls
  * back to reusing RECEIPT_DETAILS' shape (only the top-level fields differ)
  * since we don't have full mock detail records for every row.
@@ -30,8 +33,36 @@ const RECEIPT_BY_CODE = Object.fromEntries(RECEIPTS.map((r) => [r.code, r]));
 export default function StockReceiptPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [tab, setTab] = useState('list');
+  const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(RECEIPT_DETAILS.code);
+
+  const goToList = () => {
+    setActiveCode(null);
+    setTab('list');
+  };
+  const openEdit = (code) => {
+    setActiveCode(code);
+    setTab('edit');
+  };
+  const openView = (code) => {
+    setActiveCode(code);
+    setTab('view');
+  };
+
+  if (tab === 'create' || tab === 'edit') {
+    return (
+      <CreateStockReceiptPage
+        code={tab === 'edit' ? activeCode : undefined}
+        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+      />
+    );
+  }
+
+  if (tab === 'view') {
+    return <ReceiptViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+  }
 
   const selectedRow = RECEIPT_BY_CODE[selectedCode];
   const receiptDetails = selectedCode === RECEIPT_DETAILS.code
@@ -50,14 +81,14 @@ export default function StockReceiptPage() {
 
   const handleSelectReceipt = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/stock-receipt/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/stock-receipt/edit/${row.code}`);
+    if (label === 'View') return openView(row.code);
+    if (label === 'Edit') return openEdit(row.code);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Receipts is coming soon', 'info'));
-  const handleCreate = () => navigate('/stock-receipt/create');
+  const handleCreate = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => navigate(`/stock-receipt/edit/${selectedCode}`);
+  const handleEdit = () => openEdit(selectedCode);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));

@@ -26,7 +26,7 @@ const BATCH_BY_CODE = Object.fromEntries(BATCHES.map((b) => [b.code, b]));
  * Barcode & Label backend module doesn't exist yet so everything is
  * driven by barcodeLabelMockData.js.
  */
-export default function BarcodeLabelOverviewPage({ tab, onTabChange, onCreate }) {
+export default function BarcodeLabelOverviewPage({ tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -48,8 +48,8 @@ export default function BarcodeLabelOverviewPage({ tab, onTabChange, onCreate })
 
   const handleSelectBatch = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/barcode-label/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/barcode-label/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.code) : navigate(`/barcode-label/view/${row.code}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/barcode-label/edit/${row.code}`);
     return dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

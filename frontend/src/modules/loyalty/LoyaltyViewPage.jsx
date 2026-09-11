@@ -14,13 +14,14 @@ import { getLoyaltyProgramDetails } from './loyaltyMockData';
  * shows for the selected row, just addressed by :code as its own full page
  * instead of a side panel.
  */
-export default function LoyaltyViewPage() {
+export default function LoyaltyViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const program = getLoyaltyProgramDetails(code);
 
-  const handleBack = () => navigate('/loyalty');
-  const handleEdit = () => navigate(`/loyalty/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/loyalty'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/loyalty/edit/${code}`));
 
   if (!program) {
     return (

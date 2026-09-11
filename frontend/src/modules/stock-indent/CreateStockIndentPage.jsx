@@ -67,10 +67,11 @@ function itemToRow(item) {
  * there's no upload endpoint yet). Saving is mocked (no Stock Indent
  * backend module yet).
  */
-export default function CreateStockIndentPage({ onBack }) {
+export default function CreateStockIndentPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingIndent = isEditMode ? getIndentDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -93,9 +94,9 @@ export default function CreateStockIndentPage({ onBack }) {
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/stock-indent/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/stock-indent/overview');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/stock-indent/view/${code}`);
+    navigate('/stock-indent');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

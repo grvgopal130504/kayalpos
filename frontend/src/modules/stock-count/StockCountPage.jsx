@@ -14,15 +14,18 @@ import { showToast } from '../../features/ui/uiSlice';
 import StockCountSummaryCards from './components/StockCountSummaryCards';
 import StockCountTable from './components/StockCountTable';
 import StockCountDetailsCard from './components/StockCountDetailsCard';
+import CreateStockCountPage from './CreateStockCountPage';
+import CountViewPage from './CountViewPage';
 import { SUMMARY, COUNTS, TOTAL_COUNT_COUNT, COUNT_DETAILS } from './stockCountMockData';
 
 const COUNT_BY_CODE = Object.fromEntries(COUNTS.map((c) => [c.code, c]));
 
 /**
  * Landing page for the sidebar's Stock Count item — summary tiles, the
- * count list with a detail panel for whichever row is selected. "Create
- * Count" navigates to its own dedicated page. The Stock Count backend
- * module doesn't exist yet, so everything is driven by
+ * count list with a detail panel for whichever row is selected, plus the
+ * create/edit form and the read-only view, all swapped in via local state
+ * instead of separate /create, /edit/:code, /view/:code routes. The Stock
+ * Count backend module doesn't exist yet, so everything is driven by
  * stockCountMockData.js — selecting a row other than CNT-00030 falls back
  * to reusing COUNT_DETAILS' shape (only the top-level fields differ)
  * since we don't have full mock detail records for every row.
@@ -30,8 +33,36 @@ const COUNT_BY_CODE = Object.fromEntries(COUNTS.map((c) => [c.code, c]));
 export default function StockCountPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [tab, setTab] = useState('list');
+  const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(COUNT_DETAILS.code);
+
+  const goToList = () => {
+    setActiveCode(null);
+    setTab('list');
+  };
+  const openEdit = (code) => {
+    setActiveCode(code);
+    setTab('edit');
+  };
+  const openView = (code) => {
+    setActiveCode(code);
+    setTab('view');
+  };
+
+  if (tab === 'create' || tab === 'edit') {
+    return (
+      <CreateStockCountPage
+        code={tab === 'edit' ? activeCode : undefined}
+        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+      />
+    );
+  }
+
+  if (tab === 'view') {
+    return <CountViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+  }
 
   const selectedRow = COUNT_BY_CODE[selectedCode];
   const countDetails = selectedCode === COUNT_DETAILS.code
@@ -49,14 +80,14 @@ export default function StockCountPage() {
 
   const handleSelectCount = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/stock-count/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/stock-count/edit/${row.code}`);
+    if (label === 'View') return openView(row.code);
+    if (label === 'Edit') return openEdit(row.code);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Counts is coming soon', 'info'));
-  const handleCreate = () => navigate('/stock-count/create');
+  const handleCreate = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => navigate(`/stock-count/edit/${selectedCode}`);
+  const handleEdit = () => openEdit(selectedCode);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));

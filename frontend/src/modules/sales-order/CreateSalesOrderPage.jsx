@@ -76,10 +76,11 @@ function itemToRow(item) {
  * as a mockup typo and corrected here rather than replicated literally —
  * each field's label matches its own placeholder/behavior.
  */
-export default function CreateSalesOrderPage({ onBack }) {
+export default function CreateSalesOrderPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingOrder = isEditMode ? getOrderDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -107,13 +108,13 @@ export default function CreateSalesOrderPage({ onBack }) {
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/sales-order/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/sales-order/overview');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/sales-order/view/${code}`);
+    navigate('/sales-order');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleAddCustomer = () => navigate('/customer/add');
+  const handleAddCustomer = () => navigate('/customer');
   const handleAddItem = () => dispatch(showToast('Item picker is coming soon', 'info'));
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);

@@ -22,12 +22,13 @@ import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
+import { useGetBrandsQuery, useDeleteBrandMutation } from '../../../api/brandApi';
 
 import BrandTable from './components/BrandTable';
 import BrandFormDialog from './components/BrandFormDialog';
 import BrandViewDialog from './components/BrandViewDialog';
 import { CASHIER } from '../mastersMockData';
-import { BRANDS, CATEGORY_OPTIONS, STATS } from './brandMockData';
+import { CATEGORY_OPTIONS } from './brandMockData';
 
 // Converts a native <input type="date"> value ("YYYY-MM-DD") into this
 // filter bar's "dd-mm-yyyy" display format.
@@ -37,15 +38,31 @@ function formatDdMmYyyy(isoValue) {
   return `${d}-${m}-${y}`;
 }
 
+// Maps a Brand row as returned by the API (status: 'ACTIVE'/'INACTIVE',
+// createdAt: ISO timestamp) to the shape the existing table/dialog
+// components expect (status: 'Active'/'Inactive', createdOn: display date).
+// Item-count-per-brand isn't tracked yet — that lands once the Product
+// master exists and links Product -> Brand, so this shows 0 for now.
+function toViewRow(row) {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    description: row.description || '',
+    category: row.category,
+    totalItems: 0,
+    status: row.status === 'ACTIVE' ? 'Active' : 'Inactive',
+    createdOn: new Date(row.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+  };
+}
+
 /**
  * Brand — the Brand master's list screen, reached from the Masters
- * page's "Brand" card. Same searchable/filterable list shape as the
- * Product master (filter bar + table + records footer + bottom stat
- * row), sized for a small catalog of brands rather than thousands of
- * products, so all 8 mock rows fit on a single page. Filters run
- * entirely client-side over BRANDS; every row action and the Import/
- * Export/New Brand buttons are mocked — there's no Brand backend module
- * yet.
+ * page's "Brand" card. Wired to the real Brand API (see api/brandApi.js):
+ * list/search/filter run server-side via ?search=&status=, create/update
+ * go through BrandFormDialog, and delete asks for confirmation before
+ * calling the API. Import/Export remain mocked — there's no bulk
+ * import/export endpoint yet.
  */
 export default function BrandPage() {
   const dispatch = useAppDispatch();
@@ -62,6 +79,16 @@ export default function BrandPage() {
   const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewRow, setViewRow] = useState(null);
 
+  const {
+    data: brandRows = [],
+    isLoading,
+    isError,
+  } = useGetBrandsQuery({
+    search: appliedSearch || undefined,
+    status: status !== 'All' ? status.toUpperCase() : undefined,
+  });
+  const [deleteBrand] = useDeleteBrandMutation();
+
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
@@ -70,7 +97,7 @@ export default function BrandPage() {
   const handleNewBrand = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Brands is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export Brands is coming soon', 'info'));
-  const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
+  const handleSearch = () => setAppliedSearch(searchInput.trim());
   const handleReset = () => {
     setSearchInput('');
     setStatus('All');
@@ -81,20 +108,35 @@ export default function BrandPage() {
   };
   const handleViewRow = (row) => setViewRow(row);
   const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
-  const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
+  const handleDeleteRow = async (row) => {
+    if (!window.confirm(`Delete brand "${row.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteBrand(row.id).unwrap();
+      dispatch(showToast(`${row.name} deleted`, 'success'));
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to delete brand', 'error'));
+    }
+  };
   const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
 
-  const filteredRows = useMemo(() => BRANDS.filter((row) => {
-    if (appliedSearch) {
-      const haystack = `${row.code} ${row.name}`.toLowerCase();
-      if (!haystack.includes(appliedSearch)) return false;
-    }
-    if (status !== 'All' && row.status !== status) return false;
+  const viewRows = useMemo(() => brandRows.map(toViewRow), [brandRows]);
+
+  // Category and created-date range are filtered client-side (the backend
+  // doesn't index on them yet); search and status are already applied
+  // server-side via the query above.
+  const filteredRows = useMemo(() => viewRows.filter((row) => {
     if (category !== 'All' && row.category !== category) return false;
     return true;
-  }), [appliedSearch, status, category]);
+  }), [viewRows, category]);
 
   const isFiltered = Boolean(appliedSearch) || status !== 'All' || category !== 'All' || Boolean(createdFrom) || Boolean(createdTo);
+
+  const stats = useMemo(() => ({
+    totalBrands: viewRows.length,
+    activeBrands: viewRows.filter((r) => r.status === 'Active').length,
+    inactiveBrands: viewRows.filter((r) => r.status === 'Inactive').length,
+    totalItemsUnderBrands: viewRows.reduce((sum, r) => sum + r.totalItems, 0),
+  }), [viewRows]);
 
   return (
     <Stack spacing={2}>
@@ -260,11 +302,23 @@ export default function BrandPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Brand List</Typography>
-        <BrandTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+        {isError ? (
+          <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
+            Failed to load brands. Please try again.
+          </Typography>
+        ) : (
+          <BrandTable
+            rows={filteredRows}
+            loading={isLoading}
+            onViewRow={handleViewRow}
+            onEditRow={handleEditRow}
+            onDeleteRow={handleDeleteRow}
+          />
+        )}
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Showing {filteredRows.length ? 1 : 0} to {filteredRows.length} of {isFiltered ? filteredRows.length : BRANDS.length} records
+            Showing {filteredRows.length ? 1 : 0} to {filteredRows.length} of {isFiltered ? filteredRows.length : viewRows.length} records
           </Typography>
           <Pagination
             count={1}
@@ -278,16 +332,16 @@ export default function BrandPage() {
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={ReceiptOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total Brands" value={formatNumber(STATS.totalBrands)} />
+          <StatCard icon={ReceiptOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total Brands" value={formatNumber(stats.totalBrands)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Brands" value={formatNumber(STATS.activeBrands)} />
+          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Brands" value={formatNumber(stats.activeBrands)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={CloseIcon} iconColor="error" iconShape="circle" label="Inactive Brands" value={formatNumber(STATS.inactiveBrands)} />
+          <StatCard icon={CloseIcon} iconColor="error" iconShape="circle" label="Inactive Brands" value={formatNumber(stats.inactiveBrands)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={Inventory2OutlinedIcon} iconColor="warning" iconShape="circle" label="Total Items Under Brands" value={formatNumber(STATS.totalItemsUnderBrands)} />
+          <StatCard icon={Inventory2OutlinedIcon} iconColor="warning" iconShape="circle" label="Total Items Under Brands" value={formatNumber(stats.totalItemsUnderBrands)} />
         </Grid>
       </Grid>
 

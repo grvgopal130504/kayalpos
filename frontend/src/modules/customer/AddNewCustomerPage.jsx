@@ -32,10 +32,11 @@ import { getCustomerDetails } from './customerMockData';
  * real per-row mock data; the rest of the form falls back to its normal
  * create defaults since there's nothing to prefill them from).
  */
-export default function AddNewCustomerPage() {
+export default function AddNewCustomerPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingCustomer = isEditMode ? getCustomerDetails(code) : null;
 
@@ -59,11 +60,12 @@ export default function AddNewCustomerPage() {
   const onSubmit = (values) => {
     dispatch(showToast(isEditMode ? 'Customer updated successfully' : 'Customer saved successfully', 'success'));
     if (values.saveOption === 'close') {
-      navigate(isEditMode ? `/customer/view/${code}` : '/customer');
+      if (onBack) onBack();
+      else navigate(isEditMode ? `/customer/view/${code}` : '/customer');
     }
   };
 
-  const handleBackToList = () => navigate('/customer');
+  const handleBackToList = () => (onBack ? onBack() : navigate('/customer'));
 
   if (isEditMode && !existingCustomer) {
     return (

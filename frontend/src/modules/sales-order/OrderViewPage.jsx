@@ -16,14 +16,15 @@ import { getOrderDetails } from './salesOrderMockData';
  * Overview/Status pages already show for the selected row, just addressed
  * by :code as its own full page instead of a side panel.
  */
-export default function OrderViewPage() {
+export default function OrderViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const order = getOrderDetails(code);
   const [notes, setNotes] = useState('');
 
-  const handleBack = () => navigate('/sales-order');
-  const handleEdit = () => navigate(`/sales-order/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/sales-order'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/sales-order/edit/${code}`));
 
   if (!order) {
     return (

@@ -1,6 +1,7 @@
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Avatar, Button,
   ToggleButton, ToggleButtonGroup, TextField, MenuItem, Grid,
+  Switch, FormControlLabel,
 } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -18,6 +19,8 @@ import {
   selectSidebarFontStyle, toggleSidebarFontStyle,
   selectBodyFontStyle, toggleBodyFontStyle,
   selectLanguage, setLanguage,
+  selectSidebarIconColorsEnabled, setSidebarIconColorsEnabled,
+  selectSidebarAnimationsEnabled, setSidebarAnimationsEnabled,
   FONT_OPTIONS, LANGUAGE_OPTIONS,
 } from '../../features/ui/uiSlice';
 import { ACCENT_THEMES, accentCssBackground } from '../../theme/accentThemes';
@@ -102,6 +105,8 @@ export default function SettingsPage() {
   const sidebarFontStyle = useAppSelector(selectSidebarFontStyle);
   const bodyFontStyle = useAppSelector(selectBodyFontStyle);
   const language = useAppSelector(selectLanguage);
+  const sidebarIconColorsEnabled = useAppSelector(selectSidebarIconColorsEnabled);
+  const sidebarAnimationsEnabled = useAppSelector(selectSidebarAnimationsEnabled);
 
   const handleManageProfile = () => navigate('/settings/profile');
 
@@ -233,6 +238,44 @@ export default function SettingsPage() {
         <Grid size={{ xs: 12, md: 6, lg: 4 }}>
           <InfoCard title="Tabs">
             <TabsSettingsCard />
+          </InfoCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+          <InfoCard title="Sidebar Icons">
+            <Stack spacing={1} sx={{ height: '100%', justifyContent: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={sidebarIconColorsEnabled}
+                    onChange={(e) => dispatch(setSidebarIconColorsEnabled(e.target.checked))}
+                  />
+                }
+                label="Unique icon colors"
+              />
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Show each sidebar menu with its own icon color. Turn off for single-tone icons.
+              </Typography>
+            </Stack>
+          </InfoCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+          <InfoCard title="Sidebar Animation">
+            <Stack spacing={1} sx={{ height: '100%', justifyContent: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={sidebarAnimationsEnabled}
+                    onChange={(e) => dispatch(setSidebarAnimationsEnabled(e.target.checked))}
+                  />
+                }
+                label="Menu animations"
+              />
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Play the 3D entrance and hover-tilt effects on sidebar menus. Turn off for instant, static rows.
+              </Typography>
+            </Stack>
           </InfoCard>
         </Grid>
       </Grid>

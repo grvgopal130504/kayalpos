@@ -14,15 +14,18 @@ import { showToast } from '../../features/ui/uiSlice';
 import LoyaltySummaryCards from './components/LoyaltySummaryCards';
 import LoyaltyTable from './components/LoyaltyTable';
 import LoyaltyDetailsCard from './components/LoyaltyDetailsCard';
+import CreateLoyaltyProgramPage from './CreateLoyaltyProgramPage';
+import LoyaltyViewPage from './LoyaltyViewPage';
 import { SUMMARY, PROGRAMS, TOTAL_PROGRAM_COUNT, PROGRAM_DETAILS } from './loyaltyMockData';
 
 const PROGRAM_BY_CODE = Object.fromEntries(PROGRAMS.map((p) => [p.code, p]));
 
 /**
  * Landing page for the sidebar's Loyalty item — summary tiles, the program
- * list with a detail panel for whichever row is selected. "Create Loyalty
- * Program" navigates to its own dedicated page. The Loyalty backend module
- * doesn't exist yet, so everything is driven by loyaltyMockData.js —
+ * list with a detail panel for whichever row is selected. Create/Edit/View
+ * swap in via local state instead of separate /create, /edit/:code,
+ * /view/:code routes. The Loyalty backend module doesn't exist yet, so
+ * everything is driven by loyaltyMockData.js —
  * selecting a row other than LP-0001 falls back to reusing PROGRAM_DETAILS'
  * shape (only name/code/rules/status differ) since we don't have full mock
  * detail records for every row.
@@ -30,8 +33,27 @@ const PROGRAM_BY_CODE = Object.fromEntries(PROGRAMS.map((p) => [p.code, p]));
 export default function LoyaltyPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [tab, setTab] = useState('list');
+  const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(PROGRAM_DETAILS.code);
+
+  const goToList = () => { setActiveCode(null); setTab('list'); };
+  const openEdit = (code) => { setActiveCode(code); setTab('edit'); };
+  const openView = (code) => { setActiveCode(code); setTab('view'); };
+
+  if (tab === 'create' || tab === 'edit') {
+    return (
+      <CreateLoyaltyProgramPage
+        code={tab === 'edit' ? activeCode : undefined}
+        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+      />
+    );
+  }
+
+  if (tab === 'view') {
+    return <LoyaltyViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+  }
 
   const selectedRow = PROGRAM_BY_CODE[selectedCode];
   const programDetails = selectedCode === PROGRAM_DETAILS.code
@@ -47,12 +69,12 @@ export default function LoyaltyPage() {
 
   const handleSelectProgram = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/loyalty/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/loyalty/edit/${row.code}`);
+    if (label === 'View') return openView(row.code);
+    if (label === 'Edit') return openEdit(row.code);
     return dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Programs is coming soon', 'info'));
-  const handleCreate = () => navigate('/loyalty/create');
+  const handleCreate = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
   const handleEdit = () => dispatch(showToast('Edit Loyalty Program is coming soon', 'info'));
   const handleMoreAction = (label) => {

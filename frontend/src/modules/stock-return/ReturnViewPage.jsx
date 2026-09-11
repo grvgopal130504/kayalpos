@@ -14,13 +14,14 @@ import { getReturnDetails } from './stockReturnMockData';
  * for the selected row, just addressed by :code as its own full page
  * instead of a side panel.
  */
-export default function ReturnViewPage() {
+export default function ReturnViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const returnRecord = getReturnDetails(code);
 
-  const handleBack = () => navigate('/stock-return');
-  const handleEdit = () => navigate(`/stock-return/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/stock-return'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-return/edit/${code}`));
 
   if (!returnRecord) {
     return (

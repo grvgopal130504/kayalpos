@@ -16,14 +16,15 @@ import { getTransferDetails } from './stockTransferMockData';
  * the Overview/Status pages already show for the selected row, just
  * addressed by :code as its own full page instead of a side panel.
  */
-export default function TransferViewPage() {
+export default function TransferViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const transfer = getTransferDetails(code);
   const [notes, setNotes] = useState('');
 
-  const handleBack = () => navigate('/stock-transfer');
-  const handleEdit = () => navigate(`/stock-transfer/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/stock-transfer'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-transfer/edit/${code}`));
 
   if (!transfer) {
     return (

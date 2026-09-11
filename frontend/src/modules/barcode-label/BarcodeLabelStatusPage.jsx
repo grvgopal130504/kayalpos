@@ -59,7 +59,7 @@ const EXTRA_TILE_STYLE = {
  * "All Batches" overview page, scoped by `status`. Mirrors
  * SalesInvoiceStatusPage/SalesOrderStatusPage.
  */
-export default function BarcodeLabelStatusPage({ status, tab, onTabChange, onCreate }) {
+export default function BarcodeLabelStatusPage({ status, tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const meta = STATUS_META[status];
@@ -86,8 +86,8 @@ export default function BarcodeLabelStatusPage({ status, tab, onTabChange, onCre
 
   const handleSelectBatch = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/barcode-label/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/barcode-label/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.code) : navigate(`/barcode-label/view/${row.code}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/barcode-label/edit/${row.code}`);
     return dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

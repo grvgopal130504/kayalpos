@@ -56,10 +56,11 @@ function membershipValidityToValue(value) {
  * has no backend yet, so "editing" prefills from getLoyaltyProgramDetails()
  * the same best-effort way LoyaltyPage's own detail panel does.
  */
-export default function CreateLoyaltyProgramPage() {
+export default function CreateLoyaltyProgramPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingProgram = isEditMode ? getLoyaltyProgramDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -87,13 +88,15 @@ export default function CreateLoyaltyProgramPage() {
   const welcomePointsEnabled = watch('welcomePointsEnabled');
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/loyalty/view/${code}`);
-    else navigate('/loyalty');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/loyalty/view/${code}`);
+    navigate('/loyalty');
   };
 
   const onSubmit = () => {
     dispatch(showToast(isEditMode ? `Loyalty program ${code} updated successfully` : 'Loyalty program created as a draft', 'success'));
-    if (isEditMode) navigate(`/loyalty/view/${code}`);
+    if (onBack) onBack();
+    else if (isEditMode) navigate(`/loyalty/view/${code}`);
     else navigate('/loyalty');
   };
 

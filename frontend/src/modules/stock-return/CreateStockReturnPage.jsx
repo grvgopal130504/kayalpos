@@ -60,10 +60,11 @@ function nextReturnCode() {
  * picker (no upload endpoint yet). Saving is mocked — there's no Stock
  * Return backend module yet.
  */
-export default function CreateStockReturnPage({ onBack }) {
+export default function CreateStockReturnPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingReturn = isEditMode ? getReturnDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -91,9 +92,9 @@ export default function CreateStockReturnPage({ onBack }) {
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/stock-return/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/stock-return');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/stock-return/view/${code}`);
+    navigate('/stock-return');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

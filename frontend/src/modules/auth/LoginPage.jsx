@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FormProvider, useForm } from 'react-hook-form';
+import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Box,
@@ -27,7 +27,7 @@ import FormCheckbox from '../../components/form/FormCheckbox';
 import AppLogo from '../../components/common/AppLogo';
 import HealthStatusTag from '../../components/common/HealthStatusTag';
 import { useHealthStatus } from '../../hooks/useHealthStatus';
-import { MOCK_OUTLETS } from '../../constants/outlets';
+import { useGetPublicOutletsQuery } from '../../api/outletApi';
 import { loginSchema, loginDefaultValues } from './loginSchema';
 import LoginMarketingPanel from './components/LoginMarketingPanel';
 
@@ -40,6 +40,8 @@ export default function LoginPage() {
   const [login, { isLoading }] = useLoginMutation();
   const [serverError, setServerError] = useState(null);
   const { status: healthStatus, services: healthServices } = useHealthStatus();
+  const { data: outlets = [], isLoading: outletsLoading } = useGetPublicOutletsQuery();
+  const outletOptions = outlets.map((outlet) => ({ value: outlet.id, label: outlet.name }));
 
   const methods = useForm({
     resolver: zodResolver(loginSchema),
@@ -50,8 +52,17 @@ export default function LoginPage() {
     mode: 'onTouched',
   });
 
-  const [username, password, outletId] = methods.watch(['username','password','outletId']);
-  const isFormComplete = Boolean(username?.trim() && password?.trim() && outletId?.trim());
+  // Login button stays disabled until every field has a value — separate
+  // from the onTouched error display above, which only shows messages
+  // after a field is visited. Watched directly (not via formState.isValid)
+  // so it reflects raw field values ("is anything typed") rather than full
+  // schema validity, which shouldn't gate the button on username/password
+  // format the backend already checks.
+  const [watchedUsername, watchedPassword, watchedOutletId] = useWatch({
+    control: methods.control,
+    name: ['username', 'password', 'outletId'],
+  });
+  const allFieldsFilled = Boolean(watchedUsername?.trim()) && Boolean(watchedPassword) && Boolean(watchedOutletId);
 
   const onSubmit = async (values) => {
     setServerError(null);
@@ -160,7 +171,8 @@ export default function LoginPage() {
                     <FormSelect
                       name="outletId"
                       label="Select Outlet"
-                      options={MOCK_OUTLETS}
+                      options={outletOptions}
+                      disabled={outletsLoading}
                       slotProps={{
                         input: {
                           startAdornment: (
@@ -188,7 +200,7 @@ export default function LoginPage() {
                       </Link>
                     </Stack>
 
-                    <Button type="submit" variant="contained" size="large" disabled={isLoading || !isFormComplete } fullWidth>
+                    <Button type="submit" variant="contained" size="large" disabled={isLoading || !allFieldsFilled} fullWidth>
                       {isLoading ? 'Signing in…' : 'Login'}
                     </Button>
 

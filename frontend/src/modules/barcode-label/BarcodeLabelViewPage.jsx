@@ -17,14 +17,15 @@ import { getBatchDetails } from './barcodeLabelMockData';
  * those pages already show for the selected row, just addressed by :code
  * as its own full page instead of a side panel. Mirrors QuotationViewPage.
  */
-export default function BarcodeLabelViewPage() {
+export default function BarcodeLabelViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const batch = getBatchDetails(code);
   const [notes, setNotes] = useState('');
 
-  const handleBack = () => navigate('/barcode-label');
-  const handleEdit = () => navigate(`/barcode-label/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/barcode-label'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/barcode-label/edit/${code}`));
 
   if (!batch) {
     return (

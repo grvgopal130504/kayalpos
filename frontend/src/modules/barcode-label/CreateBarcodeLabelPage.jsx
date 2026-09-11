@@ -79,10 +79,11 @@ function itemToRow(item) {
  * Code get a search-icon adornment instead. Saving is mocked (no Barcode
  * & Label backend module yet).
  */
-export default function CreateBarcodeLabelPage({ onBack }) {
+export default function CreateBarcodeLabelPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingBatch = isEditMode ? getBatchDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -107,9 +108,9 @@ export default function CreateBarcodeLabelPage({ onBack }) {
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/barcode-label/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/barcode-label/overview');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/barcode-label/view/${code}`);
+    navigate('/barcode-label');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

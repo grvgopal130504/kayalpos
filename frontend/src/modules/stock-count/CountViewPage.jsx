@@ -14,13 +14,14 @@ import { getCountDetails } from './stockCountMockData';
  * for the selected row, just addressed by :code as its own full page
  * instead of a side panel.
  */
-export default function CountViewPage() {
+export default function CountViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const count = getCountDetails(code);
 
-  const handleBack = () => navigate('/stock-count');
-  const handleEdit = () => navigate(`/stock-count/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/stock-count'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-count/edit/${code}`));
 
   if (!count) {
     return (

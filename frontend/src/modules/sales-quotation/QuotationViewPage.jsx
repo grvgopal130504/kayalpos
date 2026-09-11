@@ -11,19 +11,21 @@ import QuotationTermsAndNotes from './components/QuotationTermsAndNotes';
 import { getQuotationDetails } from './salesQuotationMockData';
 
 /**
- * Read-only "View Quotation" destination for SalesQuotationTable's row
- * menu — reuses the exact same QuotationDetailsCard/QuotationTermsAndNotes
- * cards the Overview/Status pages already show for the selected row, just
- * addressed by :code as its own full page instead of a side panel.
+ * Read-only "View Quotation" body for SalesQuotationTable's row menu —
+ * reuses the exact same QuotationDetailsCard/QuotationTermsAndNotes cards
+ * the Overview/Status pages already show for the selected row. Rendered by
+ * SalesQuotationPage via props (`code`/`onBack`/`onEdit`) as part of the
+ * single /sales-quotation page rather than its own route.
  */
-export default function QuotationViewPage() {
+export default function QuotationViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const quotation = getQuotationDetails(code);
   const [notes, setNotes] = useState('');
 
-  const handleBack = () => navigate('/sales-quotation');
-  const handleEdit = () => navigate(`/sales-quotation/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/sales-quotation'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/sales-quotation/edit/${code}`));
 
   if (!quotation) {
     return (

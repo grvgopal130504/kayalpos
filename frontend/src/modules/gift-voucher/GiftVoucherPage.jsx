@@ -14,6 +14,8 @@ import { showToast } from '../../features/ui/uiSlice';
 import GiftVoucherSummaryCards from './components/GiftVoucherSummaryCards';
 import GiftVoucherTable from './components/GiftVoucherTable';
 import GiftVoucherDetailsCard from './components/GiftVoucherDetailsCard';
+import CreateGiftVoucherPage from './CreateGiftVoucherPage';
+import GiftVoucherViewPage from './GiftVoucherViewPage';
 import { SUMMARY, VOUCHERS, TOTAL_VOUCHER_COUNT, VOUCHER_DETAILS } from './giftVoucherMockData';
 
 const VOUCHER_BY_CODE = Object.fromEntries(VOUCHERS.map((v) => [v.code, v]));
@@ -21,8 +23,9 @@ const VOUCHER_BY_CODE = Object.fromEntries(VOUCHERS.map((v) => [v.code, v]));
 /**
  * Landing page for the sidebar's Gift Voucher item — summary tiles, the
  * voucher list with a detail panel for whichever row is selected.
- * "Create Gift Voucher" navigates to its own dedicated page. The Gift
- * Voucher backend module doesn't exist yet, so everything is driven by
+ * Create/Edit/View swap in via local state instead of separate
+ * /create, /edit/:code, /view/:code routes. The Gift Voucher backend module
+ * doesn't exist yet, so everything is driven by
  * giftVoucherMockData.js — selecting a row other than GV-0001 falls back to
  * reusing VOUCHER_DETAILS' shape (only name/code/type/value/status/dates
  * differ) since we don't have full mock detail records for every row.
@@ -30,8 +33,27 @@ const VOUCHER_BY_CODE = Object.fromEntries(VOUCHERS.map((v) => [v.code, v]));
 export default function GiftVoucherPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [tab, setTab] = useState('list');
+  const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(VOUCHER_DETAILS.code);
+
+  const goToList = () => { setActiveCode(null); setTab('list'); };
+  const openEdit = (code) => { setActiveCode(code); setTab('edit'); };
+  const openView = (code) => { setActiveCode(code); setTab('view'); };
+
+  if (tab === 'create' || tab === 'edit') {
+    return (
+      <CreateGiftVoucherPage
+        code={tab === 'edit' ? activeCode : undefined}
+        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+      />
+    );
+  }
+
+  if (tab === 'view') {
+    return <GiftVoucherViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+  }
 
   const selectedRow = VOUCHER_BY_CODE[selectedCode];
   const voucherDetails = selectedCode === VOUCHER_DETAILS.code
@@ -50,12 +72,12 @@ export default function GiftVoucherPage() {
 
   const handleSelectVoucher = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/gift-voucher/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/gift-voucher/edit/${row.code}`);
+    if (label === 'View') return openView(row.code);
+    if (label === 'Edit') return openEdit(row.code);
     return dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Vouchers is coming soon', 'info'));
-  const handleCreate = () => navigate('/gift-voucher/create');
+  const handleCreate = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
   const handleEdit = () => dispatch(showToast('Edit Gift Voucher is coming soon', 'info'));
   const handleMoreAction = (label) => {

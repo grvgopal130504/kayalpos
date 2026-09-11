@@ -16,14 +16,15 @@ import { getInvoiceDetails } from './salesInvoiceMockData';
  * Overview/Status pages already show for the selected row, just addressed
  * by :code as its own full page instead of a side panel.
  */
-export default function InvoiceViewPage() {
+export default function InvoiceViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const invoice = getInvoiceDetails(code);
   const [notes, setNotes] = useState('');
 
-  const handleBack = () => navigate('/sales-invoice');
-  const handleEdit = () => navigate(`/sales-invoice/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/sales-invoice'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/sales-invoice/edit/${code}`));
 
   if (!invoice) {
     return (

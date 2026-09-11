@@ -9,6 +9,8 @@ const SIDEBAR_FONT_STYLE_STORAGE_KEY = 'nexora-sidebar-font-style';
 const BODY_FONT_STYLE_STORAGE_KEY = 'nexora-body-font-style';
 const LANGUAGE_STORAGE_KEY = 'nexora-language';
 const MAX_OPEN_TABS_STORAGE_KEY = 'nexora-max-open-tabs';
+const SIDEBAR_ICON_COLORS_STORAGE_KEY = 'nexora-sidebar-icon-colors';
+const SIDEBAR_ANIMATIONS_STORAGE_KEY = 'nexora-sidebar-animations';
 
 // Hard ceiling the slider can't exceed — tabsSlice.js enforces this same
 // number regardless of what's stored, so a corrupted/tampered localStorage
@@ -112,6 +114,47 @@ function persistAccentThemeKey(key) {
   }
 }
 
+function readStoredSidebarIconColorsEnabled() {
+  if (typeof window === 'undefined') return true;
+  try {
+    const stored = window.localStorage.getItem(SIDEBAR_ICON_COLORS_STORAGE_KEY);
+    // Default ON — absent key (first run, or storage blocked) means colors show.
+    return stored === null ? true : stored === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function persistSidebarIconColorsEnabled(enabled) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SIDEBAR_ICON_COLORS_STORAGE_KEY, String(enabled));
+  } catch {
+    // Ignore write failures (e.g. private browsing storage restrictions).
+  }
+}
+
+function readStoredSidebarAnimationsEnabled() {
+  if (typeof window === 'undefined') return true;
+  try {
+    const stored = window.localStorage.getItem(SIDEBAR_ANIMATIONS_STORAGE_KEY);
+    // Default ON — absent key (first run, or storage blocked) means the
+    // entrance/hover/3D animations play.
+    return stored === null ? true : stored === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function persistSidebarAnimationsEnabled(enabled) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SIDEBAR_ANIMATIONS_STORAGE_KEY, String(enabled));
+  } catch {
+    // Ignore write failures (e.g. private browsing storage restrictions).
+  }
+}
+
 function readStoredMaxOpenTabs() {
   if (typeof window === 'undefined') return DEFAULT_MAX_OPEN_TABS;
   try {
@@ -133,6 +176,8 @@ const initialState = {
   bodyFontStyle: readStoredJson(BODY_FONT_STYLE_STORAGE_KEY, DEFAULT_FONT_STYLE),
   language: readStoredValue(LANGUAGE_STORAGE_KEY, DEFAULT_LANGUAGE),
   maxOpenTabs: readStoredMaxOpenTabs(),
+  sidebarIconColorsEnabled: readStoredSidebarIconColorsEnabled(), // each sidebar menu's icon shows its own unique color when true
+  sidebarAnimationsEnabled: readStoredSidebarAnimationsEnabled(), // entrance stagger, 3D hover tilt, and active transitions on the sidebar menus
 };
 
 const uiSlice = createSlice({
@@ -198,12 +243,21 @@ const uiSlice = createSlice({
         : DEFAULT_MAX_OPEN_TABS;
       persistValue(MAX_OPEN_TABS_STORAGE_KEY, String(state.maxOpenTabs));
     },
+    setSidebarIconColorsEnabled(state, action) {
+      state.sidebarIconColorsEnabled = Boolean(action.payload);
+      persistSidebarIconColorsEnabled(state.sidebarIconColorsEnabled);
+    },
+    setSidebarAnimationsEnabled(state, action) {
+      state.sidebarAnimationsEnabled = Boolean(action.payload);
+      persistSidebarAnimationsEnabled(state.sidebarAnimationsEnabled);
+    },
   },
 });
 
 export const {
   showToast, clearToast, toggleSidebar, setSidebarOpen, toggleThemeMode, setThemeMode, setAccentTheme,
   setSidebarFont, setBodyFont, toggleSidebarFontStyle, toggleBodyFontStyle, setLanguage, setMaxOpenTabs,
+  setSidebarIconColorsEnabled, setSidebarAnimationsEnabled,
 } = uiSlice.actions;
 export default uiSlice.reducer;
 
@@ -217,3 +271,5 @@ export const selectSidebarFontStyle = (state) => state.ui.sidebarFontStyle;
 export const selectBodyFontStyle = (state) => state.ui.bodyFontStyle;
 export const selectLanguage = (state) => state.ui.language;
 export const selectMaxOpenTabs = (state) => state.ui.maxOpenTabs;
+export const selectSidebarIconColorsEnabled = (state) => state.ui.sidebarIconColorsEnabled;
+export const selectSidebarAnimationsEnabled = (state) => state.ui.sidebarAnimationsEnabled;

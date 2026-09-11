@@ -19,6 +19,7 @@ import DonutChart from '../../components/common/DonutChart';
 import { formatCurrency } from '../../utils/format';
 
 import ExpenseTransactionsTable from './components/ExpenseTransactionsTable';
+import AddExpensePage from './AddExpensePage';
 import { CASHIER, EXPENSES_BOOK } from './expensesBookMockData';
 
 function SummaryTile({ label, value, valueColor }) {
@@ -42,12 +43,18 @@ function SummaryTile({ label, value, valueColor }) {
  * routes to the create-expense form.
  *
  * There's no expenses backend module yet, so every figure comes from
- * EXPENSES_BOOK mock data.
+ * EXPENSES_BOOK mock data. The Add Expenses form swaps in via local state
+ * instead of a separate /expenses-book/add route.
  */
 export default function ExpensesBookPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [tab, setTab] = useState('list');
   const [page, setPage] = useState(1);
+
+  if (tab === 'create') {
+    return <AddExpensePage onBack={() => setTab('list')} />;
+  }
 
   const { stats, summary, byCategory, byPaymentMode, transactions, totalPages, selectedDate } = EXPENSES_BOOK;
 
@@ -86,7 +93,7 @@ export default function ExpensesBookPage() {
             variant="contained"
             color="primary"
             startIcon={<AddIcon fontSize="small" />}
-            onClick={() => navigate('/expenses-book/add')}
+            onClick={() => setTab('create')}
           >
             Add Expenses
           </Button>

@@ -1,49 +1,68 @@
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { prisma } from '../../config/prisma.js';
 import { env } from '../../config/env.js';
-import { DEV_USER } from '../../config/devAuth.js';
 import { ApiError } from '../../middleware/errorHandler.js';
 
-/**
- * Dev-only login: checks the single hardcoded credential in devAuth.js.
- * Replace this with a Prisma-backed lookup + bcrypt.compare once the User
- * table and real authentication are implemented.
- */
-export function login({ username, password, outletId }) {
-  const isValid = username === DEV_USER.username && password === DEV_USER.password;
+const SALT_ROUNDS = 10;
 
-  if (!isValid) {
+/**
+ * Prisma-backed login: verifies the username/password against the User
+ * table (bcrypt hash) and the selected outlet against the Outlet table,
+ * then signs a JWT carrying the fields every downstream route needs
+ * (tenantId for tenant-scoped queries, outletId for the session's active
+ * outlet). Replaces the old devAuth.js hardcoded credential.
+ */
+export async function login({ username, password, outletId }) {
+  const user = await prisma.user.findUnique({ where: { username } });
+  if (!user || !user.isActive) {
     throw new ApiError(401, 'Invalid username or password');
   }
 
-  const user = {
-    id: DEV_USER.id,
-    username: DEV_USER.username,
-    name: DEV_USER.name,
-    role: DEV_USER.role,
-    outletId,
+  const passwordMatches = await bcrypt.compare(password, user.passwordHash);
+  if (!passwordMatches) {
+    throw new ApiError(401, 'Invalid username or password');
+  }
+
+  const outlet = await prisma.outlet.findFirst({
+    where: { id: outletId, tenantId: user.tenantId, isActive: true },
+  });
+  if (!outlet) {
+    throw new ApiError(400, 'Select a valid outlet');
+  }
+
+  const payload = {
+    id: user.id,
+    tenantId: user.tenantId,
+    username: user.username,
+    name: user.name,
+    role: user.role,
+    outletId: outlet.id,
   };
 
-  const token = jwt.sign(user, env.JWT_SECRET, { expiresIn: '12h' });
+  const token = jwt.sign(payload, env.JWT_SECRET, { expiresIn: '12h' });
 
-  return { user, token };
+  return { user: payload, token };
 }
 
 /**
- * Dev-only password change: verifies the current password against the same
- * hardcoded DEV_USER used by login(), then mutates it in memory — so the
- * new password is effective immediately but resets on server restart, same
- * caveat as the rest of devAuth.js. Replace with a Prisma-backed
- * bcrypt.compare + hash + update once the User table exists.
+ * Verifies the current password against the authenticated user's stored
+ * hash, then writes a new hash. `userId` comes from req.user (the decoded
+ * JWT), never from the request body.
  */
-export function changePassword({ username, currentPassword, newPassword }) {
-  if (username !== DEV_USER.username) {
+export async function changePassword({ userId, currentPassword, newPassword }) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
     throw new ApiError(401, 'Authentication required');
   }
-  if (currentPassword !== DEV_USER.password) {
+
+  const currentMatches = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!currentMatches) {
     throw new ApiError(400, 'Current password is incorrect');
   }
 
-  DEV_USER.password = newPassword;
+  const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
 
   return { success: true };
 }

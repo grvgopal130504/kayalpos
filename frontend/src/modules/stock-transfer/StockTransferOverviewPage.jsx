@@ -26,7 +26,7 @@ const TRANSFER_BY_CODE = Object.fromEntries(TRANSFERS.map((t) => [t.code, t]));
  * structure; the Stock Transfer backend module doesn't exist yet so
  * everything is driven by stockTransferMockData.js.
  */
-export default function StockTransferOverviewPage({ tab, onTabChange, onCreate }) {
+export default function StockTransferOverviewPage({ tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -50,8 +50,8 @@ export default function StockTransferOverviewPage({ tab, onTabChange, onCreate }
 
   const handleSelectTransfer = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/stock-transfer/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/stock-transfer/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.code) : navigate(`/stock-transfer/view/${row.code}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/stock-transfer/edit/${row.code}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

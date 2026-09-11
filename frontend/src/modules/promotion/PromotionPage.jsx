@@ -29,6 +29,8 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 import PromotionTable from './components/PromotionTable';
 import PromotionDetailsCard from './components/PromotionDetailsCard';
 import PromotionActivityCard from './components/PromotionHistoryCard';
+import CreatePromotionPage from './CreatePromotionPage';
+import PromotionViewPage from './PromotionViewPage';
 import {
   SUMMARY, PROMOTIONS, PROMOTION_DETAILS, STATUS_DETAILS, STATUS_STATS,
   PROMOTION_HISTORY, EXPIRED_PROMOTION_HISTORY, UPCOMING_SCHEDULE,
@@ -68,16 +70,35 @@ function firstPromotionFor(tab) {
  * detail panel, and the bottom section — so switching between
  * All/Active/Upcoming/Expired (via the tab strip built into the promotion
  * list) updates the whole page instead of only filtering the table rows.
- * "Create Promotion" navigates to its own dedicated page. The Promotion
- * backend module doesn't exist yet, so everything is driven by
- * promotionMockData.js.
+ * Create/Edit/View swap in via local state instead of separate
+ * /create, /edit/:code, /view/:code routes. The Promotion backend module
+ * doesn't exist yet, so everything is driven by promotionMockData.js.
  */
 export default function PromotionPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [tab, setTab] = useState('all');
+  const [mode, setMode] = useState('list');
+  const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(PROMOTION_DETAILS.code);
+
+  const goToList = () => { setActiveCode(null); setMode('list'); };
+  const openEdit = (code) => { setActiveCode(code); setMode('edit'); };
+  const openView = (code) => { setActiveCode(code); setMode('view'); };
+
+  if (mode === 'create' || mode === 'edit') {
+    return (
+      <CreatePromotionPage
+        code={mode === 'edit' ? activeCode : undefined}
+        onBack={mode === 'edit' ? () => openView(activeCode) : goToList}
+      />
+    );
+  }
+
+  if (mode === 'view') {
+    return <PromotionViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+  }
 
   const detailsTemplate = tab === 'all' ? PROMOTION_DETAILS : STATUS_DETAILS[tab];
   const selectedRow = PROMOTION_BY_CODE[selectedCode] || firstPromotionFor(tab);
@@ -91,12 +112,12 @@ export default function PromotionPage() {
   };
   const handleSelectPromotion = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/promotion/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/promotion/edit/${row.code}`);
+    if (label === 'View') return openView(row.code);
+    if (label === 'Edit') return openEdit(row.code);
     return dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Promotion is coming soon', 'info'));
-  const handleCreate = () => navigate('/promotion/create');
+  const handleCreate = () => setMode('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
   const handleEdit = () => dispatch(showToast('Edit Promotion is coming soon', 'info'));
   const handleViewAllItems = () => dispatch(showToast('View All Items is coming soon', 'info'));

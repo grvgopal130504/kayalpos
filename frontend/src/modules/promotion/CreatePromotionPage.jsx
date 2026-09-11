@@ -63,10 +63,11 @@ function parseDiscount(discount) {
  * yet, so "editing" prefills from getPromotionDetails() the same best-effort
  * way the list/status pages' own detail panel does.
  */
-export default function CreatePromotionPage({ embedded = false, onCreated, onCancel }) {
+export default function CreatePromotionPage({ code: propCode, onBack, embedded = false, onCreated, onCancel }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingPromotion = isEditMode ? getPromotionDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -96,14 +97,17 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
   const appliesTo = watch('appliesTo');
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/promotion/view/${code}`);
-    else if (embedded && onCancel) onCancel();
-    else navigate('/promotion');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/promotion/view/${code}`);
+    if (embedded && onCancel) return onCancel();
+    navigate('/promotion');
   };
 
   const onSubmit = () => {
     dispatch(showToast(isEditMode ? `Promotion ${code} updated successfully` : 'Promotion created as a draft', 'success'));
-    if (isEditMode) {
+    if (onBack) {
+      onBack();
+    } else if (isEditMode) {
       navigate(`/promotion/view/${code}`);
     } else if (embedded && onCreated) {
       onCreated();

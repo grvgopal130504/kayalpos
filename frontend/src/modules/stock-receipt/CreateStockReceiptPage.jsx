@@ -58,10 +58,11 @@ function nextReceiptCode() {
  * upload endpoint yet). Saving is mocked — there's no Stock Receipt
  * backend module yet.
  */
-export default function CreateStockReceiptPage({ onBack }) {
+export default function CreateStockReceiptPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingReceipt = isEditMode ? getReceiptDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -89,9 +90,9 @@ export default function CreateStockReceiptPage({ onBack }) {
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/stock-receipt/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/stock-receipt');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/stock-receipt/view/${code}`);
+    navigate('/stock-receipt');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

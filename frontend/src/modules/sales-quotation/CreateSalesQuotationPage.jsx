@@ -61,19 +61,23 @@ function itemToRow(item) {
 }
 
 /**
- * "New Quotation" screen, also doubling as the Edit Quotation page when
- * reached via `/sales-quotation/edit/:code` — the Sales Quotation module has
- * no backend yet, so "editing" prefills from getQuotationDetails() the same
- * way the Overview/Status pages' own detail panel does. Matches the
- * reference design's full create form: Customer Details + Quotation Details
- * cards, an editable line-items grid with a live totals summary, and Terms &
- * Conditions / Notes below. Saving is mocked, so both "Save as Draft" and
- * "Save & Send" just toast and hand control back to the caller.
+ * "New Quotation" screen, also doubling as the Edit Quotation form when
+ * SalesQuotationPage renders it with a `code` prop — everything (list,
+ * create, edit, view) lives on the one /sales-quotation page now, so this
+ * component is always reached via props from its parent, never its own
+ * route. The Sales Quotation module has no backend yet, so "editing"
+ * prefills from getQuotationDetails() the same way the Overview/Status
+ * pages' own detail panel does. Matches the reference design's full create
+ * form: Customer Details + Quotation Details cards, an editable line-items
+ * grid with a live totals summary, and Terms & Conditions / Notes below.
+ * Saving is mocked, so both "Save as Draft" and "Save & Send" just toast
+ * and hand control back to the caller.
  */
-export default function CreateSalesQuotationPage({ onBack }) {
+export default function CreateSalesQuotationPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingQuotation = isEditMode ? getQuotationDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -100,13 +104,13 @@ export default function CreateSalesQuotationPage({ onBack }) {
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/sales-quotation/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/sales-quotation/overview');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/sales-quotation/view/${code}`);
+    navigate('/sales-quotation');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleAddCustomer = () => navigate('/customer/add');
+  const handleAddCustomer = () => navigate('/customer');
   const handleAddItem = () => dispatch(showToast('Item picker is coming soon', 'info'));
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);

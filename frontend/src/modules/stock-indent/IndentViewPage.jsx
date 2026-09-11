@@ -16,14 +16,15 @@ import { getIndentDetails } from './stockIndentMockData';
  * Overview/Status pages already show for the selected row, just addressed
  * by :code as its own full page instead of a side panel.
  */
-export default function IndentViewPage() {
+export default function IndentViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const indent = getIndentDetails(code);
   const [notes, setNotes] = useState('');
 
-  const handleBack = () => navigate('/stock-indent');
-  const handleEdit = () => navigate(`/stock-indent/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/stock-indent'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-indent/edit/${code}`));
 
   if (!indent) {
     return (

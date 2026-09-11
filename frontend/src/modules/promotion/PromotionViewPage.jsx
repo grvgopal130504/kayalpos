@@ -14,13 +14,14 @@ import { getPromotionDetails } from './promotionMockData';
  * PromotionDetailsCard the list pages already show for the selected row,
  * just addressed by :code as its own full page instead of a side panel.
  */
-export default function PromotionViewPage() {
+export default function PromotionViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const promotion = getPromotionDetails(code);
 
-  const handleBack = () => navigate('/promotion');
-  const handleEdit = () => navigate(`/promotion/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/promotion'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/promotion/edit/${code}`));
 
   if (!promotion) {
     return (

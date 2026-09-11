@@ -14,15 +14,18 @@ import { showToast } from '../../features/ui/uiSlice';
 import StockReturnSummaryCards from './components/StockReturnSummaryCards';
 import StockReturnTable from './components/StockReturnTable';
 import StockReturnDetailsCard from './components/StockReturnDetailsCard';
+import CreateStockReturnPage from './CreateStockReturnPage';
+import ReturnViewPage from './ReturnViewPage';
 import { SUMMARY, RETURNS, TOTAL_RETURN_COUNT, RETURN_DETAILS } from './stockReturnMockData';
 
 const RETURN_BY_CODE = Object.fromEntries(RETURNS.map((r) => [r.code, r]));
 
 /**
  * Landing page for the sidebar's Stock Return item — summary tiles, the
- * return list with a detail panel for whichever row is selected. "Create
- * Return" navigates to its own dedicated page. The Stock Return backend
- * module doesn't exist yet, so everything is driven by
+ * return list with a detail panel for whichever row is selected, plus the
+ * create/edit form and the read-only view, all swapped in via local state
+ * instead of separate /create, /edit/:code, /view/:code routes. The Stock
+ * Return backend module doesn't exist yet, so everything is driven by
  * stockReturnMockData.js — selecting a row other than RRT-00030 falls back
  * to reusing RETURN_DETAILS' shape (only the top-level fields differ)
  * since we don't have full mock detail records for every row.
@@ -30,8 +33,36 @@ const RETURN_BY_CODE = Object.fromEntries(RETURNS.map((r) => [r.code, r]));
 export default function StockReturnPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [tab, setTab] = useState('list');
+  const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(RETURN_DETAILS.code);
+
+  const goToList = () => {
+    setActiveCode(null);
+    setTab('list');
+  };
+  const openEdit = (code) => {
+    setActiveCode(code);
+    setTab('edit');
+  };
+  const openView = (code) => {
+    setActiveCode(code);
+    setTab('view');
+  };
+
+  if (tab === 'create' || tab === 'edit') {
+    return (
+      <CreateStockReturnPage
+        code={tab === 'edit' ? activeCode : undefined}
+        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+      />
+    );
+  }
+
+  if (tab === 'view') {
+    return <ReturnViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+  }
 
   const selectedRow = RETURN_BY_CODE[selectedCode];
   const returnDetails = selectedCode === RETURN_DETAILS.code
@@ -50,14 +81,14 @@ export default function StockReturnPage() {
 
   const handleSelectReturn = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/stock-return/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/stock-return/edit/${row.code}`);
+    if (label === 'View') return openView(row.code);
+    if (label === 'Edit') return openEdit(row.code);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Returns is coming soon', 'info'));
-  const handleCreate = () => navigate('/stock-return/create');
+  const handleCreate = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => navigate(`/stock-return/edit/${selectedCode}`);
+  const handleEdit = () => openEdit(selectedCode);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));

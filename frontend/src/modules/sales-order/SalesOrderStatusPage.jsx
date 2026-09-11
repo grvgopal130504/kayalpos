@@ -60,7 +60,7 @@ const EXTRA_TILE_STYLE = {
  * Order landing grid — same list+details+terms layout as the "All Orders"
  * overview page, scoped by `status`. Mirrors SalesQuotationStatusPage.
  */
-export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreate }) {
+export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const meta = STATUS_META[status];
@@ -87,8 +87,8 @@ export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreat
 
   const handleSelectOrder = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/sales-order/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/sales-order/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.code) : navigate(`/sales-order/view/${row.code}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/sales-order/edit/${row.code}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

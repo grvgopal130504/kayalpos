@@ -74,10 +74,11 @@ function nextCountCode() {
  * upload endpoint yet). Saving is mocked — there's no Stock Count backend
  * module yet.
  */
-export default function CreateStockCountPage({ onBack }) {
+export default function CreateStockCountPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingCount = isEditMode ? getCountDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -110,9 +111,9 @@ export default function CreateStockCountPage({ onBack }) {
   const countBy = watch('countBy');
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/stock-count/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/stock-count');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/stock-count/view/${code}`);
+    navigate('/stock-count');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

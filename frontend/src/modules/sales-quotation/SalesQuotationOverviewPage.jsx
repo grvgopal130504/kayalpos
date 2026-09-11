@@ -29,7 +29,7 @@ const QUOTATION_BY_CODE = Object.fromEntries(QUOTATIONS.map((q) => [q.code, q]))
  * QUOTATION_DETAILS' items/totals (only the header fields differ) since we
  * don't have full mock detail records for all 86 rows.
  */
-export default function SalesQuotationOverviewPage({ tab, onTabChange, onCreate }) {
+export default function SalesQuotationOverviewPage({ tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -51,8 +51,8 @@ export default function SalesQuotationOverviewPage({ tab, onTabChange, onCreate 
 
   const handleSelectQuotation = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/sales-quotation/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/sales-quotation/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.code) : navigate(`/sales-quotation/view/${row.code}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/sales-quotation/edit/${row.code}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

@@ -27,7 +27,7 @@ const INVOICE_BY_CODE = Object.fromEntries(INVOICES.map((inv) => [inv.code, inv]
  * SalesQuotationOverviewPage's structure; the Sales Invoice backend module
  * doesn't exist yet so everything is driven by salesInvoiceMockData.js.
  */
-export default function SalesInvoiceOverviewPage({ tab, onTabChange, onCreate }) {
+export default function SalesInvoiceOverviewPage({ tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -49,8 +49,8 @@ export default function SalesInvoiceOverviewPage({ tab, onTabChange, onCreate })
 
   const handleSelectInvoice = (row) => setSelectedCode(row.code);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/sales-invoice/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/sales-invoice/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.code) : navigate(`/sales-invoice/view/${row.code}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/sales-invoice/edit/${row.code}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

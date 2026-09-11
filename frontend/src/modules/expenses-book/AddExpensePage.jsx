@@ -75,7 +75,7 @@ function TotalAmountField() {
  * drop zone). Saving is mocked — there's no Expenses Book backend module
  * yet.
  */
-export default function AddExpensePage() {
+export default function AddExpensePage({ onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [attachmentName, setAttachmentName] = useState('');
@@ -89,7 +89,7 @@ export default function AddExpensePage() {
   });
   const { handleSubmit, reset } = methods;
 
-  const handleBack = () => navigate('/expenses-book');
+  const handleBack = () => (onBack ? onBack() : navigate('/expenses-book'));
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });

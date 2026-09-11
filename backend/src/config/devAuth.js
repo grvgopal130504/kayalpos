@@ -1,17 +1,14 @@
 /**
- * TEMPORARY DEVELOPMENT AUTHENTICATION
+ * DEPRECATED — no longer used.
  * -------------------------------------------------------------------------
- * This is a placeholder credential store used only until PostgreSQL is
- * connected and a real User table + password hashing (bcrypt) + role model
- * is implemented. It intentionally lives in its own file so it is easy to
- * find and delete when real authentication replaces it.
- *
- * Do NOT add more users here. Do NOT use this pattern in production.
+ * Real, Prisma-backed authentication (User table + bcrypt password hashes)
+ * now lives in modules/auth/auth.service.js. This file is kept only so the
+ * diff is easy to review; it is safe to delete this file.
  */
 export const DEV_USER = {
   id: 'dev-super-admin',
   username: 'admin',
-  password: 'Admin@123', // plain-text on purpose: dev-only stand-in, never used once DB auth lands
+  password: 'Admin@123',
   name: 'Admin',
   role: 'SUPER_ADMIN',
 };

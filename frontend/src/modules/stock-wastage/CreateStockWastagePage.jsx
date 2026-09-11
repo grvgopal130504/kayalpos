@@ -61,10 +61,11 @@ function nextWastageCode() {
  * local-only file picker (no upload endpoint yet). Saving is mocked —
  * there's no Stock Wastage backend module yet.
  */
-export default function CreateStockWastagePage({ onBack }) {
+export default function CreateStockWastagePage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingWastage = isEditMode ? getWastageDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -93,9 +94,9 @@ export default function CreateStockWastagePage({ onBack }) {
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/stock-wastage/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/stock-wastage');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/stock-wastage/view/${code}`);
+    navigate('/stock-wastage');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

@@ -14,13 +14,14 @@ import { getReceiptDetails } from './stockReceiptMockData';
  * shows for the selected row, just addressed by :code as its own full page
  * instead of a side panel.
  */
-export default function ReceiptViewPage() {
+export default function ReceiptViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const receipt = getReceiptDetails(code);
 
-  const handleBack = () => navigate('/stock-receipt');
-  const handleEdit = () => navigate(`/stock-receipt/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/stock-receipt'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-receipt/edit/${code}`));
 
   if (!receipt) {
     return (

@@ -18,13 +18,8 @@ const COLUMNS = [
   { key: 'action', label: 'Action' },
 ];
 
-/**
- * "Brand List" table — plain rows (no per-row thumbnail, unlike Product)
- * with a green/red Status chip and edit/delete row actions. Neither
- * action is wired to a real form yet, so both surface a toast via the
- * handlers passed in.
- */
-export default function BrandTable({ rows, onViewRow, onEditRow, onDeleteRow }) {
+/** "Brand List" table, wired to the real Brand API — rows come from BrandPage's useGetBrandsQuery. */
+export default function BrandTable({ rows, loading, onViewRow, onEditRow, onDeleteRow }) {
   return (
     <Box sx={{ overflowX: 'auto' }}>
       <Table size="small" sx={{ minWidth: 1100 }}>
@@ -38,8 +33,17 @@ export default function BrandTable({ rows, onViewRow, onEditRow, onDeleteRow }) 
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.code} hover>
+          {loading && (
+            <TableRow>
+              <TableCell colSpan={COLUMNS.length}>
+                <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 3 }}>
+                  Loading brands…
+                </Typography>
+              </TableCell>
+            </TableRow>
+          )}
+          {!loading && rows.map((row) => (
+            <TableRow key={row.id} hover>
               <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.description}</TableCell>
@@ -72,7 +76,7 @@ export default function BrandTable({ rows, onViewRow, onEditRow, onDeleteRow }) 
               </TableCell>
             </TableRow>
           ))}
-          {rows.length === 0 && (
+          {!loading && rows.length === 0 && (
             <TableRow>
               <TableCell colSpan={COLUMNS.length}>
                 <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 3 }}>

@@ -93,7 +93,7 @@ export default function LoginMarketingPanel() {
             <Typography
               sx={{
                 fontWeight: 800,
-                color: 'text.primary',
+                color: '#2c2b2b',
                 lineHeight: 1.2,
                 fontSize: { md: '1.3rem', lg: '1.5rem' },
               }}

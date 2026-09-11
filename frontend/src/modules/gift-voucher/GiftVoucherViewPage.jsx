@@ -14,13 +14,14 @@ import { getGiftVoucherDetails } from './giftVoucherMockData';
  * shows for the selected row, just addressed by :code as its own full page
  * instead of a side panel.
  */
-export default function GiftVoucherViewPage() {
+export default function GiftVoucherViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const voucher = getGiftVoucherDetails(code);
 
-  const handleBack = () => navigate('/gift-voucher');
-  const handleEdit = () => navigate(`/gift-voucher/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/gift-voucher'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/gift-voucher/edit/${code}`));
 
   if (!voucher) {
     return (

@@ -66,10 +66,11 @@ function itemToRow(item) {
  * Attachment is a simple local file picker (no upload endpoint yet).
  * Saving is mocked (no Stock Transfer backend module yet).
  */
-export default function CreateStockTransferPage({ onBack }) {
+export default function CreateStockTransferPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingTransfer = isEditMode ? getTransferDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -91,9 +92,9 @@ export default function CreateStockTransferPage({ onBack }) {
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/stock-transfer/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/stock-transfer/overview');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/stock-transfer/view/${code}`);
+    navigate('/stock-transfer');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));

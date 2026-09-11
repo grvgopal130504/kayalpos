@@ -18,13 +18,14 @@ import { getCustomerDetails, RECENT_TRANSACTIONS, LOYALTY_SUMMARY } from './cust
  * panel. Recent transactions / loyalty summary aren't per-customer in the
  * mock data yet, so they show the same sample set CustomerPage does.
  */
-export default function CustomerViewPage() {
+export default function CustomerViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const customer = getCustomerDetails(code);
 
-  const handleBack = () => navigate('/customer');
-  const handleEdit = () => navigate(`/customer/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/customer'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/customer/edit/${code}`));
 
   if (!customer) {
     return (

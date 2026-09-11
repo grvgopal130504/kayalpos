@@ -8,18 +8,20 @@ import ReceiptOutlinedIcon from '@mui/icons-material/ReceiptOutlined';
 
 import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
+import { useCreateBrandMutation, useUpdateBrandMutation } from '../../../../api/brandApi';
 import { CATEGORY_OPTIONS } from '../brandMockData';
 
 const EMPTY_VALUES = { code: '', name: '', description: '', category: CATEGORY_OPTIONS[0], status: 'Active' };
 
-/**
- * Add/Edit dialog for the Brand master. No Brand backend module exists
- * yet, so Save/Update just toasts and closes.
- */
+/** Add/Edit dialog for the Brand master, backed by the real Brand API. */
 export default function BrandFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
   const [values, setValues] = useState(EMPTY_VALUES);
+  const [submitting, setSubmitting] = useState(false);
   const isEdit = mode === 'edit';
+
+  const [createBrand] = useCreateBrandMutation();
+  const [updateBrand] = useUpdateBrandMutation();
 
   useEffect(() => {
     if (open) setValues(isEdit && initialValues ? { ...EMPTY_VALUES, ...initialValues } : EMPTY_VALUES);
@@ -27,10 +29,35 @@ export default function BrandFormDialog({ open, mode = 'add', initialValues, onC
 
   const setField = (field) => (e) => setValues((prev) => ({ ...prev, [field]: e.target.value }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    dispatch(showToast(isEdit ? 'Brand updated successfully' : 'Brand saved successfully', 'success'));
-    onClose?.();
+    if (!values.name.trim()) {
+      dispatch(showToast('Brand name is required', 'error'));
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        name: values.name.trim(),
+        description: values.description?.trim() || undefined,
+        category: values.category,
+        status: values.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
+      };
+
+      if (isEdit) {
+        await updateBrand({ id: values.id, ...payload }).unwrap();
+        dispatch(showToast('Brand updated successfully', 'success'));
+      } else {
+        await createBrand(payload).unwrap();
+        dispatch(showToast('Brand saved successfully', 'success'));
+      }
+      onClose?.();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save brand', 'error'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -49,10 +76,9 @@ export default function BrandFormDialog({ open, mode = 'add', initialValues, onC
               <TextField
                 label="Brand Code *"
                 value={isEdit ? values.code : 'Auto generated'}
-                onChange={setField('code')}
-                disabled={!isEdit}
+                disabled
                 fullWidth
-                slotProps={{ input: { readOnly: !isEdit } }}
+                slotProps={{ input: { readOnly: true } }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
@@ -76,7 +102,7 @@ export default function BrandFormDialog({ open, mode = 'add', initialValues, onC
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained">{isEdit ? 'Update' : 'Save'}</Button>
+          <Button type="submit" variant="contained" disabled={submitting}>{isEdit ? 'Update' : 'Save'}</Button>
         </DialogActions>
       </form>
     </Dialog>

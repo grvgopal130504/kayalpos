@@ -80,10 +80,11 @@ function itemToRow(item) {
  * instead of a plain disabled field. Saving is mocked (no Sales Invoice
  * backend module yet).
  */
-export default function CreateSalesInvoicePage({ onBack }) {
+export default function CreateSalesInvoicePage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
   const existingInvoice = isEditMode ? getInvoiceDetails(code) : null;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -111,13 +112,13 @@ export default function CreateSalesInvoicePage({ onBack }) {
   const { handleSubmit } = methods;
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/sales-invoice/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/sales-invoice/overview');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/sales-invoice/view/${code}`);
+    navigate('/sales-invoice');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleAddCustomer = () => navigate('/customer/add');
+  const handleAddCustomer = () => navigate('/customer');
   const handleAddSalesOrder = () => dispatch(showToast('Sales Order picker is coming soon', 'info'));
   const handleAddQuotation = () => dispatch(showToast('Quotation picker is coming soon', 'info'));
   const handleAddItem = () => dispatch(showToast('Item picker is coming soon', 'info'));
