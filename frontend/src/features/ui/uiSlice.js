@@ -23,12 +23,14 @@ export const FONT_OPTIONS = [
   { value: 'Source Sans 3', label: 'Source Sans Pro' },
 ];
 
+// The language switcher (Topbar's globe/translate icon) offers exactly
+// these three — English, Tamil, Hindi — matching the translations shipped
+// in src/i18n/locales/*.json. Add a locale file and an entry here together
+// if another language is ever needed.
 export const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
-  { value: 'hi', label: 'Hindi' },
-  { value: 'ta', label: 'Tamil' },
-  { value: 'te', label: 'Telugu' },
-  { value: 'kn', label: 'Kannada' },
+  { value: 'ta', label: 'தமிழ் (Tamil)' },
+  { value: 'hi', label: 'हिन्दी (Hindi)' },
 ];
 
 const DEFAULT_FONT = 'Inter';

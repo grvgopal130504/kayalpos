@@ -5,12 +5,13 @@ import {
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { useTranslation } from 'react-i18next';
 
 import { useAppDispatch } from '../../app/hooks';
 import { logout } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 
-import { CASHIER, REPORT_ITEMS } from './reportsMockData';
+import { CASHIER, useReportItems } from './reportsMockData';
 
 function ReportCard({ item, onOpen }) {
   const Icon = item.icon;
@@ -68,10 +69,15 @@ function ReportCard({ item, onOpen }) {
  * card is a shortcut into that report's own screen (Sales, Inventory,
  * Purchase, Cashier, Financial, SAP), and every card now navigates
  * directly to its own built report screen.
+ *
+ * This is the sidebar's "Reports" submenu, so its cards translate with the
+ * Topbar language switcher via useReportItems() (English/Tamil/Hindi).
  */
 export default function ReportsPage() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const reportItems = useReportItems();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -84,22 +90,22 @@ export default function ReportsPage() {
       navigate(item.path);
       return;
     }
-    dispatch(showToast(`${item.label} is coming soon`, 'info'));
+    dispatch(showToast(t('common.reportComingSoon', { name: item.label }), 'info'));
   };
 
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Reports</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{t('common.reports')}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
-            <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Reports</Typography>
+            <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">{t('common.home')}</MuiLink>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('common.reports')}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
+            {t('common.cashier')} : {CASHIER.name} ({CASHIER.code})
           </Typography>
           <MuiLink
             component="button"
@@ -109,7 +115,7 @@ export default function ReportsPage() {
             onClick={handleLogout}
             sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
           >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
+            <LogoutOutlinedIcon fontSize="inherit" /> {t('common.logout')}
           </MuiLink>
         </Stack>
       </Stack>
@@ -131,15 +137,15 @@ export default function ReportsPage() {
           <InfoOutlinedIcon sx={{ fontSize: 18 }} />
         </Box>
         <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#2563EB' }}>View Reports</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#2563EB' }}>{t('common.viewReports')}</Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            View and generate reports across all your outlets and operations.
+            {t('common.viewReportsDesc')}
           </Typography>
         </Box>
       </Paper>
 
       <Grid container spacing={2}>
-        {REPORT_ITEMS.map((item) => (
+        {reportItems.map((item) => (
           <Grid key={item.key} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
             <ReportCard item={item} onOpen={handleOpen} />
           </Grid>

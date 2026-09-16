@@ -17,7 +17,7 @@ import DonutChart from '../../components/common/DonutChart';
 import DataTable from '../../components/common/DataTable';
 import StatusBadge from '../../components/common/StatusBadge';
 import PeriodSelect from '../../components/common/PeriodSelect';
-import { QUICK_ACCESS_ITEMS } from '../../components/layout/navConfig';
+import { useQuickAccessItems } from '../../components/layout/navConfig';
 import { formatCurrency, formatNumber } from '../../utils/format';
 import TopSellingList from './components/TopSellingList';
 
@@ -26,6 +26,7 @@ const PAYMENT_COLORS = { Cash: '#22A06B', UPI: '#2563EB', Card: '#8B5CF6', Walle
 export default function HomePage() {
   const outletId = useAppSelector(selectActiveOutletId);
   const { data, isLoading, isError } = useGetHomeDashboardQuery(outletId);
+  const quickAccessItems = useQuickAccessItems();
   const [salesPeriod, setSalesPeriod] = useState('month');
   const [topSellingPeriod, setTopSellingPeriod] = useState('month');
 
@@ -116,7 +117,7 @@ export default function HomePage() {
         <Grid size={{ xs: 12, lg: 8 }}>
           <Stack spacing={2}>
             <InfoCard title="Quick Access">
-              <QuickAccessGrid items={QUICK_ACCESS_ITEMS} />
+              <QuickAccessGrid items={quickAccessItems} />
             </InfoCard>
 
             <InfoCard

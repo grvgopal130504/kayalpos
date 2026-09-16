@@ -6,6 +6,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
 import PlaylistRemoveOutlinedIcon from '@mui/icons-material/PlaylistRemoveOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import { useTranslation } from 'react-i18next';
 
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { selectOpenTabPaths, closeTab, closeAllTabs } from '../../features/tabs/tabsSlice';
@@ -24,6 +25,7 @@ const SCROLL_STEP = 240;
  * `closeAllTabs` action this bar's icon does.
  */
 export default function TabBar() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -78,7 +80,7 @@ export default function TabBar() {
         }}
       >
         {openPaths.map((path) => {
-          const { label, icon: Icon } = getPageMeta(path);
+          const { label, icon: Icon } = getPageMeta(path, t);
           const active = location.pathname === path;
           const pinned = path === HOME_TAB_PATH;
 

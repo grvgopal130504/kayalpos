@@ -85,19 +85,30 @@ const OVERRIDES = {
  * transactional modules (Sales Order, Stock Indent, etc.) — so every route
  * in App.jsx resolves to a sensible tab without hand-listing every single
  * one.
+ *
+ * `t` is react-i18next's translate function (pass the one from
+ * `useTranslation()` in the calling component, e.g. TabBar.jsx) — nav items
+ * only carry an i18next key (`labelKey` on NAV_SECTIONS entries, `i18nKey`
+ * on MASTER_ITEMS) rather than a hardcoded label, since the sidebar/Masters
+ * submenu translate into English/Tamil/Hindi. OVERRIDES below are sub-pages
+ * outside that translated set and stay in English.
  */
-export function getPageMeta(pathname) {
+export function getPageMeta(pathname, t) {
   if (OVERRIDES[pathname]) return OVERRIDES[pathname];
-  if (NAV_BY_PATH[pathname]) return { label: NAV_BY_PATH[pathname].label, icon: NAV_BY_PATH[pathname].icon };
-  if (MASTER_BY_PATH[pathname]) return { label: MASTER_BY_PATH[pathname].label, icon: MASTER_BY_PATH[pathname].icon };
+  if (NAV_BY_PATH[pathname]) return { label: t(NAV_BY_PATH[pathname].labelKey), icon: NAV_BY_PATH[pathname].icon };
+  if (MASTER_BY_PATH[pathname]) {
+    const item = MASTER_BY_PATH[pathname];
+    return { label: t(`masters.${item.i18nKey}.label`), icon: item.icon };
+  }
 
   const segments = pathname.split('/').filter(Boolean);
   if (segments.length >= 2) {
     const parentPath = `/${segments[0]}`;
     const parentItem = NAV_BY_PATH[parentPath];
+    const parentLabel = parentItem && t(parentItem.labelKey);
     const suffix = segments[segments.length - 1];
     if (parentItem && STATUS_LABELS[suffix]) {
-      return { label: STATUS_LABELS[suffix](parentItem.label), icon: parentItem.icon };
+      return { label: STATUS_LABELS[suffix](parentLabel), icon: parentItem.icon };
     }
     // Dynamic /:module/edit/:id and /:module/view/:id detail routes — label
     // with the record's own id so each record's tab is distinguishable
@@ -109,7 +120,7 @@ export function getPageMeta(pathname) {
     if (parentItem) {
       // Unlisted sub-route of a known module — fall back to the module's
       // own label/icon rather than showing nothing.
-      return { label: parentItem.label, icon: parentItem.icon };
+      return { label: parentLabel, icon: parentItem.icon };
     }
   }
 

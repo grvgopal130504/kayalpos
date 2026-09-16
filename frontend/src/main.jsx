@@ -7,6 +7,8 @@ import { store } from './app/store';
 import { getTheme } from './theme/theme';
 import { selectThemeMode, selectAccentThemeKey, selectBodyFont, selectBodyFontStyle } from './features/ui/uiSlice';
 import App from './App.jsx';
+import './i18n';
+import useSyncLanguage from './i18n/useSyncLanguage';
 import './index.css';
 
 // Builds the MUI theme from the redux `themeMode` + `accentThemeKey` (both
@@ -22,6 +24,9 @@ function AppThemeProvider({ children }) {
     () => getTheme(themeMode, accentThemeKey, bodyFont, bodyFontStyle),
     [themeMode, accentThemeKey, bodyFont, bodyFontStyle],
   );
+  // Keeps i18next's active language mirrored from redux `ui.language`
+  // (set via the Topbar's language-switcher icon) — see src/i18n.
+  useSyncLanguage();
 
   return (
     <ThemeProvider theme={theme}>

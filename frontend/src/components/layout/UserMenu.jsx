@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Avatar, Box, Menu, MenuItem, Stack, Typography, ListItemIcon } from '@mui/material';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { logout, selectCurrentUser } from '../../features/auth/authSlice';
 
@@ -16,6 +17,7 @@ function initials(name = '') {
 }
 
 export default function UserMenu() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
@@ -57,13 +59,13 @@ export default function UserMenu() {
           <ListItemIcon>
             <LogoutOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          Log out
+          {t('common.logout')}
         </MenuItem>
         <MenuItem onClick={handleSettings}>
           <ListItemIcon>
             <SettingsOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          Settings
+          {t('common.settings')}
         </MenuItem>
       </Menu>
     </Box>

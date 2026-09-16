@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Divider, Tooltip } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { NAV_SECTIONS } from './navConfig';
+import { useNavSections } from './navConfig';
 import AppLogo from '../common/AppLogo';
 import { useAppSelector } from '../../app/hooks';
 import { selectAccentThemeKey, selectSidebarFont, selectSidebarFontStyle } from '../../features/ui/uiSlice';
@@ -24,6 +24,10 @@ const NAV_ICON_FONT_SIZE = 20;
 const NAV_LABEL_FONT_SIZE = 13;
 
 function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebarFontStyle, isDark }) {
+  // Translated on every render via the active i18next language (English,
+  // Tamil or Hindi — see src/i18n) so the whole menu, including every
+  // submenu section below, follows the Topbar language switcher.
+  const navSections = useNavSections();
   const itemColor = isDark ? 'rgba(255,255,255,0.75)' : 'text.secondary';
   const hoverBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
   const dividerColor = isDark ? 'rgba(255,255,255,0.08)' : 'divider';
@@ -51,7 +55,7 @@ function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebar
         '&::-webkit-scrollbar-thumb:hover': { backgroundColor: scrollbarThumbHover },
       }}
     >
-      {NAV_SECTIONS.map((section, sectionIndex) => (
+      {navSections.map((section, sectionIndex) => (
         <Box key={section.key}>
           {sectionIndex > 0 && <Divider sx={{ borderColor: dividerColor, my: 1, mx: 2 }} />}
           <List disablePadding sx={{ px: 1.25 }}>
