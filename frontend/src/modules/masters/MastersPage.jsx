@@ -5,12 +5,13 @@ import {
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { useTranslation } from 'react-i18next';
 
 import { useAppDispatch } from '../../app/hooks';
 import { logout } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 
-import { CASHIER, MASTER_ITEMS } from './mastersMockData';
+import { CASHIER, useMasterItems } from './mastersMockData';
 
 function MasterCard({ item, onOpen }) {
   const Icon = item.icon;
@@ -70,10 +71,15 @@ function MasterCard({ item, onOpen }) {
  * management screen; none of those screens exist yet, so every card
  * surfaces a "coming soon" toast instead of navigating, matching the
  * pattern used for not-yet-built Cashier Panel quick actions.
+ *
+ * This is the sidebar's "Masters" submenu, so its cards translate with the
+ * Topbar language switcher via useMasterItems() (English/Tamil/Hindi).
  */
 export default function MastersPage() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const masterItems = useMasterItems();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -85,22 +91,22 @@ export default function MastersPage() {
       navigate(item.path);
       return;
     }
-    dispatch(showToast(`${item.label} master is coming soon`, 'info'));
+    dispatch(showToast(t('common.masterComingSoon', { name: item.label }), 'info'));
   };
 
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Masters</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{t('common.masters')}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
-            <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Masters</Typography>
+            <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">{t('common.home')}</MuiLink>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('common.masters')}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
+            {t('common.cashier')} : {CASHIER.name} ({CASHIER.code})
           </Typography>
           <MuiLink
             component="button"
@@ -110,7 +116,7 @@ export default function MastersPage() {
             onClick={handleLogout}
             sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
           >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
+            <LogoutOutlinedIcon fontSize="inherit" /> {t('common.logout')}
           </MuiLink>
         </Stack>
       </Stack>
@@ -132,15 +138,15 @@ export default function MastersPage() {
           <InfoOutlinedIcon sx={{ fontSize: 18 }} />
         </Box>
         <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#2563EB' }}>Manage Master Data</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#2563EB' }}>{t('common.manageMasterData')}</Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Create, view and manage all master data used across the POS and integrated systems.
+            {t('common.manageMasterDataDesc')}
           </Typography>
         </Box>
       </Paper>
 
       <Grid container spacing={2}>
-        {MASTER_ITEMS.map((item) => (
+        {masterItems.map((item) => (
           <Grid key={item.key} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
             <MasterCard item={item} onOpen={handleOpen} />
           </Grid>

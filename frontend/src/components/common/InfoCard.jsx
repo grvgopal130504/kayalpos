@@ -18,12 +18,18 @@ export default function InfoCard({ title, subtitle, action, link, children, sx, 
           direction="row"
           sx={{ alignItems: 'center', justifyContent: 'space-between', px: dense ? 2 : 2.5, pt: dense ? 1.5 : 2.25, pb: 1 }}
         >
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              variant="subtitle1"
+              sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
               {title}
             </Typography>
             {subtitle && (
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              <Typography
+                variant="caption"
+                sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
+              >
                 {subtitle}
               </Typography>
             )}

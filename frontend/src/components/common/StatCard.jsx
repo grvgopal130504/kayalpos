@@ -58,7 +58,17 @@ export default function StatCard({
           </Box>
         )}
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, lineHeight: 1.25 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              fontWeight: 500,
+              lineHeight: 1.25,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {label}
           </Typography>
           <Typography
@@ -66,8 +76,10 @@ export default function StatCard({
               fontWeight: 800,
               color: valueColor || 'text.primary',
               mt: 0.25,
-              fontSize: 'clamp(1rem, 1.6vw, 1.25rem)',
+              fontSize: 'clamp(0.95rem, 1.3vw, 1.25rem)',
               lineHeight: 1.2,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
             }}
           >
@@ -77,17 +89,20 @@ export default function StatCard({
       </Stack>
 
       {delta && (
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
           {delta.direction === 'up' ? (
-            <ArrowUpwardIcon sx={{ fontSize: 14, color: 'success.main' }} />
+            <ArrowUpwardIcon sx={{ fontSize: 14, color: 'success.main', flexShrink: 0 }} />
           ) : (
-            <ArrowDownwardIcon sx={{ fontSize: 14, color: 'error.main' }} />
+            <ArrowDownwardIcon sx={{ fontSize: 14, color: 'error.main', flexShrink: 0 }} />
           )}
-          <Typography variant="caption" sx={{ color: delta.direction === 'up' ? 'success.main' : 'error.main', fontWeight: 700 }}>
+          <Typography variant="caption" sx={{ color: delta.direction === 'up' ? 'success.main' : 'error.main', fontWeight: 700, flexShrink: 0 }}>
             {delta.value}
           </Typography>
           {delta.label && (
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            <Typography
+              variant="caption"
+              sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
               {delta.label}
             </Typography>
           )}
@@ -95,7 +110,10 @@ export default function StatCard({
       )}
 
       {caption && !delta && (
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+        <Typography
+          variant="caption"
+          sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
           {caption}
         </Typography>
       )}

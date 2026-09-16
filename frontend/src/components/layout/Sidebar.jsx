@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Divider, Tooltip } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { NAV_SECTIONS } from './navConfig';
+import { useNavSections } from './navConfig';
 import AppLogo from '../common/AppLogo';
 import { useAppSelector } from '../../app/hooks';
 import {
@@ -38,6 +38,7 @@ const NAV_ICON_WIDTH = 40;
 const NAV_ICON_FONT_SIZE = 20;
 const NAV_LABEL_FONT_SIZE = 13;
 
+<<<<<<< HEAD
 // Entrance animation for the menu list: each row fades and slides in from
 // the left, staggered slightly so the sidebar feels like it "builds"
 // itself instead of popping in all at once. Delay is capped (see
@@ -48,6 +49,14 @@ const NAV_ITEM_STAGGER_CAP = 10;
 
 function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebarFontStyle, isDark, iconColorsEnabled, animationsEnabled }) {
   const itemColor = isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.82)';
+=======
+function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebarFontStyle, isDark }) {
+  // Translated on every render via the active i18next language (English,
+  // Tamil or Hindi — see src/i18n) so the whole menu, including every
+  // submenu section below, follows the Topbar language switcher.
+  const navSections = useNavSections();
+  const itemColor = isDark ? 'rgba(255,255,255,0.75)' : 'text.secondary';
+>>>>>>> main
   const hoverBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
   const dividerColor = isDark ? 'rgba(255,255,255,0.08)' : 'divider';
   const scrollbarThumb = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)';
@@ -89,7 +98,7 @@ function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebar
         }),
       }}
     >
-      {NAV_SECTIONS.map((section, sectionIndex) => (
+      {navSections.map((section, sectionIndex) => (
         <Box key={section.key}>
           {sectionIndex > 0 && <Divider sx={{ borderColor: dividerColor, my: 1, mx: 2 }} />}
           <List disablePadding sx={{ px: 1.25 }}>

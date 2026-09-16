@@ -4,22 +4,26 @@ import {
   Popper, Paper, ClickAwayListener, MenuList, MenuItem, ListItemIcon, ListItemText, Typography, Box,
 } from '@mui/material';
 import SearchOffOutlinedIcon from '@mui/icons-material/SearchOffOutlined';
+import { useTranslation } from 'react-i18next';
 import SearchBar from '../common/SearchBar';
-import { ALL_NAV_ITEMS } from './navConfig';
+import { useAllNavItems } from './navConfig';
 
 const MAX_RESULTS = 8;
 
 /**
  * Wires the (previously purely decorative) topbar SearchBar up to real
  * behavior: typing live-filters the app's page list (navConfig's
- * ALL_NAV_ITEMS — every sidebar/Quick Access destination) into a dropdown,
- * and Enter or clicking a result navigates there. There's no backend search
- * endpoint yet (items/invoices/customers aren't indexed anywhere), so this
- * covers page/module navigation — the one thing a client-side search can
- * actually do today — rather than silently doing nothing like before.
+ * ALL_NAV_ITEMS — every sidebar/Quick Access destination, translated via
+ * useAllNavItems into the active language) into a dropdown, and Enter or
+ * clicking a result navigates there. There's no backend search endpoint yet
+ * (items/invoices/customers aren't indexed anywhere), so this covers
+ * page/module navigation — the one thing a client-side search can actually
+ * do today — rather than silently doing nothing like before.
  */
 export default function GlobalSearch({ placeholder }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const navItems = useAllNavItems();
   const containerRef = useRef(null);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -27,8 +31,8 @@ export default function GlobalSearch({ placeholder }) {
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return ALL_NAV_ITEMS.filter((item) => item.label.toLowerCase().includes(q)).slice(0, MAX_RESULTS);
-  }, [query]);
+    return navItems.filter((item) => item.label.toLowerCase().includes(q)).slice(0, MAX_RESULTS);
+  }, [query, navItems]);
 
   const goTo = (path) => {
     setQuery('');
@@ -81,7 +85,7 @@ export default function GlobalSearch({ placeholder }) {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 2 }}>
                 <SearchOffOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  No pages match &ldquo;{query}&rdquo;
+                  {t('common.noPagesMatch', { query })}
                 </Typography>
               </Box>
             )}

@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined';
@@ -34,14 +36,24 @@ import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
  * sidebar), matching the spacing break seen in the reference between
  * "Stock Count" and "Cashier Panel".
  *
+<<<<<<< HEAD
  * `color` is each item's unique icon color, shown when the "Sidebar Icon
  * Colors" toggle in Settings (see uiSlice.js's sidebarIconColorsEnabled) is
  * on; turning it off falls back to the sidebar's plain single-tone icons.
+=======
+ * Labels are stored as `labelKey` (an i18next key under `nav.*`, see
+ * src/i18n/locales/*.json) rather than a hardcoded English string, so the
+ * menu re-renders in whichever language is active. Use the `useNavSections`
+ * / `useAllNavItems` / `useQuickAccessItems` hooks below to get the same
+ * shape with a translated `label` filled in — don't read `label` off the
+ * raw NAV_SECTIONS/ALL_NAV_ITEMS/QUICK_ACCESS_ITEMS constants directly.
+>>>>>>> main
  */
 export const NAV_SECTIONS = [
   {
     key: 'main',
     items: [
+<<<<<<< HEAD
       { key: 'home', label: 'Home', icon: HomeOutlinedIcon, path: '/home', color: '#1E40AF' },
       { key: 'management-dashboard', label: 'Dashboard', icon: SpaceDashboardOutlinedIcon, path: '/dashboard', color: '#5B21B6' },
       { key: 'line-sale', label: 'Line Sale', icon: PointOfSaleOutlinedIcon, path: '/line-sale', quickAccess: true, color: '#C2410C' },
@@ -60,11 +72,32 @@ export const NAV_SECTIONS = [
       { key: 'stock-return', label: 'Stock Return', icon: KeyboardReturnOutlinedIcon, path: '/stock-return', quickAccess: true, color: '#6B21A8' },
       { key: 'stock-wastage', label: 'Stock Wastage', icon: DeleteOutlineOutlinedIcon, path: '/stock-wastage', quickAccess: true, color: '#7F1D1D' },
       { key: 'stock-count', label: 'Stock Count', icon: FactCheckOutlinedIcon, path: '/stock-count', quickAccess: true, color: '#3730A3' },
+=======
+      { key: 'home', labelKey: 'nav.home', icon: HomeOutlinedIcon, path: '/home' },
+      { key: 'management-dashboard', labelKey: 'nav.dashboard', icon: SpaceDashboardOutlinedIcon, path: '/dashboard' },
+      { key: 'line-sale', labelKey: 'nav.lineSale', icon: PointOfSaleOutlinedIcon, path: '/line-sale', quickAccess: true },
+      { key: 'sales-return', labelKey: 'nav.salesReturn', icon: AssignmentReturnOutlinedIcon, path: '/sales-return', quickAccess: true },
+      { key: 'promotion', labelKey: 'nav.promotion', icon: CampaignOutlinedIcon, path: '/promotion', quickAccess: true },
+      { key: 'gift-voucher', labelKey: 'nav.giftVoucher', icon: CardGiftcardOutlinedIcon, path: '/gift-voucher', quickAccess: true },
+      { key: 'loyalty', labelKey: 'nav.loyalty', icon: FavoriteBorderOutlinedIcon, path: '/loyalty', quickAccess: true },
+      { key: 'customer', labelKey: 'nav.customer', icon: PeopleAltOutlinedIcon, path: '/customer', quickAccess: true },
+      { key: 'sales-quotation', labelKey: 'nav.salesQuotation', icon: DescriptionOutlinedIcon, path: '/sales-quotation', quickAccess: true },
+      { key: 'sales-order', labelKey: 'nav.salesOrder', icon: ReceiptLongOutlinedIcon, path: '/sales-order', quickAccess: true },
+      { key: 'sales-invoice', labelKey: 'nav.salesInvoice', icon: ReceiptOutlinedIcon, path: '/sales-invoice', quickAccess: true },
+      { key: 'barcode-label', labelKey: 'nav.barcodeLabel', icon: QrCode2OutlinedIcon, path: '/barcode-label', quickAccess: true },
+      { key: 'stock-indent', labelKey: 'nav.stockIndent', icon: PlaylistAddCheckOutlinedIcon, path: '/stock-indent', quickAccess: true },
+      { key: 'stock-transfer', labelKey: 'nav.stockTransfer', icon: LocalShippingOutlinedIcon, path: '/stock-transfer', quickAccess: true },
+      { key: 'stock-receipt', labelKey: 'nav.stockReceipt', icon: MoveToInboxOutlinedIcon, path: '/stock-receipt', quickAccess: true },
+      { key: 'stock-return', labelKey: 'nav.stockReturn', icon: KeyboardReturnOutlinedIcon, path: '/stock-return', quickAccess: true },
+      { key: 'stock-wastage', labelKey: 'nav.stockWastage', icon: DeleteOutlineOutlinedIcon, path: '/stock-wastage', quickAccess: true },
+      { key: 'stock-count', labelKey: 'nav.stockCount', icon: FactCheckOutlinedIcon, path: '/stock-count', quickAccess: true },
+>>>>>>> main
     ],
   },
   {
     key: 'operations',
     items: [
+<<<<<<< HEAD
       { key: 'cashier-panel', label: 'Cashier Panel', icon: BadgeOutlinedIcon, path: '/cashier-panel', quickAccess: true, color: '#78350F' },
       { key: 'expenses-book', label: 'Expense Book', icon: MenuBookOutlinedIcon, path: '/expenses-book', quickAccess: true, color: '#451A03' },
       { key: 'reports', label: 'Reports', icon: BarChartOutlinedIcon, path: '/reports', color: '#1E3A8A' },
@@ -72,6 +105,15 @@ export const NAV_SECTIONS = [
       { key: 'master-sync', label: 'Master Sync', icon: CloudDoneOutlinedIcon, path: '/master-sync', quickAccess: true, color: '#0C4A6E' },
       { key: 'stock-sync', label: 'Stock Sync', icon: CloudSyncOutlinedIcon, path: '/stock-sync', quickAccess: true, color: '#14532D' },
       { key: 'sap-sync', label: 'SAP Sync', icon: CloudQueueOutlinedIcon, path: '/sap-sync', quickAccess: true, color: '#4C1D95' },
+=======
+      { key: 'cashier-panel', labelKey: 'nav.cashierPanel', icon: BadgeOutlinedIcon, path: '/cashier-panel', quickAccess: true },
+      { key: 'expenses-book', labelKey: 'nav.expensesBook', icon: MenuBookOutlinedIcon, path: '/expenses-book', quickAccess: true },
+      { key: 'reports', labelKey: 'nav.reports', icon: BarChartOutlinedIcon, path: '/reports' },
+      { key: 'masters', labelKey: 'nav.masters', icon: SettingsOutlinedIcon, path: '/masters' },
+      { key: 'master-sync', labelKey: 'nav.masterSync', icon: CloudDoneOutlinedIcon, path: '/master-sync', quickAccess: true },
+      { key: 'stock-sync', labelKey: 'nav.stockSync', icon: CloudSyncOutlinedIcon, path: '/stock-sync', quickAccess: true },
+      { key: 'sap-sync', labelKey: 'nav.sapSync', icon: CloudQueueOutlinedIcon, path: '/sap-sync', quickAccess: true },
+>>>>>>> main
     ],
   },
 ];
@@ -80,3 +122,40 @@ export const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap((section) => section.items);
 
 // Modules with a Quick Access tile on the Home page, in reference order.
 export const QUICK_ACCESS_ITEMS = ALL_NAV_ITEMS.filter((item) => item.quickAccess);
+
+function withTranslatedLabel(item, t) {
+  return { ...item, label: t(item.labelKey) };
+}
+
+/** NAV_SECTIONS with each item's `label` translated into the active language. */
+export function useNavSections() {
+  const { t, i18n } = useTranslation();
+  return useMemo(
+    () => NAV_SECTIONS.map((section) => ({
+      ...section,
+      items: section.items.map((item) => withTranslatedLabel(item, t)),
+    })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, i18n.language],
+  );
+}
+
+/** ALL_NAV_ITEMS with each item's `label` translated into the active language. */
+export function useAllNavItems() {
+  const { t, i18n } = useTranslation();
+  return useMemo(
+    () => ALL_NAV_ITEMS.map((item) => withTranslatedLabel(item, t)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, i18n.language],
+  );
+}
+
+/** QUICK_ACCESS_ITEMS with each item's `label` translated into the active language. */
+export function useQuickAccessItems() {
+  const { t, i18n } = useTranslation();
+  return useMemo(
+    () => QUICK_ACCESS_ITEMS.map((item) => withTranslatedLabel(item, t)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, i18n.language],
+  );
+}

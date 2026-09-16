@@ -7,6 +7,7 @@ import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNone
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import {
   showToast, toggleThemeMode, selectThemeMode, setAccentTheme, selectAccentThemeKey,
@@ -15,6 +16,7 @@ import { ACCENT_THEMES, accentCssBackground } from '../../theme/accentThemes';
 import GlobalSearch from './GlobalSearch';
 import OutletSwitcher from './OutletSwitcher';
 import UserMenu from './UserMenu';
+import LanguageSwitcher from './LanguageSwitcher';
 
 // Mock counts until Notifications is a real module — flagged so it's easy to
 // find and wire up once that backend exists.
@@ -25,6 +27,7 @@ const MOCK_NOTIFICATION_COUNT = 5;
 // as a small round swatch with the selected row highlighted — separate from
 // light/dark mode, which controls the page background/text palette.
 function AccentThemeMenu() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const accentThemeKey = useAppSelector(selectAccentThemeKey);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -36,7 +39,7 @@ function AccentThemeMenu() {
 
   return (
     <>
-      <Tooltip title="Theme color">
+      <Tooltip title={t('common.themeColor')}>
         <IconButton onClick={(e) => setAnchorEl(e.currentTarget)}>
           <PaletteOutlinedIcon />
         </IconButton>
@@ -68,6 +71,7 @@ function AccentThemeMenu() {
 }
 
 export default function Topbar({ onMenuClick }) {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const themeMode = useAppSelector(selectThemeMode);
   const isDark = themeMode === 'dark';
@@ -87,7 +91,7 @@ export default function Topbar({ onMenuClick }) {
         <OutletSwitcher />
 
         <Box sx={{ flex: '0 1 480px', display: { xs: 'none', md: 'block' } }}>
-          <GlobalSearch placeholder="Search pages… (e.g. Customer, Stock Count)" />
+          <GlobalSearch placeholder={t('common.searchPlaceholder')} />
         </Box>
 
         {/* Always-present spacer — absorbs whatever space the (capped) search
@@ -96,21 +100,28 @@ export default function Topbar({ onMenuClick }) {
             search box. */}
         <Box sx={{ flex: 1 }} />
 
-        <Tooltip title="Notifications">
-          <IconButton onClick={() => dispatch(showToast('Notifications are coming soon', 'info'))}>
+        <Tooltip title={t('common.notifications')}>
+          <IconButton onClick={() => dispatch(showToast(t('common.notificationsComingSoon'), 'info'))}>
             <Badge badgeContent={MOCK_NOTIFICATION_COUNT} color="error">
               <NotificationsNoneOutlinedIcon />
             </Badge>
           </IconButton>
         </Tooltip>
 
-        <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+        <Tooltip title={isDark ? t('common.switchToLightMode') : t('common.switchToDarkMode')}>
           <IconButton onClick={() => dispatch(toggleThemeMode())}>
             {isDark ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
           </IconButton>
         </Tooltip>
 
         <AccentThemeMenu />
+
+        {/* Language switcher — icon opens a menu of English / Tamil / Hindi
+            (LANGUAGE_OPTIONS in features/ui/uiSlice.js). Selecting one
+            updates redux `ui.language`, which useSyncLanguage (mounted near
+            the app root) mirrors into i18next, retranslating the sidebar
+            and its submenus instantly. */}
+        <LanguageSwitcher />
 
         <UserMenu />
       </Toolbar>
