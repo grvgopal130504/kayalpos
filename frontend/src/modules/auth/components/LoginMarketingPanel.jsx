@@ -7,7 +7,7 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import StoreIcon from '@mui/icons-material/Store';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import loginImage from '../../../assets/Login Image.png';
+import AppLogo from '../../../components/common/AppLogo';
 
 const FEATURES = [
   { icon: BoltIcon, label: 'Fast Billing' },
@@ -24,41 +24,19 @@ const STATS = [
 ];
 
 /**
- * Full-bleed left half of the login screen (desktop only — LoginPage hides it
- * below `md`). The product photo fills the entire panel edge-to-edge as a
- * background layer; the headline, feature icons, stats bar and copyright sit
- * on top of it (each on its own translucent/blurred card) so the text stays
- * readable no matter what part of the image is behind it.
+ * Text/branding overlay for the login screen's full-bleed background photo
+ * (the photo itself, plus the readability scrim behind this, are rendered
+ * once by LoginPage so they can span the *entire* viewport — including the
+ * area behind the floating login card — rather than just this panel).
+ * Desktop only (LoginPage hides this below `md`). The brand mark, headline,
+ * feature icons, stats bar and copyright each sit on their own
+ * translucent/blurred card so the text stays readable no matter what part
+ * of the image is behind it.
  */
 export default function LoginMarketingPanel() {
   return (
-    <Box
-      sx={{
-        position: 'relative',
-        height: '100%',
-        width: '100%',
-        overflow: 'hidden',
-        bgcolor: 'background.paper',
-      }}
-    >
-      {/* Background photo — full panel, cropped (never letterboxed) so it
-          always fills the width and height with no gaps. */}
-      <Box
-        component="img"
-        src={loginImage}
-        alt="Kayal Agro Foods products"
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          objectPosition: 'center',
-          zIndex: 0,
-        }}
-      />
-
-      {/* Content — layered above the photo. */}
+    <Box sx={{ position: 'relative', height: '100%', width: '100%' }}>
+      {/* Content — layered above the photo (painted by the parent). */}
       <Stack
         sx={{
           position: 'relative',
@@ -81,15 +59,17 @@ export default function LoginMarketingPanel() {
           <Box
             sx={{
               display: 'inline-block',
-              // bgcolor: 'rgba(255, 255, 255, 0)',
-              // backdropFilter: 'blur(6px)',
-              borderRadius: 1,
+              bgcolor: 'rgba(255, 255, 255, 0.6)',
+              backdropFilter: 'blur(8px)',
+              borderRadius: 2,
               px: 1.75,
               py: 1.25,
-              borderColor: 'divider',
-              // boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
             }}
           >
+            <Box sx={{ mb: 0.75 }}>
+              <AppLogo iconSize={32} titleFontSize="1.05rem" subtitleFontSize="0.56rem" />
+            </Box>
             <Typography
               sx={{
                 fontWeight: 800,
@@ -196,8 +176,8 @@ export default function LoginMarketingPanel() {
               px: { md: 2, lg: 3 },
               py: { md: 1, lg: 1.25 },
               borderRadius: 3,
-              bgcolor: 'rgba(255, 255, 255, 0)',
-              backdropFilter: 'blur(2px)',
+              bgcolor: 'rgba(255, 255, 255, 0.55)',
+              backdropFilter: 'blur(8px)',
               border: '1px solid',
               borderColor: 'divider',
               boxShadow: '0 4px 20px rgba(0,0,0,0.12)',

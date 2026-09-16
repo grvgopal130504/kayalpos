@@ -30,6 +30,7 @@ import { useHealthStatus } from '../../hooks/useHealthStatus';
 import { useGetPublicOutletsQuery } from '../../api/outletApi';
 import { loginSchema, loginDefaultValues } from './loginSchema';
 import LoginMarketingPanel from './components/LoginMarketingPanel';
+import loginBackground from '../../assets/LoginImage1.jpeg';
 
 const APP_VERSION = '1.0.0';
 const TENANT_NAME = 'Kayal Agro Foods'; // TODO: replace with tenant context once multi-tenant lookup exists
@@ -88,51 +89,84 @@ export default function LoginPage() {
   return (
     <Box
       sx={{
+        position: 'relative',
         height: '100vh',
         width: '100%',
-        display: 'flex',
         bgcolor: 'background.default',
         overflow: 'hidden',
       }}
     >
-      {/* Left half — full-bleed branded panel. Hidden on phones/small tablets,
-          where the form takes the whole screen instead. */}
-      <Box sx={{ display: { xs: 'none', md: 'block' }, flex: 1, minWidth: 0 }}>
-        <LoginMarketingPanel />
+      {/* Desktop only: the product photo covers the *entire* page edge-to-
+          edge as a fixed background layer, with the brand copy and login
+          card both floating on top of it. Phones/small tablets fall back to
+          a plain background with just the centered login card (below). */}
+      <Box sx={{ display: { xs: 'none', md: 'block' }, position: 'absolute', inset: 0, zIndex: 0 }}>
+        <Box
+          component="img"
+          src={loginBackground}
+          alt=""
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'fill',
+          }}
+        />
+        <Box sx={{ position: 'relative', height: '100%', width: { md: '60%', lg: '62%', xl: '64%' } }}>
+          <LoginMarketingPanel />
+        </Box>
       </Box>
 
-      {/* Right half — login form. Fixed, comfortable column on desktop so the
-          fields never stretch to an unusable width on ultrawide monitors. */}
+      {/* Login card — floats over the photo as a self-contained card with
+          a gap all around it (not flush to any edge), vertically centered
+          and pinned toward the right on desktop; falls back to a normal
+          centered column (no image) on phones/small tablets. */}
       <Box
         sx={{
-          width: { xs: '100%', md: '46%', lg: '43%', xl: '40%' },
-          flexShrink: 0,
+          position: { xs: 'relative', md: 'absolute' },
+          zIndex: 1,
+          top: { md: '50%' },
+          right: { md: 32, lg: 48, xl: 64 },
+          transform: { md: 'translateY(-50%)' },
+          height: { xs: '100%', md: 'auto' },
+          maxHeight: { md: 'calc(100vh - 64px)' },
+          width: { xs: '100%', md: 'auto' },
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          px: { xs: 2, sm: 4, md: 5 },
-          py: 3,
+          px: { xs: 2, sm: 4, md: 0 },
+          py: { xs: 3, md: 0 },
           overflowY: 'auto',
         }}
       >
           <Paper
-            elevation={3}
+            elevation={8}
             sx={{
               width: '100%',
               maxWidth: { xs: 420, xl: 460 },
-              p: { xs: 3, sm: 4 },
+              maxHeight: { md: '100%' },
+              // Safety net: if a very short window still can't fit every
+              // field, the card scrolls internally instead of spilling
+              // content past its own edges (which the outer page clips).
+              overflowY: 'auto',
+              px: { xs: 3, sm: 4, md: 5 },
+              py: { xs: 3, sm: 4, md: 4 },
               borderRadius: 4,
+              bgcolor: { xs: 'background.paper', md: 'rgba(255, 255, 255, 0.95)' },
+              backdropFilter: { md: 'blur(16px)' },
+              border: { md: '1px solid rgba(255, 255, 255, 0.6)' },
             }}
           >
-            <Stack spacing={2.5}>
-              <Stack spacing={1.25} sx={{ alignItems: 'center' }}>
-                <AppLogo iconSize={40} titleFontSize="1.2rem" subtitleFontSize="0.64rem" />
+            <Stack spacing={1.75} sx={{ width: '100%' }}>
+              <Stack spacing={0.75} sx={{ alignItems: 'center' }}>
+                <AppLogo iconSize={32} titleFontSize="1.05rem" subtitleFontSize="0.56rem" />
                 <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                     Welcome to <Box component="span" sx={{ color: 'primary.main' }}>Nexora</Box> POS
                   </Typography>
-                  <Box sx={{ width: 52, height: 3, bgcolor: 'primary.main', borderRadius: 1, mx: 'auto', mt: 0.75 }} />
-                  <Typography variant="body2" sx={{ mt: 0.75, fontWeight: 600, color: 'text.secondary' }}>
+                  <Box sx={{ width: 44, height: 3, bgcolor: 'primary.main', borderRadius: 1, mx: 'auto', mt: 0.5 }} />
+                  <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 600, color: 'text.secondary' }}>
                     {TENANT_NAME}
                   </Typography>
                 </Box>
@@ -140,7 +174,7 @@ export default function LoginPage() {
 
               <FormProvider {...methods}>
                 <Box component="form" onSubmit={methods.handleSubmit(onSubmit)} noValidate>
-                  <Stack spacing={1.75}>
+                  <Stack spacing={1.25}>
                     {serverError && (
                       <Typography variant="body2" color="error" role="alert">
                         {serverError}
@@ -151,6 +185,7 @@ export default function LoginPage() {
                       name="username"
                       label="Username"
                       autoComplete="username"
+                      size="small"
                       slotProps={{
                         input: {
                           startAdornment: (
@@ -166,6 +201,7 @@ export default function LoginPage() {
                       name="password"
                       label="Password"
                       autoComplete="current-password"
+                      size="small"
                     />
 
                     <FormSelect
@@ -173,6 +209,7 @@ export default function LoginPage() {
                       label="Select Outlet"
                       options={outletOptions}
                       disabled={outletsLoading}
+                      size="small"
                       slotProps={{
                         input: {
                           startAdornment: (
@@ -200,7 +237,7 @@ export default function LoginPage() {
                       </Link>
                     </Stack>
 
-                    <Button type="submit" variant="contained" size="large" disabled={isLoading || !allFieldsFilled} fullWidth>
+                    <Button type="submit" variant="contained" size="medium" disabled={isLoading || !allFieldsFilled} fullWidth>
                       {isLoading ? 'Signing in…' : 'Login'}
                     </Button>
 
@@ -216,7 +253,7 @@ export default function LoginPage() {
 
                     <Button
                       variant="outlined"
-                      size="large"
+                      size="medium"
                       fullWidth
                       startIcon={<PinIcon />}
                       onClick={() => handleComingSoon('Login with PIN')}
