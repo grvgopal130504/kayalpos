@@ -37,8 +37,6 @@ import {
   PROMOTION_PERFORMANCE, TOP_PROMOTIONS, DISCOUNT_TREND, OUTLET_USAGE,
 } from './promotionMockData';
 
-const PROMOTION_BY_CODE = Object.fromEntries(PROMOTIONS.map((p) => [p.code, p]));
-
 const STATUS_META = {
   active: { label: 'Active Promotions', icon: PlayCircleOutlinedIcon, iconColor: 'success' },
   upcoming: { label: 'Upcoming Promotions', icon: AccessTimeOutlinedIcon, iconColor: 'success' },
@@ -48,12 +46,20 @@ const STATUS_META = {
 const EXTRA_TILE_ICONS = [CardGiftcardOutlinedIcon, CurrencyRupeeOutlinedIcon, ShoppingCartOutlinedIcon, PieChartOutlineOutlinedIcon];
 const EXTRA_TILE_COLORS = ['info', '#E5484D', '#F5A623', '#8B5CF6'];
 
+// Reads live counts from the current PROMOTIONS array (so a promotion
+// created/edited this session is reflected immediately) while leaving the
+// couponsUsed/discountGiven figures as static mock summary values, since
+// nothing in the app tracks real redemptions yet.
 function buildAllTiles() {
+  const total = PROMOTIONS.length;
+  const active = PROMOTIONS.filter((p) => p.status === 'active').length;
+  const upcoming = PROMOTIONS.filter((p) => p.status === 'upcoming').length;
+  const expired = PROMOTIONS.filter((p) => p.status === 'expired').length;
   return [
-    { icon: LocalOfferOutlinedIcon, iconColor: '#8B5CF6', label: 'Total Promotions', value: formatNumber(SUMMARY.totalPromotions.value), caption: SUMMARY.totalPromotions.caption },
-    { icon: PlayCircleOutlinedIcon, iconColor: 'success', label: 'Active Promotions', value: formatNumber(SUMMARY.activePromotions.value), caption: SUMMARY.activePromotions.caption },
-    { icon: AccessTimeOutlinedIcon, iconColor: 'warning', label: 'Upcoming Promotions', value: formatNumber(SUMMARY.upcomingPromotions.value), caption: SUMMARY.upcomingPromotions.caption },
-    { icon: PauseCircleOutlinedIcon, iconColor: 'error', label: 'Expired Promotions', value: formatNumber(SUMMARY.expiredPromotions.value), caption: SUMMARY.expiredPromotions.caption },
+    { icon: LocalOfferOutlinedIcon, iconColor: '#8B5CF6', label: 'Total Promotions', value: formatNumber(total), caption: SUMMARY.totalPromotions.caption },
+    { icon: PlayCircleOutlinedIcon, iconColor: 'success', label: 'Active Promotions', value: formatNumber(active), caption: SUMMARY.activePromotions.caption },
+    { icon: AccessTimeOutlinedIcon, iconColor: 'warning', label: 'Upcoming Promotions', value: formatNumber(upcoming), caption: SUMMARY.upcomingPromotions.caption },
+    { icon: PauseCircleOutlinedIcon, iconColor: 'error', label: 'Expired Promotions', value: formatNumber(expired), caption: SUMMARY.expiredPromotions.caption },
     { icon: CardGiftcardOutlinedIcon, iconColor: 'info', label: 'Coupon/Offers Used', value: formatNumber(SUMMARY.couponsUsed.value), caption: SUMMARY.couponsUsed.caption },
     { icon: CurrencyRupeeOutlinedIcon, iconColor: '#E5484D', label: 'Discount Given', value: formatCurrency(SUMMARY.discountGiven.value, { decimals: true }), caption: SUMMARY.discountGiven.caption },
   ];
@@ -83,6 +89,11 @@ export default function PromotionPage() {
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(PROMOTION_DETAILS.code);
 
+  // Recomputed on every render (rather than module scope) so a promotion
+  // created or edited this session — which mutates PROMOTIONS in place —
+  // is picked up immediately instead of only on a full page reload.
+  const promotionByCode = Object.fromEntries(PROMOTIONS.map((p) => [p.code, p]));
+
   const goToList = () => { setActiveCode(null); setMode('list'); };
   const openEdit = (code) => { setActiveCode(code); setMode('edit'); };
   const openView = (code) => { setActiveCode(code); setMode('view'); };
@@ -91,7 +102,11 @@ export default function PromotionPage() {
     return (
       <CreatePromotionPage
         code={mode === 'edit' ? activeCode : undefined}
-        onBack={mode === 'edit' ? () => openView(activeCode) : goToList}
+        onBack={(savedCode) => {
+          if (savedCode) setSelectedCode(savedCode);
+          if (mode === 'edit') return openView(savedCode || activeCode);
+          return goToList();
+        }}
       />
     );
   }
@@ -101,7 +116,7 @@ export default function PromotionPage() {
   }
 
   const detailsTemplate = tab === 'all' ? PROMOTION_DETAILS : STATUS_DETAILS[tab];
-  const selectedRow = PROMOTION_BY_CODE[selectedCode] || firstPromotionFor(tab);
+  const selectedRow = promotionByCode[selectedCode] || firstPromotionFor(tab);
   const promotionDetails = selectedCode === detailsTemplate.code
     ? detailsTemplate
     : { ...detailsTemplate, code: selectedRow.code, name: selectedRow.name, status: selectedRow.status };

@@ -8,21 +8,26 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CustomerDetailsCard from './components/CustomerDetailsCard';
 import CustomerTransactionsCard from './components/CustomerTransactionsCard';
 import CustomerLoyaltySummary from './components/CustomerLoyaltySummary';
-import { getCustomerDetails, RECENT_TRANSACTIONS, LOYALTY_SUMMARY } from './customerMockData';
+import { RECENT_TRANSACTIONS, LOYALTY_SUMMARY } from './customerMockData';
+import { toCustomerDetails } from './customerApiHelpers';
+import { useGetCustomersQuery } from '../../api/customerApi';
 
 /**
  * Read-only "View Customer" destination for CustomerTable's row menu —
  * reuses the exact same CustomerDetailsCard/CustomerTransactionsCard/
  * CustomerLoyaltySummary cards CustomerPage already shows for the selected
  * row, just addressed by :code as its own full page instead of a side
- * panel. Recent transactions / loyalty summary aren't per-customer in the
- * mock data yet, so they show the same sample set CustomerPage does.
+ * panel, and wired to the real Customer API. Recent transactions / loyalty
+ * summary are still mock placeholders — they need the Sales Invoice/Payment
+ * and Loyalty modules, which don't exist yet.
  */
 export default function CustomerViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
   const { code: paramCode } = useParams();
   const code = propCode ?? paramCode;
-  const customer = getCustomerDetails(code);
+  const { data: customerRows = [] } = useGetCustomersQuery({});
+  const row = customerRows.find((c) => c.code === code);
+  const customer = row ? toCustomerDetails(row) : null;
 
   const handleBack = () => (onBack ? onBack() : navigate('/customer'));
   const handleEdit = () => (onEdit ? onEdit() : navigate(`/customer/edit/${code}`));

@@ -38,9 +38,11 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  outlets Outlet[]
-  users   User[]
-  brands  Brand[]
+  outlets   Outlet[]
+  users     User[]
+  brands    Brand[]
+  products  Product[]
+  customers Customer[]
 }
 
 model Outlet {
@@ -86,6 +88,67 @@ model Brand {
   status      RecordStatus @default(ACTIVE)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+
+  @@unique([tenantId, code])
+}
+
+// Product master (Phase 1 of the Sales cycle build-out — Line Sale/Invoice
+// depend on this existing). `availableQty` is a simple on-hand counter for
+// now; once the Stock module exists it should move to a proper Stock Ledger
+// (see docs/architecture-proposal.md §7) and this field becomes a cached/
+// derived balance instead of the source of truth.
+model Product {
+  id           String       @id @default(cuid())
+  tenantId     String
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  code         String
+  name         String
+  group        String
+  brand        String?
+  uom          String
+  hsnSac       String?
+  taxCode      String?
+  salePrice    Decimal      @default(0) @db.Decimal(12, 2)
+  mrp          Decimal      @default(0) @db.Decimal(12, 2)
+  availableQty Int          @default(0)
+  status       RecordStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([tenantId, code])
+}
+
+// Customer master. `loyaltyPoints` is a plain counter for now (no Loyalty
+// module yet); `totalPurchase`/`outstanding`/transaction history are NOT
+// stored here on purpose — those are derived from Sales Invoice + Payment
+// records once that module exists, never hand-maintained on the customer
+// row itself (source-of-truth rule from the architecture proposal).
+model Customer {
+  id                  String       @id @default(cuid())
+  tenantId            String
+  tenant              Tenant       @relation(fields: [tenantId], references: [id])
+  code                String
+  name                String
+  mobile              String
+  email               String?
+  gstin               String?
+  customerType        String
+  group               String?
+  priceCategory       String?
+  creditLimit         Decimal      @default(0) @db.Decimal(12, 2)
+  openingBalance      Decimal      @default(0) @db.Decimal(12, 2)
+  openingBalanceType  String       @default("Cr")
+  address             String?
+  salesRepresentative String?
+  territory           String?
+  allowCreditSale     Boolean      @default(true)
+  priceInclusive      Boolean      @default(false)
+  smsNotification     Boolean      @default(true)
+  notes               String?
+  loyaltyPoints       Int          @default(0)
+  status              RecordStatus @default(ACTIVE)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   @@unique([tenantId, code])
 }

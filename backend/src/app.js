@@ -7,6 +7,8 @@ import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 import healthRoutes from './modules/health/health.routes.js';
 import outletRoutes from './modules/outlet/outlet.routes.js';
 import brandRoutes from './modules/brand/brand.routes.js';
+import productRoutes from './modules/product/product.routes.js';
+import customerRoutes from './modules/customer/customer.routes.js';
 
 export const app = express();
 
@@ -44,6 +46,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/outlets', outletRoutes);
 app.use('/api/masters/brand', brandRoutes);
+app.use('/api/masters/product', productRoutes);
+app.use('/api/customers', customerRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

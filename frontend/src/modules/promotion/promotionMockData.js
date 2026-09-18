@@ -8,7 +8,16 @@
  * Code ranges are kept non-overlapping by status so the three status pages
  * (and the overview page) never show duplicate PROMO-#### ids:
  *   0001-0012  active     0013-0016  upcoming     0017-0028  expired
+ *
+ * `upsertPromotion()` below is the one exception to "static" — since there's
+ * no backend to persist to, Create/Edit Promotion writes straight into the
+ * arrays here (mutating `PROMOTIONS` in place) so a saved promotion actually
+ * shows up in the list/details panel for the rest of the browser session,
+ * instead of vanishing the moment the form navigates away.
  */
+
+import { MAXIMUM_USAGE_OPTIONS, MAXIMUM_USAGE_DESCRIPTIONS } from './createPromotionSchema';
+import { PRODUCTS, PRODUCT_GROUP_COLORS } from '../masters/product/productMockData';
 
 export const SUMMARY = {
   totalPromotions: { value: 28, caption: 'All Time' },
@@ -324,7 +333,14 @@ const PROMOTION_BY_CODE = Object.fromEntries(PROMOTIONS.map((p) => [p.code, p]))
  * CreatePromotionPage's edit mode needs those flat values to prefill the
  * create form, while PromotionDetailsCard only reads the template fields.
  */
+// Session-only overrides: full detail records for any promotion
+// created/edited via CreatePromotionPage this session, keyed by code. Takes
+// priority over the STATUS_DETAILS-template fallback below, since a saved
+// promotion has real, complete data instead of a borrowed template.
+const SESSION_DETAILS = {};
+
 export function getPromotionDetails(code) {
+  if (SESSION_DETAILS[code]) return SESSION_DETAILS[code];
   const row = PROMOTION_BY_CODE[code];
   if (!row) return null;
   const template = STATUS_DETAILS[row.status] || PROMOTION_DETAILS;
@@ -340,6 +356,156 @@ export function getPromotionDetails(code) {
     endDate: row.endDate,
     usage: row.usage,
   };
+}
+
+// ---------------------------------------------------------------------
+// Create/Edit Promotion support: code generation + save-in-place, since
+// there's no backend to POST/PUT to.
+// ---------------------------------------------------------------------
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const APPLIES_TO_VALUE_TO_LABEL = { specific: 'Item', category: 'Category', all: 'Bill' };
+const ITEM_CHIP_COLORS = ['#F26B21', '#F5A623', '#8B5CF6', '#D97706', '#E5484D', '#2563EB', '#22A06B'];
+
+// Accepts either the create form's "DD/MM/YYYY" default dates or the date
+// picker's "DD Mon YYYY" output (and the mock data's own "20 May 2026"
+// style) so status/display formatting works regardless of which one a
+// given field happens to hold.
+function parseFlexibleDate(value) {
+  if (!value || typeof value !== 'string') return null;
+  const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (slash) return new Date(Number(slash[3]), Number(slash[2]) - 1, Number(slash[1]));
+  const named = /^(\d{1,2})\s+([A-Za-z]{3})\w*\s+(\d{4})$/.exec(value.trim());
+  if (named) {
+    const monthIndex = MONTH_NAMES.findIndex((m) => m.toLowerCase() === named[2].slice(0, 3).toLowerCase());
+    if (monthIndex !== -1) return new Date(Number(named[3]), monthIndex, Number(named[1]));
+  }
+  return null;
+}
+
+function formatDisplayDate(date) {
+  if (!date) return '';
+  return `${String(date.getDate()).padStart(2, '0')} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function computePromotionStatus({ startDate, endDate, noExpiry }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = parseFlexibleDate(startDate);
+  const end = noExpiry ? null : parseFlexibleDate(endDate);
+  if (start && start > today) return 'upcoming';
+  if (end && end < today) return 'expired';
+  return 'active';
+}
+
+function formatDiscountDisplay({ discountType, discountValue, discountUnit }) {
+  if (discountType === 'Free Item') return 'Free';
+  if (discountType === 'Special Price') return 'Special Price';
+  if (!discountValue) return '—';
+  return discountUnit === '₹' ? `₹${Number(discountValue).toFixed(2)}` : `${discountValue}%`;
+}
+
+function buildItemChip(code, index) {
+  const product = PRODUCTS.find((p) => p.code === code);
+  const name = product?.name || code;
+  return { code, name, initial: name.charAt(0).toUpperCase(), color: ITEM_CHIP_COLORS[index % ITEM_CHIP_COLORS.length] };
+}
+
+function buildCategoryChip(category, index) {
+  return {
+    code: category,
+    name: category,
+    initial: category.charAt(0).toUpperCase(),
+    color: PRODUCT_GROUP_COLORS[category] || ITEM_CHIP_COLORS[index % ITEM_CHIP_COLORS.length],
+  };
+}
+
+/** Next PROMO-#### code — scans every existing code for the highest numeric
+ * suffix and adds one, the same convention Sales Invoice/Order/Quotation
+ * use for their own auto-numbers. */
+export function getNextPromotionCode() {
+  const max = PROMOTIONS.reduce((m, p) => {
+    const n = Number(String(p.code || '').replace(/\D/g, ''));
+    return Number.isFinite(n) ? Math.max(m, n) : m;
+  }, 0);
+  return `PROMO-${String(max + 1).padStart(4, '0')}`;
+}
+
+/** Builds the flat row shape PromotionTable/PromotionPage's tiles read. */
+export function buildPromotionRow(code, values, { usage = 0 } = {}) {
+  const startDate = formatDisplayDate(parseFlexibleDate(values.startDate)) || values.startDate;
+  const endDate = values.noExpiry ? 'No Expiry' : (formatDisplayDate(parseFlexibleDate(values.endDate)) || values.endDate);
+  return {
+    code,
+    name: values.promotionName,
+    type: values.promotionType,
+    appliesTo: APPLIES_TO_VALUE_TO_LABEL[values.appliesTo] || 'Bill',
+    discount: formatDiscountDisplay(values),
+    startDate,
+    endDate,
+    status: computePromotionStatus(values),
+    usage,
+  };
+}
+
+/** Builds the rich detail shape PromotionDetailsCard/PromotionViewPage read,
+ * plus a `formValues` copy so re-opening this promotion for editing can
+ * prefill the form exactly instead of re-deriving values lossily. */
+export function buildPromotionDetails(code, values, row) {
+  const appliesToLabel = row.appliesTo === 'Item' ? 'Specific Items' : row.appliesTo === 'Category' ? 'Category' : 'All Items';
+  const usageLabel = MAXIMUM_USAGE_OPTIONS.find((o) => o.value === values.maximumUsage)?.label || 'No Limit';
+  return {
+    code,
+    name: values.promotionName,
+    status: row.status,
+    usageColumnLabel: 'Usage (Till Date)',
+    fields: [
+      { label: 'Promotion Type', value: values.promotionType },
+      { label: 'Discount Type', value: values.discountType },
+      { label: 'Applies To', value: appliesToLabel },
+      { label: 'Discount Value', value: formatDiscountDisplay(values) },
+      { label: 'Start Date', value: row.startDate },
+      { label: 'Minimum Bill Amount', value: values.minimumBillAmount ? `₹${values.minimumBillAmount}` : '₹0.00' },
+      { label: 'End Date', value: row.endDate },
+      { label: 'Maximum Usage', value: usageLabel },
+    ],
+    items: row.appliesTo === 'Item'
+      ? (values.selectedItems || []).map(buildItemChip)
+      : row.appliesTo === 'Category'
+        ? (values.selectedCategories || []).map(buildCategoryChip)
+        : [],
+    terms: [
+      'Offer applicable on listed items only.',
+      'Not valid with other promotions.',
+      MAXIMUM_USAGE_DESCRIPTIONS[values.maximumUsage] || MAXIMUM_USAGE_DESCRIPTIONS['no-limit'],
+      'Offer valid only during the selected period.',
+      'Management reserves the right to modify or cancel this promotion at any time.',
+    ],
+    usageSummary: {
+      title: 'Usage Summary',
+      rows: [
+        { label: 'Total Used', value: row.usage, currency: false },
+        { label: 'Total Transactions', value: 0, currency: false },
+        { label: 'Discount Given', value: 0, currency: true },
+        { label: 'Average Discount / Bill', value: 0, currency: true },
+      ],
+    },
+    formValues: { ...values },
+  };
+}
+
+/** Saves a created/edited promotion in place: upserts the flat row into
+ * `PROMOTIONS` (so the list/table picks it up immediately) and stores the
+ * rich detail record in `SESSION_DETAILS` (so the details panel, View page,
+ * and re-editing all see the real data instead of a borrowed template). */
+export function upsertPromotion({ listRow, fullDetails }) {
+  const idx = PROMOTIONS.findIndex((p) => p.code === listRow.code);
+  if (idx === -1) {
+    PROMOTIONS.unshift(listRow);
+  } else {
+    PROMOTIONS[idx] = listRow;
+  }
+  SESSION_DETAILS[listRow.code] = fullDetails;
 }
 
 export const PROMOTION_PERFORMANCE = [

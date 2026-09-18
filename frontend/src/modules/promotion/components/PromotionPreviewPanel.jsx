@@ -4,12 +4,15 @@ import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import SellOutlinedIcon from '@mui/icons-material/SellOutlined';
 
-import { MAXIMUM_USAGE_OPTIONS } from '../createPromotionSchema';
+import { MAXIMUM_USAGE_OPTIONS, MAXIMUM_USAGE_DESCRIPTIONS } from '../createPromotionSchema';
+import { PRODUCTS } from '../../masters/product/productMockData';
 
-const TERMS = [
+const PRODUCT_NAME_BY_CODE = Object.fromEntries(PRODUCTS.map((p) => [p.code, p.name]));
+
+const STATIC_TERMS = [
   'Offer applicable on listed items only.',
   'Not valid with other promotions.',
-  'Minimum bill amount and usage limit (if any) must be met.',
+  'Minimum bill amount (if any) must be met.',
   'Offer valid only during the selected period.',
   'Management reserves the right to modify or cancel this promotion at any time.',
 ];
@@ -44,6 +47,13 @@ export default function PromotionPreviewPanel({ onSelectItems }) {
   const youSave = values.discountValue
     ? (values.discountUnit === '₹' ? `₹${Number(values.discountValue).toFixed(2)}` : `${values.discountValue}% off`)
     : '₹0.00';
+
+  // The usage-limit term is the one line in Terms & Conditions that actually
+  // changes meaning based on a form field, so it's generated from the same
+  // MAXIMUM_USAGE_DESCRIPTIONS map the create form's own helper caption
+  // uses, rather than duplicating the wording here.
+  const usageLimitTerm = MAXIMUM_USAGE_DESCRIPTIONS[values.maximumUsage] || MAXIMUM_USAGE_DESCRIPTIONS['no-limit'];
+  const terms = [STATIC_TERMS[0], STATIC_TERMS[1], usageLimitTerm, ...STATIC_TERMS.slice(2)];
 
   return (
     <Stack spacing={2}>
@@ -101,37 +111,65 @@ export default function PromotionPreviewPanel({ onSelectItems }) {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: 2.5 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>Items / Categories</Typography>
-        <Box
-          sx={{
-            border: '1px dashed', borderColor: 'divider', borderRadius: 2, p: 3,
-            textAlign: 'center', bgcolor: 'background.default',
-          }}
-        >
-          <Inventory2OutlinedIcon sx={{ fontSize: 32, color: 'text.disabled', mb: 1 }} />
-          {values.appliesTo === 'all' || !values.appliesTo ? (
-            <>
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>No items or categories selected</Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                This promotion will be applied to all items.
-              </Typography>
-            </>
-          ) : (
-            <>
-              <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
-                No {values.appliesTo === 'category' ? 'category' : 'items'} selected yet
-              </Typography>
-              <Button variant="outlined" size="small" onClick={onSelectItems}>
-                + Select {values.appliesTo === 'category' ? 'Category' : 'Items'}
-              </Button>
-            </>
-          )}
-        </Box>
+        {(() => {
+          const isCategoryMode = values.appliesTo === 'category';
+          const selection = isCategoryMode ? (values.selectedCategories || []) : (values.selectedItems || []);
+          const hasSelection = values.appliesTo !== 'all' && values.appliesTo && selection.length > 0;
+
+          if (hasSelection) {
+            return (
+              <Stack spacing={1.5}>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                  {selection.map((val) => (
+                    <Chip
+                      key={val}
+                      size="small"
+                      label={isCategoryMode ? val : (PRODUCT_NAME_BY_CODE[val] || val)}
+                      sx={{ fontWeight: 600, bgcolor: 'rgba(242,107,33,0.1)', color: 'primary.main' }}
+                    />
+                  ))}
+                </Stack>
+                <Button variant="text" size="small" onClick={onSelectItems} sx={{ alignSelf: 'flex-start', fontWeight: 700 }}>
+                  Edit {isCategoryMode ? 'Categories' : 'Items'}
+                </Button>
+              </Stack>
+            );
+          }
+
+          return (
+            <Box
+              sx={{
+                border: '1px dashed', borderColor: 'divider', borderRadius: 2, p: 3,
+                textAlign: 'center', bgcolor: 'background.default',
+              }}
+            >
+              <Inventory2OutlinedIcon sx={{ fontSize: 32, color: 'text.disabled', mb: 1 }} />
+              {values.appliesTo === 'all' || !values.appliesTo ? (
+                <>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>No items or categories selected</Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    This promotion will be applied to all items.
+                  </Typography>
+                </>
+              ) : (
+                <>
+                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
+                    No {isCategoryMode ? 'category' : 'items'} selected yet
+                  </Typography>
+                  <Button variant="outlined" size="small" onClick={onSelectItems}>
+                    + Select {isCategoryMode ? 'Category' : 'Items'}
+                  </Button>
+                </>
+              )}
+            </Box>
+          );
+        })()}
       </Paper>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: 2.5 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>Terms &amp; Conditions</Typography>
         <Stack component="ul" spacing={0.5} sx={{ m: 0, pl: 2.5 }}>
-          {TERMS.map((term) => (
+          {terms.map((term) => (
             <Typography key={term} component="li" variant="body2" sx={{ color: 'text.secondary' }}>
               {term}
             </Typography>

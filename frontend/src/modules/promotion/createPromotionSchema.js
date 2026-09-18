@@ -34,6 +34,16 @@ export const MAXIMUM_USAGE_OPTIONS = [
   { value: 'once-per-bill', label: 'Once Per Bill' },
 ];
 
+// Plain-language explanation of what each Maximum Usage option actually
+// does at billing time — shown as a caption under the field on the create
+// form and folded into the live preview's Terms & Conditions, so the choice
+// reads the same wherever it's referenced.
+export const MAXIMUM_USAGE_DESCRIPTIONS = {
+  'no-limit': 'No restriction — this promotion can be applied on every eligible item, for every customer, on any number of bills.',
+  'once-per-customer': 'Each customer can redeem this promotion only once in total, even across separate bills or visits.',
+  'once-per-bill': 'This promotion can be applied only once per bill — a customer can still use it again on a different bill.',
+};
+
 function todayFormatted() {
   const d = new Date();
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
@@ -64,10 +74,21 @@ export const createPromotionSchema = z
     onePerCustomer: z.boolean(),
     combinable: z.boolean(),
     showInInvoice: z.boolean(),
+    // Only meaningful when appliesTo is 'specific' / 'category' respectively
+    // — see the superRefine below. Holds product codes / category names
+    // picked in PromotionItemPickerDialog.
+    selectedItems: z.array(z.string()).default([]),
+    selectedCategories: z.array(z.string()).default([]),
   })
   .superRefine((values, ctx) => {
     if (!values.noExpiry && !values.endDate) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['endDate'], message: 'End date is required' });
+    }
+    if (values.appliesTo === 'specific' && values.selectedItems.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['selectedItems'], message: 'Select at least one item' });
+    }
+    if (values.appliesTo === 'category' && values.selectedCategories.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['selectedCategories'], message: 'Select at least one category' });
     }
   });
 
@@ -89,4 +110,6 @@ export const createPromotionDefaultValues = {
   onePerCustomer: false,
   combinable: true,
   showInInvoice: true,
+  selectedItems: [],
+  selectedCategories: [],
 };

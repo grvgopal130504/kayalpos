@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -18,20 +18,19 @@ import CustomerTransactionsCard from './components/CustomerTransactionsCard';
 import CustomerLoyaltySummary from './components/CustomerLoyaltySummary';
 import AddNewCustomerPage from './AddNewCustomerPage';
 import CustomerViewPage from './CustomerViewPage';
-import {
-  SUMMARY, CUSTOMERS, TOTAL_CUSTOMER_COUNT, CUSTOMER_DETAILS, RECENT_TRANSACTIONS, LOYALTY_SUMMARY,
-  getCustomerDetails,
-} from './customerMockData';
+import { SUMMARY, RECENT_TRANSACTIONS, LOYALTY_SUMMARY } from './customerMockData';
+import { toCustomerRow, toCustomerDetails } from './customerApiHelpers';
+import { useGetCustomersQuery, useDeleteCustomerMutation } from '../../api/customerApi';
 
 /**
  * Customer List / dashboard page — summary tiles, the customer table with a
  * detail panel for whichever row is selected, recent transactions, and a
- * loyalty summary. The Customer backend module doesn't exist yet, so
- * everything is driven by customerMockData.js — selecting a row other than
- * CUS-0001 falls back to reusing CUSTOMER_DETAILS' shape (only
- * name/code/status/contact fields differ) since we don't have full mock
- * detail records for every generated row. Add/Edit/View swap in via local
- * state instead of separate /add, /edit/:code, /view/:code routes.
+ * loyalty summary. Wired to the real Customer API (see api/customerApi.js)
+ * for the list, detail panel, and Add/Edit/Delete. Recent Transactions and
+ * the Loyalty Summary are still mock placeholders — those need the Sales
+ * Invoice/Payment and Loyalty modules, which don't exist yet. Add/Edit/View
+ * swap in via local state instead of separate /add, /edit/:code, /view/:code
+ * routes.
  */
 export default function CustomerPage() {
   const dispatch = useAppDispatch();
@@ -39,7 +38,15 @@ export default function CustomerPage() {
   const [tab, setTab] = useState('list');
   const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(CUSTOMER_DETAILS.code);
+  const [selectedCode, setSelectedCode] = useState(null);
+
+  const { data: customerRows = [] } = useGetCustomersQuery({});
+  const [deleteCustomer] = useDeleteCustomerMutation();
+
+  // Computed unconditionally (before the create/edit/view early returns
+  // below) so hook order stays stable across renders.
+  const viewRows = useMemo(() => customerRows.map(toCustomerRow), [customerRows]);
+  const byCode = useMemo(() => Object.fromEntries(customerRows.map((c) => [c.code, c])), [customerRows]);
 
   const goToList = () => { setActiveCode(null); setTab('list'); };
   const openEdit = (code) => { setActiveCode(code); setTab('edit'); };
@@ -49,7 +56,7 @@ export default function CustomerPage() {
     return (
       <AddNewCustomerPage
         code={tab === 'edit' ? activeCode : undefined}
-        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+        onBack={(savedCode) => (tab === 'edit' ? openView(savedCode || activeCode) : goToList())}
       />
     );
   }
@@ -58,18 +65,31 @@ export default function CustomerPage() {
     return <CustomerViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
   }
 
-  const customerDetails = getCustomerDetails(selectedCode);
+  const effectiveSelectedCode = selectedCode && byCode[selectedCode] ? selectedCode : customerRows[0]?.code;
+  const customerDetails = effectiveSelectedCode && byCode[effectiveSelectedCode]
+    ? toCustomerDetails(byCode[effectiveSelectedCode])
+    : null;
 
   const handleSelectCustomer = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => {
+  const handleRowAction = async (label, row) => {
     if (label === 'View') return openView(row.code);
     if (label === 'Edit') return openEdit(row.code);
+    if (label === 'Delete') {
+      if (!window.confirm(`Delete customer "${row.name}"? This cannot be undone.`)) return;
+      try {
+        await deleteCustomer(row.id).unwrap();
+        dispatch(showToast(`${row.name} deleted`, 'success'));
+      } catch (err) {
+        dispatch(showToast(err?.data?.message || 'Failed to delete customer', 'error'));
+      }
+      return;
+    }
     dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Customers is coming soon', 'info'));
   const handleAddCustomer = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => openEdit(selectedCode);
+  const handleEdit = () => effectiveSelectedCode && openEdit(effectiveSelectedCode);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
@@ -114,9 +134,9 @@ export default function CustomerPage() {
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <CustomerTable
-              customers={CUSTOMERS}
-              totalCount={TOTAL_CUSTOMER_COUNT}
-              selectedCode={selectedCode}
+              customers={viewRows}
+              totalCount={viewRows.length}
+              selectedCode={effectiveSelectedCode}
               onSelectCustomer={handleSelectCustomer}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -124,7 +144,13 @@ export default function CustomerPage() {
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <CustomerDetailsCard customer={customerDetails} onEdit={handleEdit} />
+          {customerDetails ? (
+            <CustomerDetailsCard customer={customerDetails} onEdit={handleEdit} />
+          ) : (
+            <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 4 }}>
+              No customers yet — add one to see details here.
+            </Typography>
+          )}
         </Grid>
 
         <Grid size={{ xs: 12, lg: 7 }}>

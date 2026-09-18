@@ -55,17 +55,17 @@ export default function UserMenu() {
         </Box>
       </Stack>
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-        <MenuItem onClick={handleLogout}>
-          <ListItemIcon>
-            <LogoutOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          {t('common.logout')}
-        </MenuItem>
         <MenuItem onClick={handleSettings}>
           <ListItemIcon>
             <SettingsOutlinedIcon fontSize="small" />
           </ListItemIcon>
           {t('common.settings')}
+        </MenuItem>
+        <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
+          <ListItemIcon>
+            <LogoutOutlinedIcon fontSize="small" sx={{ color: 'error.main' }} />
+          </ListItemIcon>
+          {t('common.logout')}
         </MenuItem>
       </Menu>
     </Box>

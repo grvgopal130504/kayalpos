@@ -28,23 +28,39 @@ import ProductTable from './components/ProductTable';
 import ProductFormDialog from './components/ProductFormDialog';
 import ProductViewDialog from './components/ProductViewDialog';
 import { CASHIER } from '../mastersMockData';
-import {
-  STATS, PRODUCTS, PRODUCT_GROUP_OPTIONS, PRODUCT_TYPE_OPTIONS, BRAND_OPTIONS, UOM_OPTIONS,
-  totalRecords, totalPages,
-} from './productMockData';
+import { PRODUCT_GROUP_OPTIONS, PRODUCT_TYPE_OPTIONS, BRAND_OPTIONS, UOM_OPTIONS } from './productMockData';
+import { useGetProductsQuery, useDeleteProductMutation } from '../../../api/productApi';
 
-const PAGE_SIZE = 10;
+// Maps a Product row as returned by the API (status: 'ACTIVE'/'INACTIVE',
+// salePrice/mrp: Decimal serialized as string) to the shape the existing
+// table/dialog components expect (status: 'Active'/'Inactive', numeric
+// prices).
+function toViewRow(row) {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    group: row.group,
+    brand: row.brand || '',
+    uom: row.uom,
+    hsnSac: row.hsnSac || '',
+    taxCode: row.taxCode || '',
+    salePrice: Number(row.salePrice) || 0,
+    mrp: Number(row.mrp) || 0,
+    availableQty: row.availableQty,
+    status: row.status === 'ACTIVE' ? 'Active' : 'Inactive',
+  };
+}
 
 /**
  * Product — the Product master's list screen, reached from the Masters
- * page's "Product" card. Unlike Company/Outlet/Warehouse (single-record
- * detail forms), this is a searchable/filterable table over the product
- * catalog, matching the reference: a filter bar, the product grid, a
- * "Showing X to Y of Z records" + page-number footer, and a bottom row of
- * catalog-health stat tiles. Filters are entirely local (`PRODUCTS` only
- * mocks the first page of a 245-row catalog), so Search/Reset only
- * operate on this mocked page; paging past page 1 surfaces a toast since
- * there's no Product backend module yet to fetch further pages from.
+ * page's "Product" card. Wired to the real Product API (see
+ * api/productApi.js): list/search/status run server-side, create/update go
+ * through ProductFormDialog, delete asks for confirmation. Product Group /
+ * Type / Brand / UOM filters and the "catalog-health" stat tiles are
+ * computed client-side over whatever rows the current search/status filter
+ * returned — no backend aggregation endpoint exists yet. Import/Export/More
+ * actions remain mocked — there's no bulk endpoint yet.
  */
 export default function ProductPage() {
   const dispatch = useAppDispatch();
@@ -60,6 +76,16 @@ export default function ProductPage() {
   const [page, setPage] = useState(1);
   const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewRow, setViewRow] = useState(null);
+
+  const {
+    data: productRows = [],
+    isLoading,
+    isError,
+  } = useGetProductsQuery({
+    search: appliedSearch || undefined,
+    status: status !== 'All' ? status.toUpperCase() : undefined,
+  });
+  const [deleteProduct] = useDeleteProductMutation();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -85,28 +111,42 @@ export default function ProductPage() {
   };
   const handleOpenProduct = (row) => setViewRow(row);
   const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
-  const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.code} is coming soon`, 'info'));
-  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
-  const handlePageChange = (value) => {
-    setPage(value);
-    if (value !== 1) dispatch(showToast('Loading further pages is coming soon', 'info'));
-  };
-
-  const filteredRows = useMemo(() => PRODUCTS.filter((row) => {
-    if (appliedSearch) {
-      const haystack = `${row.code} ${row.name}`.toLowerCase();
-      if (!haystack.includes(appliedSearch)) return false;
+  const handleDeleteRow = async (row) => {
+    if (!window.confirm(`Delete product "${row.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteProduct(row.id).unwrap();
+      dispatch(showToast(`${row.name} deleted`, 'success'));
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to delete product', 'error'));
     }
+  };
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
+  const handlePageChange = (value) => setPage(value);
+
+  const viewRows = useMemo(() => productRows.map(toViewRow), [productRows]);
+
+  // Product Group / Brand / UOM are filtered client-side (the backend
+  // doesn't index on them yet); search and status are already applied
+  // server-side via the query above.
+  const filteredRows = useMemo(() => viewRows.filter((row) => {
     if (productGroup !== 'All' && row.group !== productGroup) return false;
     if (brand !== 'All' && row.brand !== brand) return false;
     if (uom !== 'All' && row.uom !== uom) return false;
-    if (status !== 'All' && row.status !== status) return false;
     return true;
-  }), [appliedSearch, productGroup, brand, uom, status]);
+  }), [viewRows, productGroup, brand, uom]);
 
-  const rangeStart = filteredRows.length ? (page - 1) * PAGE_SIZE + 1 : 0;
-  const rangeEnd = Math.min(rangeStart + PAGE_SIZE - 1, filteredRows.length ? rangeStart - 1 + filteredRows.length : 0);
-  const isFiltered = Boolean(appliedSearch) || productGroup !== 'All' || brand !== 'All' || uom !== 'All' || status !== 'All';
+  const rangeStart = filteredRows.length ? 1 : 0;
+  const rangeEnd = filteredRows.length;
+  const isFiltered = Boolean(appliedSearch) || productGroup !== 'All' || productType !== 'All' || brand !== 'All' || uom !== 'All' || status !== 'All';
+
+  const stats = useMemo(() => ({
+    totalProducts: viewRows.length,
+    activeProducts: viewRows.filter((r) => r.status === 'Active').length,
+    inactiveProducts: viewRows.filter((r) => r.status === 'Inactive').length,
+    lowStockProducts: viewRows.filter((r) => r.availableQty > 0 && r.availableQty <= 20).length,
+    outOfStockProducts: viewRows.filter((r) => r.availableQty === 0).length,
+    totalInventoryValue: viewRows.reduce((sum, r) => sum + r.salePrice * r.availableQty, 0),
+  }), [viewRows]);
 
   return (
     <Stack spacing={2}>
@@ -243,44 +283,46 @@ export default function ProductPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Product List</Typography>
-        <ProductTable rows={filteredRows} onOpenProduct={handleOpenProduct} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+        {isError ? (
+          <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
+            Failed to load products. Please try again.
+          </Typography>
+        ) : (
+          <ProductTable rows={filteredRows} loading={isLoading} onOpenProduct={handleOpenProduct} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+        )}
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {isFiltered
-              ? `Showing ${filteredRows.length} of ${totalRecords} records`
-              : `Showing ${rangeStart} to ${rangeEnd} of ${formatNumber(totalRecords)} records`}
+            Showing {rangeStart} to {rangeEnd} of {formatNumber(filteredRows.length)} records
           </Typography>
-          {!isFiltered && (
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={(_e, value) => handlePageChange(value)}
-              color="primary"
-              shape="rounded"
-            />
-          )}
+          <Pagination
+            count={1}
+            page={page}
+            onChange={(_e, value) => handlePageChange(value)}
+            color="primary"
+            shape="rounded"
+          />
         </Stack>
       </Paper>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-          <StatCard icon={Inventory2OutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total Products" value={formatNumber(STATS.totalProducts)} />
+          <StatCard icon={Inventory2OutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total Products" value={formatNumber(stats.totalProducts)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Products" value={formatNumber(STATS.activeProducts)} />
+          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Products" value={formatNumber(stats.activeProducts)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-          <StatCard icon={CloseIcon} iconColor="error" iconShape="circle" label="Inactive Products" value={formatNumber(STATS.inactiveProducts)} />
+          <StatCard icon={CloseIcon} iconColor="error" iconShape="circle" label="Inactive Products" value={formatNumber(stats.inactiveProducts)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-          <StatCard icon={WarningAmberOutlinedIcon} iconColor="warning" iconShape="circle" label="Low Stock Products" value={formatNumber(STATS.lowStockProducts)} />
+          <StatCard icon={WarningAmberOutlinedIcon} iconColor="warning" iconShape="circle" label="Low Stock Products" value={formatNumber(stats.lowStockProducts)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-          <StatCard icon={Inventory2OutlinedIcon} iconColor="#8B5CF6" iconShape="circle" label="Out of Stock Products" value={formatNumber(STATS.outOfStockProducts)} />
+          <StatCard icon={Inventory2OutlinedIcon} iconColor="#8B5CF6" iconShape="circle" label="Out of Stock Products" value={formatNumber(stats.outOfStockProducts)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-          <StatCard icon={CurrencyRupeeOutlinedIcon} iconColor="#0EA5A4" iconShape="circle" label="Total Inventory Value" value={formatCurrency(STATS.totalInventoryValue, { decimals: true })} />
+          <StatCard icon={CurrencyRupeeOutlinedIcon} iconColor="#0EA5A4" iconShape="circle" label="Total Inventory Value" value={formatCurrency(stats.totalInventoryValue, { decimals: true })} />
         </Grid>
       </Grid>
 

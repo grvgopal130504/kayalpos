@@ -24,6 +24,7 @@ import { ApiError } from '../middleware/errorHandler.js';
  * @param {object} [opts.orderBy] - default sort, e.g. { createdAt: 'desc' }
  * @param {string} [opts.codePrefix] - e.g. 'BR' to auto-generate BR001, BR002...
  * @param {string} [opts.codeField] - field name the generated code is written to (default 'code')
+ * @param {number} [opts.codeLength] - digits to zero-pad the sequence to (default 3, e.g. BR001; pass 4 for PROD0001)
  */
 export function createCrudRouter({
   model,
@@ -33,6 +34,7 @@ export function createCrudRouter({
   orderBy = { createdAt: 'desc' },
   codePrefix,
   codeField = 'code',
+  codeLength = 3,
 }) {
   const router = Router();
   router.use(requireAuth);
@@ -73,7 +75,7 @@ export function createCrudRouter({
       const data = { ...req.body, tenantId: req.user.tenantId };
 
       if (codePrefix && !data[codeField]) {
-        data[codeField] = await nextCode({ model, tenantId: req.user.tenantId, prefix: codePrefix });
+        data[codeField] = await nextCode({ model, tenantId: req.user.tenantId, prefix: codePrefix, length: codeLength });
       }
 
       const row = await model.create({ data });
@@ -118,9 +120,9 @@ export function createCrudRouter({
  * table (already anticipated in the architecture proposal) guarded by a
  * transaction.
  */
-async function nextCode({ model, tenantId, prefix }) {
+async function nextCode({ model, tenantId, prefix, length = 3 }) {
   const count = await model.count({ where: { tenantId } });
-  return `${prefix}${String(count + 1).padStart(3, '0')}`;
+  return `${prefix}${String(count + 1).padStart(length, '0')}`;
 }
 
 /** Turns a Prisma unique-constraint violation into a friendly 409 instead of a raw 500. */

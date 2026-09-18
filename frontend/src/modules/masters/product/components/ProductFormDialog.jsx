@@ -9,22 +9,22 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
 import { PRODUCT_GROUP_OPTIONS, PRODUCT_TYPE_OPTIONS, BRAND_OPTIONS, UOM_OPTIONS } from '../productMockData';
+import { useCreateProductMutation, useUpdateProductMutation } from '../../../../api/productApi';
 
 const EMPTY_VALUES = {
   code: '', name: '', group: PRODUCT_GROUP_OPTIONS[0], brand: BRAND_OPTIONS[0], uom: UOM_OPTIONS[0],
   hsnSac: '', taxCode: '', salePrice: '', mrp: '', availableQty: '', status: 'Active',
 };
 
-/**
- * Add/Edit dialog for the Product master. No Product backend module
- * exists yet, so Save/Update just toasts and closes (mirrors how the
- * mocked transaction-module forms behave) — this only wires up the UI
- * interaction, not real persistence.
- */
+/** Add/Edit dialog for the Product master, backed by the real Product API. */
 export default function ProductFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
   const [values, setValues] = useState(EMPTY_VALUES);
+  const [submitting, setSubmitting] = useState(false);
   const isEdit = mode === 'edit';
+
+  const [createProduct] = useCreateProductMutation();
+  const [updateProduct] = useUpdateProductMutation();
 
   useEffect(() => {
     if (open) setValues(isEdit && initialValues ? { ...EMPTY_VALUES, ...initialValues } : EMPTY_VALUES);
@@ -32,10 +32,41 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
 
   const setField = (field) => (e) => setValues((prev) => ({ ...prev, [field]: e.target.value }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    dispatch(showToast(isEdit ? 'Product updated successfully' : 'Product saved successfully', 'success'));
-    onClose?.();
+    if (!values.name.trim()) {
+      dispatch(showToast('Product name is required', 'error'));
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        name: values.name.trim(),
+        group: values.group,
+        brand: values.brand || undefined,
+        uom: values.uom,
+        hsnSac: values.hsnSac?.trim() || undefined,
+        taxCode: values.taxCode?.trim() || undefined,
+        salePrice: values.salePrice === '' ? 0 : Number(values.salePrice),
+        mrp: values.mrp === '' ? 0 : Number(values.mrp),
+        availableQty: values.availableQty === '' ? 0 : Number(values.availableQty),
+        status: values.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
+      };
+
+      if (isEdit) {
+        await updateProduct({ id: values.id, ...payload }).unwrap();
+        dispatch(showToast('Product updated successfully', 'success'));
+      } else {
+        await createProduct(payload).unwrap();
+        dispatch(showToast('Product saved successfully', 'success'));
+      }
+      onClose?.();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save product', 'error'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -54,10 +85,9 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
               <TextField
                 label="Product Code *"
                 value={isEdit ? values.code : 'Auto generated'}
-                onChange={setField('code')}
-                disabled={!isEdit}
+                disabled
                 fullWidth
-                slotProps={{ input: { readOnly: !isEdit } }}
+                slotProps={{ input: { readOnly: true } }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
@@ -108,7 +138,7 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained">{isEdit ? 'Update' : 'Save'}</Button>
+          <Button type="submit" variant="contained" disabled={submitting}>{isEdit ? 'Update' : 'Save'}</Button>
         </DialogActions>
       </form>
     </Dialog>
