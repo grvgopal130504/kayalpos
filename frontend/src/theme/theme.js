@@ -84,12 +84,23 @@ export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY, bodyFon
       },
       MuiTextField: {
         defaultProps: {
-          size: 'medium',
+          size: 'small',
+        },
+      },
+      MuiSelect: {
+        defaultProps: {
+          size: 'small',
         },
       },
       MuiOutlinedInput: {
         styleOverrides: {
           root: { borderRadius: 8 },
+          input: { paddingTop: 10, paddingBottom: 10 },
+        },
+      },
+      MuiInputLabel: {
+        styleOverrides: {
+          root: { fontSize: 14 },
         },
       },
       MuiPaper: {

@@ -63,8 +63,8 @@ export default function AppLogo({
             noWrap
             component="div"
             sx={{
-              fontSize: subtitleFontSize, fontWeight: 600, letterSpacing: '0.22em',
-              color: subtitleColor, lineHeight: 1.4,
+              fontSize: subtitleFontSize, fontWeight: 900, letterSpacing: '0.22em',
+              color: LOGO_O_COLOR, lineHeight: 1.4,
               display: 'flex',
               ...SUBTITLE_LETTER_KEYFRAMES,
             }}

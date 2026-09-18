@@ -32,97 +32,144 @@ export default function StatCard({
         borderRadius: 3,
         height: '100%',
         display: 'flex',
-        flexDirection: 'column',
-        gap: 1,
+        // Icon + content are laid out as one row spanning the *entire*
+        // card (label, value, delta/caption AND the "View Details"-style
+        // link all live inside the content column now) — so the icon is
+        // vertically centered against everything, not just the
+        // label/value block above a separately-positioned link. That's
+        // what kept it landing at a different height card to card.
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 1.5,
+        // Enables the `cqw` (container-query width) units below: the label
+        // and value fonts scale off this card's own rendered width instead
+        // of the viewport's, so they shrink/grow to fit whatever width the
+        // grid gives the card — 5 tiles in a row on a small laptop, or 5
+        // wide tiles on an ultrawide monitor — rather than overflowing or
+        // getting clipped.
+        containerType: 'inline-size',
       }}
     >
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-        {Icon && (
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              borderRadius: iconShape === 'circle' ? '50%' : 2.5,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              bgcolor: iconShape === 'circle'
-                ? (theme) => alpha(isHex ? iconColor : theme.palette[iconColor].main, 0.12)
-                : (isHex ? iconColor : `${iconColor}.main`),
-              color: iconShape === 'circle' ? (isHex ? iconColor : `${iconColor}.main`) : '#fff',
-              opacity: iconShape === 'circle' ? 1 : 0.95,
-              flexShrink: 0,
-            }}
-          >
-            <Icon fontSize="small" />
-          </Box>
-        )}
-        <Box sx={{ minWidth: 0, flex: 1 }}>
+      {Icon && (
+        <Box
+          sx={{
+            width: 44,
+            height: 44,
+            borderRadius: iconShape === 'circle' ? '50%' : 2.5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: iconShape === 'circle'
+              ? (theme) => alpha(isHex ? iconColor : theme.palette[iconColor].main, 0.12)
+              : (isHex ? iconColor : `${iconColor}.main`),
+            color: iconShape === 'circle' ? (isHex ? iconColor : `${iconColor}.main`) : '#fff',
+            opacity: iconShape === 'circle' ? 1 : 0.95,
+            flexShrink: 0,
+          }}
+        >
+          <Icon fontSize="small" />
+        </Box>
+      )}
+
+      <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography
             variant="body2"
             sx={{
               color: 'text.secondary',
               fontWeight: 500,
               lineHeight: 1.25,
+              fontSize: 'clamp(0.7rem, 3.2cqw, 0.875rem)',
+              // Full label text, wrapped onto up to 2 lines instead of
+              // truncated to "…" — falls back to an ellipsis only if it
+              // still doesn't fit in that space.
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              wordBreak: 'break-word',
             }}
           >
             {label}
           </Typography>
+
           <Typography
             sx={{
               fontWeight: 800,
               color: valueColor || 'text.primary',
               mt: 0.25,
-              fontSize: 'clamp(0.95rem, 1.3vw, 1.25rem)',
+              fontSize: 'clamp(0.8rem, 8cqw, 1.35rem)',
               lineHeight: 1.2,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              // The full value, always on one line — shrinks (via the `cqw`
+              // container-width unit) to whatever size fits this card's own
+              // width, rather than wrapping or getting cut off.
               whiteSpace: 'nowrap',
+              overflow: 'hidden',
             }}
           >
             {value}
           </Typography>
-        </Box>
-      </Stack>
 
-      {delta && (
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
-          {delta.direction === 'up' ? (
-            <ArrowUpwardIcon sx={{ fontSize: 14, color: 'success.main', flexShrink: 0 }} />
-          ) : (
-            <ArrowDownwardIcon sx={{ fontSize: 14, color: 'error.main', flexShrink: 0 }} />
+          {delta && (
+            <Box sx={{ mt: 0.25 }}>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                {delta.direction === 'up' ? (
+                  <ArrowUpwardIcon sx={{ fontSize: 14, color: 'success.main', flexShrink: 0 }} />
+                ) : (
+                  <ArrowDownwardIcon sx={{ fontSize: 14, color: 'error.main', flexShrink: 0 }} />
+                )}
+                <Typography variant="caption" sx={{ color: delta.direction === 'up' ? 'success.main' : 'error.main', fontWeight: 700, flexShrink: 0 }}>
+                  {delta.value}
+                </Typography>
+              </Stack>
+              {delta.label && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: 'clamp(0.6rem, 2.8cqw, 0.75rem)',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {delta.label}
+                </Typography>
+              )}
+            </Box>
           )}
-          <Typography variant="caption" sx={{ color: delta.direction === 'up' ? 'success.main' : 'error.main', fontWeight: 700, flexShrink: 0 }}>
-            {delta.value}
-          </Typography>
-          {delta.label && (
+
+          {caption && !delta && (
             <Typography
               variant="caption"
-              sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              sx={{
+                color: 'text.secondary',
+                fontSize: 'clamp(0.6rem, 2.8cqw, 0.75rem)',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                wordBreak: 'break-word',
+                mt: 0.25,
+              }}
             >
-              {delta.label}
+              {caption}
             </Typography>
           )}
-        </Stack>
-      )}
 
-      {caption && !delta && (
-        <Typography
-          variant="caption"
-          sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-        >
-          {caption}
-        </Typography>
-      )}
-
-      {link && (
-        <MuiLink component={RouterLink} to={link.to} variant="caption" sx={{ fontWeight: 700 }} underline="hover">
-          {link.label}
-        </MuiLink>
-      )}
+          {link && (
+            <MuiLink
+              component={RouterLink}
+              to={link.to}
+              variant="caption"
+              underline="hover"
+              sx={{ display: 'block', fontWeight: 700, mt: 0.25 }}
+            >
+              {link.label}
+            </MuiLink>
+          )}
+        </Box>
     </Paper>
   );
 }

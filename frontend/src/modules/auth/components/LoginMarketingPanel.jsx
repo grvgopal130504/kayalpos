@@ -44,27 +44,33 @@ export default function LoginMarketingPanel() {
           height: '100%',
           width: '100%',
           justifyContent: 'space-between',
-          py: { md: 2, lg: 3 },
+          py: 2,
         }}
       >
         {/* Copy */}
         <Box
           sx={{
             width: '100%',
-            maxWidth: { md: 780, xl: 940 },
+            maxWidth: 780,
             mx: 'auto',
-            px: { md: 4, lg: 6 },
+            px: 12,
           }}
         >
-          <Box
+          <Paper
+            elevation={0}
             sx={{
               display: 'inline-block',
-              bgcolor: 'rgba(255, 255, 255, 0.6)',
-              backdropFilter: 'blur(8px)',
-              borderRadius: 2,
-              px: 1.75,
-              py: 1.25,
-              boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+              px: 3,
+              py: 1.5,
+              borderRadius: 4,
+              // Glassmorphism: same low-opacity white + blur treatment as the
+              // stats bar below, so the whole copy block (logo, headline,
+              // description and feature icons) reads as one translucent
+              // panel over the photo instead of floating text.
+              bgcolor: 'rgba(255, 255, 255, 0)',
+              backdropFilter: 'blur(0px)',
+              border: '0px solid rgba(255, 255, 255, 0)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.6)',
             }}
           >
             <Box sx={{ mb: 0.75 }}>
@@ -75,7 +81,8 @@ export default function LoginMarketingPanel() {
                 fontWeight: 800,
                 color: '#2c2b2b',
                 lineHeight: 1.2,
-                fontSize: { md: '1.3rem', lg: '1.5rem' },
+                fontSize: '1.35rem',
+                textShadow: '0 1px 6px rgba(255,255,255,0.85), 0 1px 3px rgba(255,255,255,0.85)',
               }}
             >
               Empowering Your Business
@@ -85,7 +92,8 @@ export default function LoginMarketingPanel() {
                 fontWeight: 800,
                 color: 'primary.main',
                 lineHeight: 1.2,
-                fontSize: { md: '1.3rem', lg: '1.5rem' },
+                fontSize: '1.35rem',
+                textShadow: '0 1px 6px rgba(255,255,255,0.85), 0 1px 3px rgba(255,255,255,0.85)',
               }}
             >
               Every Sale. Every Day.
@@ -95,7 +103,8 @@ export default function LoginMarketingPanel() {
                 mt: 0.75,
                 color: 'text.secondary',
                 maxWidth: 470,
-                fontSize: { md: '0.8rem', lg: '0.875rem' },
+                fontSize: '0.8125rem',
+                textShadow: '0 1px 6px rgba(255,255,255,0.85), 0 1px 3px rgba(255,255,255,0.85)',
               }}
             >
               Smart POS solutions to simplify billing,
@@ -104,19 +113,19 @@ export default function LoginMarketingPanel() {
               sx={{
                 color: 'text.secondary',
                 maxWidth: 470,
-                fontSize: { md: '0.8rem', lg: '0.875rem' },
+                fontSize: '0.8125rem',
+                textShadow: '0 1px 6px rgba(255,255,255,0.85), 0 1px 3px rgba(255,255,255,0.85)',
               }}
             >
               inventory and grow your business.
             </Typography>
-          </Box>
 
-          <Stack
-            direction="row"
-            spacing={{ md: 2, lg: 2.5 }}
-            useFlexGap
-            sx={{ mt: { md: 1.25, lg: 1.5 }, flexWrap: 'wrap' }}
-          >
+            <Stack
+              direction="row"
+              spacing={2.25}
+              useFlexGap
+              sx={{ mt: 1.4, flexWrap: 'wrap' }}
+            >
             {FEATURES.map(({ icon: Icon, label }) => (
               <Stack key={label} spacing={0.5} sx={{ width: 50, alignItems: 'center', mt: "-5px" }}>
                 <Box
@@ -153,6 +162,7 @@ export default function LoginMarketingPanel() {
               </Stack>
             ))}
           </Stack>
+          </Paper>
         </Box>
 
         {/* Spacer so the copy stays pinned to the top and the stats bar to
@@ -163,24 +173,32 @@ export default function LoginMarketingPanel() {
         <Box
           sx={{
             width: '100%',
-            maxWidth: { md: 780, xl: 940 },
+            maxWidth: 780,
             mx: 'auto',
-            px: { md: 4, lg: 6 },
+            px: 4,
           }}
         >
           <Paper
             elevation={0}
             sx={{
               display: 'flex',
-              justifyContent: 'space-between',
-              px: { md: 2, lg: 3 },
-              py: { md: 1, lg: 1.25 },
-              borderRadius: 3,
-              bgcolor: 'rgba(255, 255, 255, 0.55)',
-              backdropFilter: 'blur(8px)',
-              border: '1px solid',
-              borderColor: 'divider',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+              gap: 3,
+              mx: 'auto',
+              width: 'fit-content',
+              maxWidth: '100%',
+              px: 3.5,
+              py: 1.4,
+              borderRadius: 4,
+              // Glassmorphism: low-opacity white + heavy blur/saturation so
+              // the photo behind still reads through, a soft outer shadow
+              // for lift, and a bright inset top edge to sell the "glass"
+              // highlight you'd see on a real frosted pane.
+              bgcolor: 'rgba(255, 255, 255, 0)',
+              backdropFilter: 'blur(4px)',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.6)',
             }}
           >
             {STATS.map(({ icon: Icon, value, label }) => (

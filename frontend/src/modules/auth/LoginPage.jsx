@@ -30,7 +30,7 @@ import { useHealthStatus } from '../../hooks/useHealthStatus';
 import { useGetPublicOutletsQuery } from '../../api/outletApi';
 import { loginSchema, loginDefaultValues } from './loginSchema';
 import LoginMarketingPanel from './components/LoginMarketingPanel';
-import loginBackground from '../../assets/LoginImage1.jpeg';
+import loginBackground from '../../assets/LoginImage3.jpeg';
 
 const APP_VERSION = '1.0.0';
 const TENANT_NAME = 'Kayal Agro Foods'; // TODO: replace with tenant context once multi-tenant lookup exists
@@ -113,7 +113,7 @@ export default function LoginPage() {
             objectFit: 'fill',
           }}
         />
-        <Box sx={{ position: 'relative', height: '100%', width: { md: '60%', lg: '62%', xl: '64%' } }}>
+        <Box sx={{ position: 'relative', height: '100%', width: '60%' }}>
           <LoginMarketingPanel />
         </Box>
       </Box>
@@ -127,10 +127,13 @@ export default function LoginPage() {
           position: { xs: 'relative', md: 'absolute' },
           zIndex: 1,
           top: { md: '50%' },
-          right: { md: 32, lg: 48, xl: 64 },
+          right: { md: 48 },
           transform: { md: 'translateY(-50%)' },
+          // Fixed, content-sized height — deliberately NOT tied to 100vh/vh
+          // units, so the card's own dimensions stay exactly the same
+          // regardless of window size or browser zoom level. Only the
+          // *position* (top/right offsets above) is responsive.
           height: { xs: '100%', md: 'auto' },
-          maxHeight: { md: 'calc(100vh - 64px)' },
           width: { xs: '100%', md: 'auto' },
           display: 'flex',
           alignItems: 'center',
@@ -144,18 +147,23 @@ export default function LoginPage() {
             elevation={8}
             sx={{
               width: '100%',
-              maxWidth: { xs: 420, xl: 460 },
-              maxHeight: { md: '100%' },
-              // Safety net: if a very short window still can't fit every
-              // field, the card scrolls internally instead of spilling
-              // content past its own edges (which the outer page clips).
-              overflowY: 'auto',
+              maxWidth: 420,
               px: { xs: 3, sm: 4, md: 5 },
               py: { xs: 3, sm: 4, md: 4 },
               borderRadius: 4,
-              bgcolor: { xs: 'background.paper', md: 'rgba(255, 255, 255, 0.95)' },
+              // Glass card on desktop (blurred, semi-transparent so the photo
+              // shows through) — tinted to match whichever mode is active,
+              // so dark mode gets a dark-tinted glass card instead of a
+              // white one with unreadable light-on-light text, and light
+              // mode keeps the original near-white glass look.
+              bgcolor: {
+                xs: 'background.paper',
+                md: (t) => (t.palette.mode === 'dark' ? 'rgba(26, 31, 43, 0.85)' : 'rgba(255, 255, 255, 0.95)'),
+              },
               backdropFilter: { md: 'blur(16px)' },
-              border: { md: '1px solid rgba(255, 255, 255, 0.6)' },
+              border: {
+                md: (t) => `1px solid ${t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.6)'}`,
+              },
             }}
           >
             <Stack spacing={1.75} sx={{ width: '100%' }}>
