@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -16,78 +16,76 @@ import StockWastageTable from './components/StockWastageTable';
 import StockWastageDetailsCard from './components/StockWastageDetailsCard';
 import CreateStockWastagePage from './CreateStockWastagePage';
 import WastageViewPage from './WastageViewPage';
-import { SUMMARY, WASTAGES, TOTAL_WASTAGE_COUNT, WASTAGE_DETAILS } from './stockWastageMockData';
-
-const WASTAGE_BY_CODE = Object.fromEntries(WASTAGES.map((w) => [w.code, w]));
+import { useGetStockWastagesQuery, useStockWastageSummaryQuery } from '../../api/stockWastageApi';
+import { toWastageRow, toWastageDetails, buildSummary } from './stockWastageDisplay';
 
 /**
  * Landing page for the sidebar's Stock Wastage item — summary tiles, the
  * wastage list with a detail panel for whichever row is selected, plus the
  * create/edit form and the read-only view, all swapped in via local state
- * instead of separate /create, /edit/:code, /view/:code routes. The Stock
- * Wastage backend module doesn't exist yet, so everything is driven by
- * stockWastageMockData.js — selecting a row other than WST-00030 falls
- * back to reusing WASTAGE_DETAILS' shape (only the top-level fields
- * differ) since we don't have full mock detail records for every row.
+ * instead of separate /create, /edit/:id, /view/:id routes. Fully wired to
+ * the real backend (see backend/src/modules/stock-wastage): every tile, row
+ * and detail field comes from the actual StockWastage table, so a tenant
+ * with no wastages yet honestly shows zeros/empty states instead of this
+ * page's old static mock data. Rows are keyed/selected by real `id` (not
+ * `code`), same convention every other module's table adopted once it was
+ * wired to a real backend.
  */
 export default function StockWastagePage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [tab, setTab] = useState('list');
-  const [activeCode, setActiveCode] = useState(null);
+  const [activeId, setActiveId] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(WASTAGE_DETAILS.code);
+  const [selectedId, setSelectedId] = useState(null);
+
+  const { data: wastages = [], isLoading, isError } = useGetStockWastagesQuery({});
+  const { data: summaryData } = useStockWastageSummaryQuery();
+
+  const rows = useMemo(() => wastages.map(toWastageRow), [wastages]);
+  const summary = useMemo(() => buildSummary(summaryData), [summaryData]);
+  const wastageById = useMemo(() => Object.fromEntries(wastages.map((w) => [w.id, w])), [wastages]);
 
   const goToList = () => {
-    setActiveCode(null);
+    setActiveId(null);
     setTab('list');
   };
-  const openEdit = (code) => {
-    setActiveCode(code);
+  const openEdit = (id) => {
+    setActiveId(id);
     setTab('edit');
   };
-  const openView = (code) => {
-    setActiveCode(code);
+  const openView = (id) => {
+    setActiveId(id);
     setTab('view');
   };
 
   if (tab === 'create' || tab === 'edit') {
     return (
       <CreateStockWastagePage
-        code={tab === 'edit' ? activeCode : undefined}
-        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+        id={tab === 'edit' ? activeId : undefined}
+        onBack={(savedId) => (tab === 'edit' ? openView(savedId || activeId) : goToList())}
       />
     );
   }
 
   if (tab === 'view') {
-    return <WastageViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+    return <WastageViewPage id={activeId} onBack={goToList} onEdit={() => openEdit(activeId)} />;
   }
 
-  const selectedRow = WASTAGE_BY_CODE[selectedCode];
-  const wastageDetails = selectedCode === WASTAGE_DETAILS.code
-    ? WASTAGE_DETAILS
-    : {
-        ...WASTAGE_DETAILS,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        outletLocation: selectedRow.outlet,
-        wastageType: selectedRow.wastageType,
-        items: selectedRow.items,
-        wastageValue: selectedRow.wastageValue,
-        status: selectedRow.status,
-      };
+  const effectiveSelectedId = selectedId && wastageById[selectedId] ? selectedId : wastages[0]?.id;
+  const selectedWastage = effectiveSelectedId ? wastageById[effectiveSelectedId] : null;
+  const wastageDetails = selectedWastage ? toWastageDetails(selectedWastage) : null;
 
-  const handleSelectWastage = (row) => setSelectedCode(row.code);
+  const handleSelectWastage = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return openView(row.code);
-    if (label === 'Edit') return openEdit(row.code);
+    if (label === 'View') return openView(row.id);
+    if (label === 'Edit') return openEdit(row.id);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Wastages is coming soon', 'info'));
   const handleCreate = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => openEdit(selectedCode);
+  const handleEdit = () => openEdit(effectiveSelectedId);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
@@ -126,15 +124,14 @@ export default function StockWastagePage() {
         </Stack>
       </Stack>
 
-      <StockWastageSummaryCards summary={SUMMARY} />
+      <StockWastageSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <StockWastageTable
-              wastages={WASTAGES}
-              totalCount={TOTAL_WASTAGE_COUNT}
-              selectedCode={selectedCode}
+              wastages={rows}
+              selectedId={effectiveSelectedId}
               onSelectWastage={handleSelectWastage}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -142,8 +139,18 @@ export default function StockWastagePage() {
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <Box sx={{ height: { lg: 560 } }}>
-            <StockWastageDetailsCard wastage={wastageDetails} onEdit={handleEdit} />
+          <Box sx={{ height: { lg: 560 }, overflow: 'auto' }}>
+            {isLoading ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>Loading wastages…</Typography>
+            ) : isError ? (
+              <Typography variant="body2" color="error" sx={{ p: 2 }}>Failed to load wastages.</Typography>
+            ) : wastageDetails ? (
+              <StockWastageDetailsCard wastage={wastageDetails} onEdit={handleEdit} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No wastages yet — create one to get started.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

@@ -8,26 +8,38 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import LabelDetailsCard from './components/LabelDetailsCard';
 import LabelTermsAndNotes from './components/LabelTermsAndNotes';
-import { getBatchDetails } from './barcodeLabelMockData';
+import { useGetBarcodeLabelBatchQuery } from '../../api/barcodeLabelApi';
+import { toBatchDetails } from './barcodeLabelDisplay';
 
 /**
- * Read-only "View Barcode & Label" destination for BarcodeLabelTable's row
- * menu (used from both the Overview and Draft/Pending Print/Printed status
- * pages) — reuses the exact same LabelDetailsCard/LabelTermsAndNotes cards
- * those pages already show for the selected row, just addressed by :code
- * as its own full page instead of a side panel. Mirrors QuotationViewPage.
+ * Read-only "View Batch" body for BarcodeLabelTable's row menu — reuses the
+ * exact same LabelDetailsCard/LabelTermsAndNotes cards the Overview/Status
+ * pages already show for the selected row. Rendered by BarcodeLabelPage via
+ * props (`id`/`onBack`/`onEdit`) as part of the single /barcode-label page
+ * rather than its own route. Fully wired to the real backend — every field
+ * here comes from the actual BarcodeLabelBatch row fetched by GET
+ * /api/barcode-labels/:id.
  */
-export default function BarcodeLabelViewPage({ code: propCode, onBack, onEdit }) {
+export default function BarcodeLabelViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code: paramCode } = useParams();
-  const code = propCode ?? paramCode;
-  const batch = getBatchDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: row, isLoading, isError } = useGetBarcodeLabelBatchQuery(id, { skip: !id });
+  const batch = row ? toBatchDetails(row) : null;
   const [notes, setNotes] = useState('');
 
   const handleBack = () => (onBack ? onBack() : navigate('/barcode-label'));
-  const handleEdit = () => (onEdit ? onEdit() : navigate(`/barcode-label/edit/${code}`));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/barcode-label/edit/${id}`));
 
-  if (!batch) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading batch…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !batch) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Batch not found</Typography>

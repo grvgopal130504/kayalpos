@@ -18,3 +18,14 @@ export const createProductSchema = z.object({
 });
 
 export const updateProductSchema = createProductSchema.partial();
+
+// One row of a bulk Excel/CSV import — same shape as create, but every
+// numeric field arrives as whatever Excel/SheetJS produced (string or
+// number) and blank cells should fall back to defaults rather than fail
+// validation outright, since spreadsheets are inherently messier than a
+// hand-built form payload.
+export const bulkProductRowSchema = createProductSchema;
+
+export const bulkProductImportSchema = z.object({
+  rows: z.array(z.record(z.string(), z.unknown())).min(1, 'No rows to import').max(500, 'Send at most 500 rows per request'),
+});

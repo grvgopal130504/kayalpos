@@ -24,6 +24,11 @@ const STATUS_LABEL = {
  * from/to outlet and indent-reference fields, and an items table with
  * Available/Transfer Qty plus Unit/Total Cost instead of pricing tax
  * columns, since a stock transfer is a goods movement rather than a sale.
+ *
+ * Shows "Department" instead of the old mock's "Required By" — the real
+ * Create Stock Transfer form only collects one date (Transfer Date), so a
+ * separate "required by" date would have no real source; Department is an
+ * actual field the form collects instead.
  */
 export default function TransferDetailsCard({ transfer, title = 'Transfer Details', showReceivedFields = false }) {
   const itemColumns = [
@@ -78,7 +83,7 @@ export default function TransferDetailsCard({ transfer, title = 'Transfer Detail
             <Field label="Priority" value={transfer.priority} />
           </Stack>
           <Stack spacing={1.75} sx={{ flex: 1, minWidth: 0 }}>
-            <Field label="Required By" value={transfer.requiredBy} />
+            <Field label="Department" value={transfer.department} />
             <Field label="Cost Center" value={transfer.costCenter} />
             {showReceivedFields ? (
               <Field label="Received By" value={`${transfer.receivedBy} · ${transfer.receivedOn}`} />

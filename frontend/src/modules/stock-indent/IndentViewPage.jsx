@@ -8,25 +8,38 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import IndentDetailsCard from './components/IndentDetailsCard';
 import IndentTermsAndNotes from './components/IndentTermsAndNotes';
-import { getIndentDetails } from './stockIndentMockData';
+import { useGetStockIndentQuery } from '../../api/stockIndentApi';
+import { toIndentDetails } from './stockIndentDisplay';
 
 /**
- * Read-only "View Indent" destination for StockIndentTable's row menu —
- * reuses the exact same IndentDetailsCard/IndentTermsAndNotes cards the
- * Overview/Status pages already show for the selected row, just addressed
- * by :code as its own full page instead of a side panel.
+ * Read-only "View Indent" body for StockIndentTable's row menu — reuses the
+ * exact same IndentDetailsCard/IndentTermsAndNotes cards the Overview/Status
+ * pages already show for the selected row. Rendered by StockIndentPage via
+ * props (`id`/`onBack`/`onEdit`) as part of the single /stock-indent page
+ * rather than its own route. Fully wired to the real backend — every field
+ * here comes from the actual StockIndent row fetched by GET
+ * /api/stock-indents/:id.
  */
-export default function IndentViewPage({ code: propCode, onBack, onEdit }) {
+export default function IndentViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code: paramCode } = useParams();
-  const code = propCode ?? paramCode;
-  const indent = getIndentDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: row, isLoading, isError } = useGetStockIndentQuery(id, { skip: !id });
+  const indent = row ? toIndentDetails(row) : null;
   const [notes, setNotes] = useState('');
 
   const handleBack = () => (onBack ? onBack() : navigate('/stock-indent'));
-  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-indent/edit/${code}`));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-indent/edit/${id}`));
 
-  if (!indent) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading indent…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !indent) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Indent not found</Typography>

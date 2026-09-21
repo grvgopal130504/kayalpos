@@ -27,9 +27,11 @@ import { formatCurrency, formatNumber } from '../../../utils/format';
 import ProductTable from './components/ProductTable';
 import ProductFormDialog from './components/ProductFormDialog';
 import ProductViewDialog from './components/ProductViewDialog';
+import ProductBulkImportDialog from './components/ProductBulkImportDialog';
 import { CASHIER } from '../mastersMockData';
 import { PRODUCT_GROUP_OPTIONS, PRODUCT_TYPE_OPTIONS, BRAND_OPTIONS, UOM_OPTIONS } from './productMockData';
-import { useGetProductsQuery, useDeleteProductMutation } from '../../../api/productApi';
+import { useGetProductsQuery, useDeleteProductMutation, useInfiniteProducts } from '../../../api/productApi';
+import { useOfflineListSnapshot, buildListCacheKey } from '../../../api/offlineCache';
 
 // Maps a Product row as returned by the API (status: 'ACTIVE'/'INACTIVE',
 // salePrice/mrp: Decimal serialized as string) to the shape the existing
@@ -59,8 +61,10 @@ function toViewRow(row) {
  * through ProductFormDialog, delete asks for confirmation. Product Group /
  * Type / Brand / UOM filters and the "catalog-health" stat tiles are
  * computed client-side over whatever rows the current search/status filter
- * returned — no backend aggregation endpoint exists yet. Import/Export/More
- * actions remain mocked — there's no bulk endpoint yet.
+ * returned — no backend aggregation endpoint exists yet. Import opens
+ * ProductBulkImportDialog (chunked Excel/CSV upload against POST
+ * /masters/product/bulk); Export/More actions remain mocked — no endpoint
+ * exists for those yet.
  */
 export default function ProductPage() {
   const dispatch = useAppDispatch();
@@ -76,15 +80,39 @@ export default function ProductPage() {
   const [page, setPage] = useState(1);
   const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewRow, setViewRow] = useState(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
-  const {
-    data: productRows = [],
-    isLoading,
-    isError,
-  } = useGetProductsQuery({
+  const queryParams = {
     search: appliedSearch || undefined,
     status: status !== 'All' ? status.toUpperCase() : undefined,
-  });
+  };
+
+  // Fast path: one unpaginated request, capped server-side at 1,000 rows
+  // (see crudFactory.js's UNPAGINATED_LIMIT) — fine for the size this
+  // catalog actually is today. If that cap is ever hit, there may be more
+  // than 1,000 matching rows, so switch to chunked infinite loading instead
+  // of silently truncating the list.
+  const {
+    data: singlePageRows = [],
+    isLoading: singlePageLoading,
+    isError: singlePageError,
+  } = useGetProductsQuery(queryParams);
+  const isLargeDataset = singlePageRows.length >= 1000;
+
+  const infinite = useInfiniteProducts(queryParams, 200, isLargeDataset);
+
+  // If the live request failed (offline, backend down), fall back to the
+  // last successful snapshot saved to IndexedDB (see api/offlineCache.js)
+  // instead of showing a dead end.
+  const offlineSnapshot = useOfflineListSnapshot(buildListCacheKey('Product', queryParams));
+  const usingOfflineSnapshot = Boolean(singlePageError) && !isLargeDataset && offlineSnapshot?.rows?.length;
+
+  const productRows = isLargeDataset
+    ? infinite.rows
+    : (usingOfflineSnapshot ? offlineSnapshot.rows : singlePageRows);
+  const isLoading = isLargeDataset ? infinite.isFetching && productRows.length === 0 : singlePageLoading;
+  const isError = isLargeDataset ? infinite.isError : (singlePageError && !usingOfflineSnapshot);
+
   const [deleteProduct] = useDeleteProductMutation();
 
   const handleLogout = () => {
@@ -93,7 +121,7 @@ export default function ProductPage() {
   };
 
   const handleNewProduct = () => setFormDialog({ open: true, mode: 'add', row: null });
-  const handleImport = () => dispatch(showToast('Import Products is coming soon', 'info'));
+  const handleImport = () => setImportDialogOpen(true);
   const handleExport = () => dispatch(showToast('Export Products is coming soon', 'info'));
   const handleMoreAction = (label) => {
     setMoreAnchor(null);
@@ -283,6 +311,12 @@ export default function ProductPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Product List</Typography>
+        {usingOfflineSnapshot && (
+          <Typography variant="caption" sx={{ display: 'block', color: 'warning.main', mb: 1.5 }}>
+            Couldn't reach the server — showing the last saved copy of this list from{' '}
+            {new Date(offlineSnapshot.savedAt).toLocaleString('en-IN')}.
+          </Typography>
+        )}
         {isError ? (
           <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
             Failed to load products. Please try again.
@@ -293,15 +327,25 @@ export default function ProductPage() {
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Showing {rangeStart} to {rangeEnd} of {formatNumber(filteredRows.length)} records
+            {isLargeDataset
+              ? `Showing ${formatNumber(productRows.length)} of ${formatNumber(infinite.total)} records`
+              : `Showing ${rangeStart} to ${rangeEnd} of ${formatNumber(filteredRows.length)} records`}
           </Typography>
-          <Pagination
-            count={1}
-            page={page}
-            onChange={(_e, value) => handlePageChange(value)}
-            color="primary"
-            shape="rounded"
-          />
+          {isLargeDataset ? (
+            infinite.hasMore && (
+              <Button variant="outlined" onClick={infinite.loadMore} disabled={infinite.isFetching}>
+                {infinite.isFetching ? 'Loading…' : 'Load More'}
+              </Button>
+            )
+          ) : (
+            <Pagination
+              count={1}
+              page={page}
+              onChange={(_e, value) => handlePageChange(value)}
+              color="primary"
+              shape="rounded"
+            />
+          )}
         </Stack>
       </Paper>
 
@@ -327,6 +371,7 @@ export default function ProductPage() {
       </Grid>
 
       <ProductFormDialog open={formDialog.open} mode={formDialog.mode} initialValues={formDialog.row} onClose={closeFormDialog} />
+      <ProductBulkImportDialog open={importDialogOpen} onClose={() => setImportDialogOpen(false)} />
       <ProductViewDialog
         open={Boolean(viewRow)}
         row={viewRow}

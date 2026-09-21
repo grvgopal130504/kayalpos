@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -16,45 +16,46 @@ import SalesInvoiceSummaryCards from './components/SalesInvoiceSummaryCards';
 import SalesInvoiceTable from './components/SalesInvoiceTable';
 import InvoiceDetailsCard from './components/InvoiceDetailsCard';
 import InvoiceTermsAndNotes from './components/InvoiceTermsAndNotes';
-import { SUMMARY, INVOICES, INVOICE_DETAILS } from './salesInvoiceMockData';
-
-const INVOICE_BY_CODE = Object.fromEntries(INVOICES.map((inv) => [inv.code, inv]));
+import { useGetSalesInvoicesQuery, useSalesInvoiceSummaryQuery } from '../../api/salesInvoiceApi';
+import { toInvoiceRow, toInvoiceDetails, buildSummary } from './salesInvoiceDisplay';
 
 /**
  * Sales Invoice list/detail page — summary tiles, the invoice table with a
  * detail panel for whichever row is selected, and a Terms & Conditions /
- * Notes strip below. Mirrors SalesOrderOverviewPage/
- * SalesQuotationOverviewPage's structure; the Sales Invoice backend module
- * doesn't exist yet so everything is driven by salesInvoiceMockData.js.
+ * Notes strip below. Fully wired to the real backend (see
+ * backend/src/modules/sales-invoice): every tile, row and detail field comes
+ * from the actual SalesInvoice table, so a tenant with no invoices yet
+ * honestly shows zeros/empty states instead of this page's old static mock
+ * data. "Record Payment" stays a coming-soon placeholder — there is no
+ * backend action yet that marks an invoice 'paid' (see salesInvoice.schema.js
+ * comment), so it would be dishonest to pretend this button works.
  */
 export default function SalesInvoiceOverviewPage({ tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(INVOICE_DETAILS.code);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const selectedRow = INVOICE_BY_CODE[selectedCode];
-  const invoiceDetails = selectedCode === INVOICE_DETAILS.code
-    ? INVOICE_DETAILS
-    : {
-        ...INVOICE_DETAILS,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        status: selectedRow.status,
-        totalAmount: selectedRow.amount,
-        dueDate: selectedRow.dueDate,
-        customer: { ...INVOICE_DETAILS.customer, name: selectedRow.customer },
-      };
+  const { data: invoices = [], isLoading, isError } = useGetSalesInvoicesQuery({});
+  const { data: summaryData } = useSalesInvoiceSummaryQuery();
 
-  const handleSelectInvoice = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => invoices.map(toInvoiceRow), [invoices]);
+  const summary = useMemo(() => buildSummary(summaryData), [summaryData]);
+  const invoiceById = useMemo(() => Object.fromEntries(invoices.map((i) => [i.id, i])), [invoices]);
+
+  const effectiveSelectedId = selectedId && invoiceById[selectedId] ? selectedId : invoices[0]?.id;
+  const selectedInvoice = effectiveSelectedId ? invoiceById[effectiveSelectedId] : null;
+  const invoiceDetails = selectedInvoice ? toInvoiceDetails(selectedInvoice) : null;
+
+  const handleSelectInvoice = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return onView ? onView(row.code) : navigate(`/sales-invoice/view/${row.code}`);
-    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/sales-invoice/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/sales-invoice/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/sales-invoice/edit/${row.id}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleRecordPayment = () => dispatch(showToast(`Record Payment for "${invoiceDetails.code}" is coming soon`, 'info'));
+  const handleRecordPayment = () => dispatch(showToast(`Record Payment for "${invoiceDetails?.code || ''}" is coming soon`, 'info'));
   const handleCreate = () => {
     if (onCreate) onCreate(); else navigate('/sales-invoice/create');
   };
@@ -79,7 +80,7 @@ export default function SalesInvoiceOverviewPage({ tab, onTabChange, onCreate, o
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
-          <Button variant="outlined" color="inherit" startIcon={<PaymentsOutlinedIcon fontSize="small" />} onClick={handleRecordPayment}>
+          <Button variant="outlined" color="inherit" startIcon={<PaymentsOutlinedIcon fontSize="small" />} onClick={handleRecordPayment} disabled={!invoiceDetails}>
             Record Payment
           </Button>
           <Button
@@ -101,14 +102,14 @@ export default function SalesInvoiceOverviewPage({ tab, onTabChange, onCreate, o
         </Stack>
       </Stack>
 
-      <SalesInvoiceSummaryCards summary={SUMMARY} />
+      <SalesInvoiceSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 640 } }}>
             <SalesInvoiceTable
-              invoices={INVOICES}
-              selectedCode={selectedCode}
+              invoices={rows}
+              selectedId={effectiveSelectedId}
               onSelectInvoice={handleSelectInvoice}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -119,7 +120,17 @@ export default function SalesInvoiceOverviewPage({ tab, onTabChange, onCreate, o
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: { lg: 640 }, overflow: 'auto' }}>
-            <InvoiceDetailsCard invoice={invoiceDetails} />
+            {isLoading ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>Loading invoices…</Typography>
+            ) : isError ? (
+              <Typography variant="body2" color="error" sx={{ p: 2 }}>Failed to load invoices.</Typography>
+            ) : invoiceDetails ? (
+              <InvoiceDetailsCard invoice={invoiceDetails} showPaidFields={invoiceDetails.status === 'paid'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No invoices yet — create one to get started.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

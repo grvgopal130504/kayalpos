@@ -11,12 +11,12 @@ import {
 import { getAccentTheme, accentCssBackground } from '../../theme/accentThemes';
 
 export const SIDEBAR_WIDTH = 264;
-export const SIDEBAR_RAIL_WIDTH = 70;
+export const SIDEBAR_RAIL_WIDTH = 60;
 
 // Nav item sizing — tweak these to resize every menu row at once instead of
 // hunting through the ListItemButton sx below.
 // Expanded (icon + label) row sizing.
-const NAV_ITEM_HEIGHT = 44;
+const NAV_ITEM_HEIGHT = 40;
 const NAV_ITEM_PADDING_TOP = 1;
 const NAV_ITEM_PADDING_BOTTOM = 1;
 const NAV_ITEM_GAP = 0;
@@ -24,7 +24,7 @@ const NAV_ITEM_GAP = 0;
 // so the rail's row height/padding/gap can be tuned independently of the
 // expanded view instead of inheriting it. Without their own values here,
 // collapsed rows shrink to just the icon's height and look congested.
-const NAV_ITEM_HEIGHT_COLLAPSED = 44;
+const NAV_ITEM_HEIGHT_COLLAPSED = 40;
 const NAV_ITEM_PADDING_TOP_COLLAPSED = 1;
 const NAV_ITEM_PADDING_BOTTOM_COLLAPSED = 1;
 const NAV_ITEM_GAP_COLLAPSED = 0;
@@ -54,8 +54,6 @@ function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebar
   const itemColor = isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.82)';
   const hoverBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
   const dividerColor = isDark ? 'rgba(255,255,255,0.08)' : 'divider';
-  const scrollbarThumb = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)';
-  const scrollbarThumbHover = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)';
 
   let itemIndex = 0;
 
@@ -65,19 +63,12 @@ function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebar
         overflowY: 'auto',
         flex: 1,
         py: 1,
-        // Slim, low-profile scrollbar instead of the browser's default
-        // full-size track + arrow buttons, which look oversized against the
-        // narrow sidebar.
-        scrollbarWidth: 'thin',
-        scrollbarColor: `${scrollbarThumb} transparent`,
-        '&::-webkit-scrollbar': { width: 6 },
-        '&::-webkit-scrollbar-button': { display: 'none', height: 0, width: 0 },
-        '&::-webkit-scrollbar-track': { background: 'transparent' },
-        '&::-webkit-scrollbar-thumb': {
-          backgroundColor: scrollbarThumb,
-          borderRadius: 4,
-        },
-        '&::-webkit-scrollbar-thumb:hover': { backgroundColor: scrollbarThumbHover },
+        // Scrolling stays fully functional, but the scrollbar itself is
+        // made invisible (rather than just slimmed down) so nothing is
+        // drawn over the narrow sidebar at all.
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none',
+        '&::-webkit-scrollbar': { width: 0, height: 0, display: 'none', background: 'transparent' },
         // 3D flip-down entrance: each row rotates in around its own top
         // edge (like a flap opening) rather than a flat fade/slide.
         // `perspective()` is baked into the transform itself so no
@@ -255,7 +246,7 @@ export default function Sidebar({ variant, collapsed = false, open, onClose, onN
         sx={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: collapsed ? 'center' : 'flex-start',
+          justifyContent: collapsed ? 'center' : 'center',
           px: collapsed ? 1 : 2.5,
           py: 2.5,
           minHeight: 72,
@@ -263,7 +254,7 @@ export default function Sidebar({ variant, collapsed = false, open, onClose, onN
       >
         <AppLogo
           iconOnly={collapsed}
-          iconSize={collapsed ? 28 : 34}
+          iconSize={collapsed ? 30 : 34}
           titleFontSize="1.05rem"
           subtitleFontSize="0.6rem"
           titleColor={isDark ? '#fff' : 'text.primary'}

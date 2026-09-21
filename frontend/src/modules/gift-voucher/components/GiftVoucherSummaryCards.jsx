@@ -33,7 +33,7 @@ export default function GiftVoucherSummaryCards({ summary }) {
       value: formatNumber(summary.redeemedThisMonth.value), caption: summary.redeemedThisMonth.caption,
     },
     {
-      key: 'issued', icon: CurrencyRupeeOutlinedIcon, iconColor: '#F5A623', label: 'Value Issued',
+      key: 'issued', icon: CurrencyRupeeOutlinedIcon, iconColor: '#F5A623', label: 'Total Voucher Value',
       value: formatCurrency(summary.valueIssued.value, { decimals: true }), caption: summary.valueIssued.caption,
     },
     {

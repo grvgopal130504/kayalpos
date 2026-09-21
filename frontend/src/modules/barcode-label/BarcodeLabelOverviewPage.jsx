@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -15,41 +15,40 @@ import BarcodeLabelSummaryCards from './components/BarcodeLabelSummaryCards';
 import BarcodeLabelTable from './components/BarcodeLabelTable';
 import LabelDetailsCard from './components/LabelDetailsCard';
 import LabelTermsAndNotes from './components/LabelTermsAndNotes';
-import { SUMMARY, BATCHES, BATCH_DETAILS } from './barcodeLabelMockData';
-
-const BATCH_BY_CODE = Object.fromEntries(BATCHES.map((b) => [b.code, b]));
+import { useGetBarcodeLabelBatchesQuery, useBarcodeLabelSummaryQuery } from '../../api/barcodeLabelApi';
+import { toBatchRow, toBatchDetails, buildSummary } from './barcodeLabelDisplay';
 
 /**
  * Barcode & Label list/detail page — summary tiles, the batch table with a
  * detail panel for whichever row is selected, and a Terms & Conditions /
- * Notes strip below. Mirrors SalesInvoiceOverviewPage's structure; the
- * Barcode & Label backend module doesn't exist yet so everything is
- * driven by barcodeLabelMockData.js.
+ * Notes strip below. Fully wired to the real backend (see
+ * backend/src/modules/barcode-label): every tile, row and detail field
+ * comes from the actual BarcodeLabelBatch table, so a tenant with no batches
+ * yet honestly shows zeros/empty states instead of this page's old static
+ * mock data.
  */
 export default function BarcodeLabelOverviewPage({ tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(BATCH_DETAILS.code);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const selectedRow = BATCH_BY_CODE[selectedCode];
-  const batchDetails = selectedCode === BATCH_DETAILS.code
-    ? BATCH_DETAILS
-    : {
-        ...BATCH_DETAILS,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        status: selectedRow.status,
-        labelName: selectedRow.labelName,
-        itemCategory: selectedRow.itemCategory,
-        totalLabels: selectedRow.totalLabels,
-      };
+  const { data: batches = [], isLoading, isError } = useGetBarcodeLabelBatchesQuery({});
+  const { data: summaryData } = useBarcodeLabelSummaryQuery();
 
-  const handleSelectBatch = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => batches.map(toBatchRow), [batches]);
+  const summary = useMemo(() => buildSummary(summaryData), [summaryData]);
+  const batchById = useMemo(() => Object.fromEntries(batches.map((b) => [b.id, b])), [batches]);
+
+  const effectiveSelectedId = selectedId && batchById[selectedId] ? selectedId : batches[0]?.id;
+  const selectedBatch = effectiveSelectedId ? batchById[effectiveSelectedId] : null;
+  const batchDetails = selectedBatch ? toBatchDetails(selectedBatch) : null;
+
+  const handleSelectBatch = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return onView ? onView(row.code) : navigate(`/barcode-label/view/${row.code}`);
-    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/barcode-label/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/barcode-label/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/barcode-label/edit/${row.id}`);
     return dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -96,14 +95,14 @@ export default function BarcodeLabelOverviewPage({ tab, onTabChange, onCreate, o
         </Stack>
       </Stack>
 
-      <BarcodeLabelSummaryCards summary={SUMMARY} />
+      <BarcodeLabelSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 640 } }}>
             <BarcodeLabelTable
-              batches={BATCHES}
-              selectedCode={selectedCode}
+              batches={rows}
+              selectedId={effectiveSelectedId}
               onSelectBatch={handleSelectBatch}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -114,7 +113,17 @@ export default function BarcodeLabelOverviewPage({ tab, onTabChange, onCreate, o
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: { lg: 640 }, overflow: 'auto' }}>
-            <LabelDetailsCard batch={batchDetails} />
+            {isLoading ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>Loading batches…</Typography>
+            ) : isError ? (
+              <Typography variant="body2" color="error" sx={{ p: 2 }}>Failed to load batches.</Typography>
+            ) : batchDetails ? (
+              <LabelDetailsCard batch={batchDetails} showPrintedFields={batchDetails.status === 'printed'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No batches yet — create one to get started.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

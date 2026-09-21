@@ -9,6 +9,9 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
+import {
+  useNextSalesReturnNoQuery, useLazyLookupOriginalInvoiceQuery, useCreateSalesReturnMutation,
+} from '../../api/salesReturnApi';
 
 import ReturnItemsPanel from './components/ReturnItemsPanel';
 import ReturnCartPanel from './components/ReturnCartPanel';
@@ -20,35 +23,38 @@ import OriginalInvoiceSummaryCard from './components/OriginalInvoiceSummaryCard'
 import RefundSummaryCard from './components/RefundSummaryCard';
 import PaymentMethodSummaryCard from './components/PaymentMethodSummaryCard';
 import ReturnActionsCard from './components/ReturnActionsCard';
-import {
-  ORIGINAL_INVOICE, RETURNABLE_ITEMS, INITIAL_RETURN_CART, RETURN_REASONS,
-  REFUND_PAYMENT_METHODS, TAX_RATE, generateReturnNo,
-} from './salesReturnMockData';
+import FindInvoiceDialog from './components/FindInvoiceDialog';
+import { RETURN_REASONS, REFUND_PAYMENT_METHODS } from './salesReturnConstants';
 
-const ITEM_BY_CODE = Object.fromEntries(RETURNABLE_ITEMS.map((item) => [item.code, item]));
 const WALK_IN_CUSTOMER_NAME = 'Walk-in Customer';
 
-function buildInitialCart() {
-  return INITIAL_RETURN_CART.map(({ code, qty }) => {
-    const item = ITEM_BY_CODE[code];
-    return { code, qty, name: item.name, uom: item.uom, batch: item.batch, rate: item.rate, maxQty: item.returnableQty };
-  });
+const PAYMENT_METHOD_LABEL = {
+  cash: 'Cash', upi: 'UPI', card: 'Card', wallet: 'Wallet', credit: 'Credit',
+};
+
+function formatDate(value) {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
 }
 
 /**
  * Sales Return (POS refund) screen — find the original invoice, pick which
- * lines are coming back, capture why, and settle the refund. Mirrors Line
- * Sale's structure (items panel / cart panel / bottom summary + actions)
- * with return-specific fields layered in (returnable qty caps, return
- * reason, refund routing, original-invoice + refund summaries).
- * All state is local mock data — the Sales Return backend module doesn't
- * exist yet.
+ * lines are coming back, capture why, and settle the refund. Fully wired to
+ * the real backend (see backend/src/modules/sales-return): "Find Original
+ * Invoice" looks up an actual Sale by its billNo, each returnable line's
+ * remaining qty is computed from real prior returns (never fabricated),
+ * and "Process Return" writes a real SalesReturn + SalesReturnItem rows,
+ * validated again server-side (over-returning a line is rejected there even
+ * if this page's own qty caps were somehow bypassed).
  */
 export default function SalesReturnPage() {
   const dispatch = useAppDispatch();
   const user = useAppSelector(selectCurrentUser);
 
-  const [cart, setCart] = useState(buildInitialCart);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogError, setDialogError] = useState('');
+  const [originalInvoice, setOriginalInvoice] = useState(null);
+  const [cart, setCart] = useState([]);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [refundMode, setRefundMode] = useState('refund');
@@ -56,47 +62,90 @@ export default function SalesReturnPage() {
   const [printSettingsEnabled, setPrintSettingsEnabled] = useState(false);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
 
-  const returnNo = useMemo(() => generateReturnNo(), []);
+  const { data: returnNo } = useNextSalesReturnNoQuery();
+  const [lookupInvoice, { isFetching: isLookingUp }] = useLazyLookupOriginalInvoiceQuery();
+  const [createSalesReturn, { isLoading: isProcessing }] = useCreateSalesReturnMutation();
+
   const returnDate = useMemo(
     () => new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date()),
     [],
   );
 
+  // The items panel's "returnable" figure accounts for lines already added
+  // to *this* not-yet-submitted cart too, on top of what the backend
+  // reported as returnable — so a user can't add the same line twice past
+  // what's actually left, without a round trip per click.
+  const displayItems = useMemo(() => {
+    if (!originalInvoice) return [];
+    return originalInvoice.items.map((item) => {
+      const inCart = cart.find((line) => line.saleLineId === item.saleLineId);
+      return { ...item, returnableQty: Math.max(item.returnableQty - (inCart?.qty || 0), 0) };
+    });
+  }, [originalInvoice, cart]);
+
   const totals = useMemo(() => {
     const subTotal = cart.reduce((sum, line) => sum + line.qty * line.rate, 0);
     const discountAmount = 0;
     const taxable = Math.max(subTotal - discountAmount, 0);
-    const tax = taxable * TAX_RATE;
+    const tax = cart.reduce((sum, line) => sum + line.qty * line.rate * line.taxRate, 0);
     const grandTotal = taxable + tax;
     return { subTotal, discountAmount, tax, grandTotal };
   }, [cart]);
 
-  const handleAddItem = (code) => {
+  const handleOpenFindInvoice = () => {
+    setDialogError('');
+    setDialogOpen(true);
+  };
+
+  const handleFindInvoiceSubmit = async (billNo) => {
+    try {
+      const data = await lookupInvoice(billNo).unwrap();
+      setOriginalInvoice(data);
+      setCart([]);
+      setDialogOpen(false);
+      setDialogError('');
+    } catch (err) {
+      setDialogError(err?.data?.message || 'No invoice found with that bill number');
+    }
+  };
+
+  const handleAddItem = (saleLineId) => {
+    const item = originalInvoice?.items.find((i) => i.saleLineId === saleLineId);
+    if (!item) return;
     setCart((prev) => {
-      const existing = prev.find((line) => line.code === code);
-      const item = ITEM_BY_CODE[code];
+      const existing = prev.find((line) => line.saleLineId === saleLineId);
       if (existing) {
         return prev.map((line) => (
-          line.code === code ? { ...line, qty: Math.min(line.maxQty, line.qty + 1) } : line
+          line.saleLineId === saleLineId ? { ...line, qty: Math.min(item.returnableQty, line.qty + 1) } : line
         ));
       }
-      return [...prev, { code, qty: 1, name: item.name, uom: item.uom, batch: item.batch, rate: item.rate, maxQty: item.returnableQty }];
+      if (item.returnableQty <= 0) return prev;
+      return [...prev, {
+        saleLineId,
+        code: item.code,
+        name: item.name,
+        uom: item.uom,
+        rate: item.rate,
+        taxRate: item.taxRate,
+        qty: 1,
+        maxQty: item.returnableQty,
+      }];
     });
   };
 
-  const handleQtyChange = (code, qty) => {
-    setCart((prev) => prev.map((line) => (line.code === code ? { ...line, qty } : line)));
+  const handleQtyChange = (saleLineId, qty) => {
+    setCart((prev) => prev.map((line) => (line.saleLineId === saleLineId ? { ...line, qty } : line)));
   };
 
-  const handleRemove = (code) => {
-    setCart((prev) => prev.filter((line) => line.code !== code));
+  const handleRemove = (saleLineId) => {
+    setCart((prev) => prev.filter((line) => line.saleLineId !== saleLineId));
   };
 
-  const handleFindOriginalInvoice = () => dispatch(showToast('Find Original Invoice is coming soon', 'info'));
   const handleClear = () => {
     setCart([]);
     setReason('');
     setNote('');
+    setRefundTo('');
     dispatch(showToast('Return cleared', 'info'));
   };
   const handleMoreAction = (label) => {
@@ -104,7 +153,12 @@ export default function SalesReturnPage() {
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
   const handleAddCustomer = () => dispatch(showToast('Add Customer is coming soon', 'info'));
-  const handleProcessReturn = () => {
+
+  const handleProcessReturn = async () => {
+    if (!originalInvoice) {
+      dispatch(showToast('Find the original invoice first', 'warning'));
+      return;
+    }
     if (cart.length === 0) {
       dispatch(showToast('Add at least one item before processing the return', 'warning'));
       return;
@@ -113,7 +167,35 @@ export default function SalesReturnPage() {
       dispatch(showToast('Select a return reason first', 'warning'));
       return;
     }
-    dispatch(showToast('Return processed — refund initiated', 'success'));
+    if (refundMode === 'refund' && !refundTo) {
+      dispatch(showToast('Select where the refund is going', 'warning'));
+      return;
+    }
+
+    try {
+      const saved = await createSalesReturn({
+        saleId: originalInvoice.saleId,
+        items: cart.map((line) => ({ saleLineId: line.saleLineId, qty: line.qty })),
+        reason,
+        note: note || undefined,
+        refundMode,
+        refundTo: refundMode === 'refund' ? refundTo : undefined,
+      }).unwrap();
+
+      dispatch(showToast(`Return ${saved.returnNo} processed — refund initiated`, 'success'));
+
+      // Refresh the same invoice's returnable/alreadyRefunded figures (this
+      // return just changed both) and reset the working cart/reason/note
+      // for the next return against the same or a different invoice.
+      const refreshed = await lookupInvoice(originalInvoice.invoiceNo).unwrap();
+      setOriginalInvoice(refreshed);
+      setCart([]);
+      setReason('');
+      setNote('');
+      setRefundTo('');
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to process the return', 'error'));
+    }
   };
   const handlePrintReturn = () => dispatch(showToast('Print Return is coming soon', 'info'));
   const handleEmailOrWhatsapp = () => dispatch(showToast('Email / WhatsApp is coming soon', 'info'));
@@ -129,7 +211,7 @@ export default function SalesReturnPage() {
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" color="warning" onClick={handleFindOriginalInvoice}>Find Original Invoice (F3)</Button>
+          <Button variant="outlined" color="warning" onClick={handleOpenFindInvoice}>Find Original Invoice (F3)</Button>
           <Button variant="outlined" color="error" onClick={handleClear}>Clear</Button>
           <Button
             variant="outlined"
@@ -148,26 +230,26 @@ export default function SalesReturnPage() {
       </Stack>
 
       <ReturnInfoRow
-        customerName={WALK_IN_CUSTOMER_NAME}
-        returnNo={returnNo}
+        customerName={originalInvoice?.customerName || WALK_IN_CUSTOMER_NAME}
+        returnNo={returnNo || 'Generating…'}
         returnDate={returnDate}
-        originalInvoiceNo={ORIGINAL_INVOICE.invoiceNo}
-        invoiceDate={ORIGINAL_INVOICE.invoiceDate}
+        originalInvoiceNo={originalInvoice?.invoiceNo || '-'}
+        invoiceDate={originalInvoice ? formatDate(originalInvoice.invoiceDate) : '-'}
         cashierName={user?.name || 'Admin'}
         onAddCustomer={handleAddCustomer}
-        onFindOriginalInvoice={handleFindOriginalInvoice}
+        onFindOriginalInvoice={handleOpenFindInvoice}
       />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 6 }}>
           <Box sx={{ height: { lg: 520 } }}>
-            <ReturnItemsPanel onAddItem={handleAddItem} />
+            <ReturnItemsPanel items={displayItems} onAddItem={handleAddItem} />
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 6 }}>
           <Stack spacing={2}>
             <Box sx={{ height: { lg: 340 } }}>
-              <ReturnCartPanel lines={cart} onQtyChange={handleQtyChange} onRemove={handleRemove} taxRate={TAX_RATE} />
+              <ReturnCartPanel lines={cart} onQtyChange={handleQtyChange} onRemove={handleRemove} />
             </Box>
             <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
@@ -192,17 +274,39 @@ export default function SalesReturnPage() {
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <OriginalInvoiceSummaryCard invoice={ORIGINAL_INVOICE} />
+          {originalInvoice ? (
+            <OriginalInvoiceSummaryCard
+              invoice={{
+                invoiceNo: originalInvoice.invoiceNo,
+                invoiceDate: formatDate(originalInvoice.invoiceDate),
+                totalAmount: originalInvoice.totalAmount,
+                paidAmount: originalInvoice.paidAmount,
+              }}
+            />
+          ) : (
+            <EmptySummaryPlaceholder title="Original Invoice Summary" />
+          )}
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <RefundSummaryCard
-            totalReturnAmount={totals.grandTotal}
-            alreadyRefunded={0}
-            invoicePaidAmount={ORIGINAL_INVOICE.paidAmount}
-          />
+          {originalInvoice ? (
+            <RefundSummaryCard
+              totalReturnAmount={totals.grandTotal}
+              alreadyRefunded={originalInvoice.alreadyRefunded}
+              invoicePaidAmount={originalInvoice.paidAmount}
+            />
+          ) : (
+            <EmptySummaryPlaceholder title="Refund Summary" />
+          )}
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <PaymentMethodSummaryCard method={ORIGINAL_INVOICE.paymentMethod} amount={ORIGINAL_INVOICE.paidAmount} />
+          {originalInvoice ? (
+            <PaymentMethodSummaryCard
+              method={PAYMENT_METHOD_LABEL[originalInvoice.paymentMethod] || originalInvoice.paymentMethod}
+              amount={originalInvoice.paidAmount}
+            />
+          ) : (
+            <EmptySummaryPlaceholder title="Payment Method (Original Invoice)" />
+          )}
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <ReturnActionsCard
@@ -211,10 +315,35 @@ export default function SalesReturnPage() {
             onEmailOrWhatsapp={handleEmailOrWhatsapp}
             printSettingsEnabled={printSettingsEnabled}
             onTogglePrintSettings={setPrintSettingsEnabled}
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || !originalInvoice || isProcessing}
           />
         </Grid>
       </Grid>
+
+      <FindInvoiceDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onSubmit={handleFindInvoiceSubmit}
+        isLoading={isLookingUp}
+        error={dialogError}
+      />
     </Stack>
+  );
+}
+
+// Same outlined-Paper shell as the three real summary cards it stands in
+// for, so the bottom grid row doesn't visibly shift once an invoice loads —
+// shown only until "Find Original Invoice" actually returns a real Sale, so
+// nothing here is ever mistaken for a real (zeroed) figure.
+function EmptySummaryPlaceholder({ title }) {
+  return (
+    <Box sx={{
+      border: '1px solid', borderColor: 'divider', borderRadius: 3, p: 2, height: '100%',
+      display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: 0.5,
+    }}
+    >
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.secondary' }}>{title}</Typography>
+      <Typography variant="caption" sx={{ color: 'text.disabled' }}>Find an invoice to see this</Typography>
+    </Box>
   );
 }

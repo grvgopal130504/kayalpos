@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,7 +9,6 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import AddIcon from '@mui/icons-material/Add';
 import ListOutlinedIcon from '@mui/icons-material/ListOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
@@ -22,82 +21,131 @@ import FormCheckbox from '../../components/form/FormCheckbox';
 
 import LoyaltyFormSection from './components/LoyaltyFormSection';
 import LoyaltyPreviewPanel from './components/LoyaltyPreviewPanel';
-import { getLoyaltyProgramDetails } from './loyaltyMockData';
+import {
+  useGetLoyaltyProgramQuery, useNextLoyaltyProgramCodeQuery, useCreateLoyaltyProgramMutation, useUpdateLoyaltyProgramMutation,
+} from '../../api/loyaltyApi';
 import {
   createLoyaltyProgramSchema, createLoyaltyProgramDefaultValues,
   STATUS_OPTIONS, EARN_POINTS_ON_OPTIONS, POINTS_TYPE_OPTIONS, REDEMPTION_TYPE_OPTIONS,
   APPLY_ON_OPTIONS, MEMBERSHIP_VALIDITY_OPTIONS, POINTS_EXPIRY_OPTIONS,
 } from './createLoyaltyProgramSchema';
 
-// The detail record's rule fields are display labels ("Total Bill Amount",
-// "Fixed Points", "Discount on Bill", "Lifetime", "Never"), not the form
-// select's underlying option values — build label->value lookups from the
-// option lists themselves so edit mode can prefill the selects correctly.
-function labelToValueMap(options) {
-  return Object.fromEntries(options.filter((o) => o.value).map((o) => [o.label, o.value]));
+/** Builds react-hook-form default values from a real LoyaltyProgram row (as
+ * returned by GET /api/loyalty-programs/:id) — the backend stores the raw
+ * option values directly (not display labels), so every select field can be
+ * prefilled as-is; numeric fields come back as numbers/Decimals and are
+ * stringified for the text fields that hold them. */
+function programToFormValues(program) {
+  return {
+    ...createLoyaltyProgramDefaultValues,
+    programName: program.name,
+    description: program.description || '',
+    status: program.status,
+    earnPointsOn: program.earnPointsOn,
+    pointsType: program.pointsType,
+    pointsValue: String(program.pointsValue ?? '0'),
+    redemptionType: program.redemptionType,
+    redemptionValue: String(program.redemptionValue ?? '0'),
+    minimumPointsRequired: String(program.minimumPointsRequired ?? '0'),
+    maximumDiscountPerTransaction: String(program.maximumDiscountPerTransaction ?? '0'),
+    applyOn: program.applyOn,
+    membershipValidity: program.membershipValidity,
+    validityPeriodMonths: String(program.validityPeriodMonths ?? '0'),
+    pointsExpiry: program.pointsExpiry,
+    welcomePointsEnabled: Boolean(program.welcomePointsEnabled),
+    welcomePointsValue: String(program.welcomePointsValue ?? '0'),
+    allowPointsRedemption: Boolean(program.allowPointsRedemption),
+    showLoyaltyDetailsInInvoice: Boolean(program.showLoyaltyDetailsInInvoice),
+    allowNegativePoints: Boolean(program.allowNegativePoints),
+    pointsExpiryNotification: Boolean(program.pointsExpiryNotification),
+  };
 }
-const EARN_POINTS_ON_LABEL_TO_VALUE = labelToValueMap(EARN_POINTS_ON_OPTIONS);
-const POINTS_TYPE_LABEL_TO_VALUE = labelToValueMap(POINTS_TYPE_OPTIONS);
-const REDEMPTION_TYPE_LABEL_TO_VALUE = labelToValueMap(REDEMPTION_TYPE_OPTIONS);
-const POINTS_EXPIRY_LABEL_TO_VALUE = labelToValueMap(POINTS_EXPIRY_OPTIONS);
 
-// membershipValidity on the detail/list rows is either "Lifetime" or a
-// "Fixed Period (N mo)" string — collapse the latter down to the form's
-// plain "fixed-period" option value.
-function membershipValidityToValue(value) {
-  if (value === 'Lifetime') return 'lifetime';
-  if (typeof value === 'string' && value.startsWith('Fixed Period')) return 'fixed-period';
-  return '';
+/** Converts the form's string-based values back into the types the backend
+ * expects (real numbers instead of strings), so the payload sent to
+ * POST/PUT /api/loyalty-programs matches loyalty.schema.js exactly. */
+function formValuesToPayload(values) {
+  return {
+    programName: values.programName,
+    description: values.description || '',
+    status: values.status,
+    earnPointsOn: values.earnPointsOn,
+    pointsType: values.pointsType,
+    pointsValue: Number(values.pointsValue || 0),
+    redemptionType: values.redemptionType,
+    redemptionValue: Number(values.redemptionValue || 0),
+    minimumPointsRequired: Number(values.minimumPointsRequired || 0),
+    maximumDiscountPerTransaction: Number(values.maximumDiscountPerTransaction || 0),
+    applyOn: values.applyOn,
+    membershipValidity: values.membershipValidity,
+    validityPeriodMonths: Number(values.validityPeriodMonths || 0),
+    pointsExpiry: values.pointsExpiry,
+    welcomePointsEnabled: values.welcomePointsEnabled,
+    welcomePointsValue: Number(values.welcomePointsValue || 0),
+    allowPointsRedemption: values.allowPointsRedemption,
+    showLoyaltyDetailsInInvoice: values.showLoyaltyDetailsInInvoice,
+    allowNegativePoints: values.allowNegativePoints,
+    pointsExpiryNotification: values.pointsExpiryNotification,
+  };
 }
 
 /**
  * "Create Loyalty Program" screen, also doubling as the Edit Loyalty
- * Program page when reached via `/loyalty/edit/:code` — the Loyalty module
- * has no backend yet, so "editing" prefills from getLoyaltyProgramDetails()
- * the same best-effort way LoyaltyPage's own detail panel does.
+ * Program page when reached via `/loyalty/edit/:id` — fully wired to the
+ * backend: creating or updating a program here actually writes to the
+ * LoyaltyProgram table (see backend/src/modules/loyalty), with the same
+ * validations enforced again server-side so a request built outside this
+ * form can never bypass them.
  */
-export default function CreateLoyaltyProgramPage({ code: propCode, onBack }) {
+export default function CreateLoyaltyProgramPage({ id: propId, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code: paramCode } = useParams();
-  const code = propCode ?? paramCode;
-  const isEditMode = Boolean(code);
-  const existingProgram = isEditMode ? getLoyaltyProgramDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
+  const { data: existingProgram, isLoading: isLoadingExisting, isError: loadError } = useGetLoyaltyProgramQuery(id, { skip: !isEditMode });
+  const nextCode = useNextLoyaltyProgramCodeQuery(undefined, { skip: isEditMode });
+  const [createLoyaltyProgram, { isLoading: isCreating }] = useCreateLoyaltyProgramMutation();
+  const [updateLoyaltyProgram, { isLoading: isUpdating }] = useUpdateLoyaltyProgramMutation();
+  const isSaving = isCreating || isUpdating;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
 
   const methods = useForm({
     resolver: zodResolver(createLoyaltyProgramSchema),
-    defaultValues: useMemo(() => {
-      if (!existingProgram) return createLoyaltyProgramDefaultValues;
-      return {
-        ...createLoyaltyProgramDefaultValues,
-        programName: existingProgram.name,
-        description: existingProgram.description || '',
-        status: existingProgram.status,
-        earnPointsOn: EARN_POINTS_ON_LABEL_TO_VALUE[existingProgram.earnPointsOn] || '',
-        pointsType: POINTS_TYPE_LABEL_TO_VALUE[existingProgram.pointsType] || '',
-        redemptionType: REDEMPTION_TYPE_LABEL_TO_VALUE[existingProgram.redemptionType] || '',
-        minimumPointsRequired: String(existingProgram.minimumPointsRequired ?? '0'),
-        membershipValidity: membershipValidityToValue(existingProgram.membershipValidity),
-        pointsExpiry: POINTS_EXPIRY_LABEL_TO_VALUE[existingProgram.pointsExpiry] || '',
-      };
-    }, [existingProgram]),
+    defaultValues: createLoyaltyProgramDefaultValues,
     mode: 'onTouched',
   });
-  const { watch, handleSubmit } = methods;
+  const { watch, reset, handleSubmit } = methods;
   const welcomePointsEnabled = watch('welcomePointsEnabled');
+
+  // The edit-mode fetch is async, so the form can't be seeded via
+  // useForm's defaultValues (that only runs once, before the data exists) —
+  // reset() re-seeds every field once the real program row arrives.
+  useEffect(() => {
+    if (existingProgram) reset(programToFormValues(existingProgram));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingProgram]);
 
   const handleBack = () => {
     if (onBack) return onBack();
-    if (isEditMode) return navigate(`/loyalty/view/${code}`);
+    if (isEditMode) return navigate(`/loyalty/view/${id}`);
     navigate('/loyalty');
   };
 
-  const onSubmit = () => {
-    dispatch(showToast(isEditMode ? `Loyalty program ${code} updated successfully` : 'Loyalty program created as a draft', 'success'));
-    if (onBack) onBack();
-    else if (isEditMode) navigate(`/loyalty/view/${code}`);
-    else navigate('/loyalty');
+  const onSubmit = async (values) => {
+    const payload = formValuesToPayload(values);
+    try {
+      const saved = isEditMode
+        ? await updateLoyaltyProgram({ id, ...payload }).unwrap()
+        : await createLoyaltyProgram(payload).unwrap();
+
+      dispatch(showToast(isEditMode ? `Loyalty program ${saved.code} updated successfully` : `Loyalty program ${saved.code} created successfully`, 'success'));
+      if (onBack) onBack(saved.id);
+      else if (isEditMode) navigate(`/loyalty/view/${saved.id}`);
+      else navigate('/loyalty');
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the loyalty program', 'error'));
+    }
   };
 
   const handleProgramList = () => dispatch(showToast('Loyalty Program List is coming soon', 'info'));
@@ -107,7 +155,15 @@ export default function CreateLoyaltyProgramPage({ code: propCode, onBack }) {
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  if (isEditMode && !existingProgram) {
+  if (isEditMode && isLoadingExisting) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading loyalty program…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && (loadError || !existingProgram)) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Loyalty program not found</Typography>
@@ -126,7 +182,7 @@ export default function CreateLoyaltyProgramPage({ code: propCode, onBack }) {
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/loyalty" underline="hover" color="text.secondary">Loyalty</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? `Edit ${code}` : 'Create Loyalty Program'}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? `Edit ${existingProgram?.code || ''}` : 'Create Loyalty Program'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -160,7 +216,7 @@ export default function CreateLoyaltyProgramPage({ code: propCode, onBack }) {
             <Grid size={{ xs: 12, lg: 7 }}>
               <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2.5, sm: 3 } }}>
                 <Stack spacing={3.5}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{isEditMode ? `Edit Loyalty Program (${code})` : 'Create Loyalty Program'}</Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{isEditMode ? `Edit Loyalty Program (${existingProgram?.code || ''})` : 'Create Loyalty Program'}</Typography>
 
                   <LoyaltyFormSection number={1} title="Program Information">
                     <Grid container spacing={2}>
@@ -169,8 +225,8 @@ export default function CreateLoyaltyProgramPage({ code: propCode, onBack }) {
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
-                          label="Program Code *"
-                          value={isEditMode ? code : 'Auto generated'}
+                          label="Program Code"
+                          value={isEditMode ? (existingProgram?.code || '') : (nextCode.data || 'Generating…')}
                           disabled
                           fullWidth
                           slotProps={{ input: { readOnly: true } }}
@@ -272,8 +328,10 @@ export default function CreateLoyaltyProgramPage({ code: propCode, onBack }) {
                   </LoyaltyFormSection>
 
                   <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end', pt: 1 }}>
-                    <Button variant="outlined" color="inherit" onClick={handleCancel}>Cancel</Button>
-                    <Button type="submit" variant="contained">{isEditMode ? 'Update Program' : 'Save Program'}</Button>
+                    <Button variant="outlined" color="inherit" onClick={handleCancel} disabled={isSaving}>Cancel</Button>
+                    <Button type="submit" variant="contained" disabled={isSaving}>
+                      {isSaving ? 'Saving…' : (isEditMode ? 'Update Program' : 'Save Program')}
+                    </Button>
                   </Stack>
                 </Stack>
               </Paper>

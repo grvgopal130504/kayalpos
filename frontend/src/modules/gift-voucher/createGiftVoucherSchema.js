@@ -19,27 +19,65 @@ export const YES_NO_OPTIONS = [
   { value: 'no', label: 'No' },
 ];
 
+// Same "DD Mon YYYY" shape FormDatePicker's formatPickerDate() produces, so
+// the default value already matches what the picker itself would write —
+// mirrors the fix already made for Promotion's createPromotionSchema.js
+// (the old "DD/MM/YYYY" default couldn't be parsed back by the picker).
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatDate(d) {
+  return `${String(d.getDate()).padStart(2, '0')} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 function todayFormatted() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  return formatDate(new Date());
 }
 
 function addMonthsFormatted(months) {
   const d = new Date();
   d.setMonth(d.getMonth() + months);
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  return formatDate(d);
 }
+
+/** Accepts "DD Mon YYYY" (the date picker's own format) or "DD/MM/YYYY" (an
+ * old default some saved records may still carry) and returns a real Date,
+ * or null if the string doesn't match either shape. Exported so
+ * GiftVoucherPage/CreateGiftVoucherPage can convert form strings to real
+ * dates before sending them to the backend (which expects ISO dates). */
+export function parseGiftVoucherDate(value) {
+  if (!value || typeof value !== 'string') return null;
+  const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (slash) return new Date(Number(slash[3]), Number(slash[2]) - 1, Number(slash[1]));
+  const named = /^(\d{1,2})\s+([A-Za-z]{3})\w*\s+(\d{4})$/.exec(value.trim());
+  if (named) {
+    const monthIndex = MONTH_NAMES.findIndex((m) => m.toLowerCase() === named[2].slice(0, 3).toLowerCase());
+    if (monthIndex !== -1) return new Date(Number(named[3]), monthIndex, Number(named[1]));
+  }
+  return null;
+}
+
+export function formatGiftVoucherDate(date) {
+  return date ? formatDate(date) : '';
+}
+
+// A plain (optional) non-negative decimal amount, entered as free text
+// (money fields allow a "." so they can't use FormTextField's `numeric`
+// digit-stripping prop) — validated here instead so "12.5.3", "-5" or "abc"
+// are caught before they ever reach the backend.
+const decimalAmount = (message) => z.string().trim()
+  .refine((v) => v === '' || (/^\d+(\.\d{1,2})?$/.test(v) && Number(v) >= 0), message);
 
 export const createGiftVoucherSchema = z
   .object({
     voucherName: z.string().trim().min(1, 'Voucher name is required'),
     voucherType: z.string().trim().min(1, 'Select a voucher type'),
-    voucherValue: z.string().trim().min(1, 'Enter a voucher value'),
+    voucherValue: decimalAmount('Enter a valid, non-negative value')
+      .refine((v) => v !== '', 'Enter a voucher value'),
     description: z.string().trim().optional(),
     validFrom: z.string().trim().min(1, 'Valid From date is required'),
     validTill: z.string().trim(),
     noExpiry: z.boolean(),
-    minimumBillAmount: z.string().trim(),
+    minimumBillAmount: decimalAmount('Enter a valid, non-negative amount'),
     maximumUsage: z.string(),
     oneTimePerCustomer: z.string(),
     partialRedemptionAllowed: z.string(),
@@ -52,6 +90,16 @@ export const createGiftVoucherSchema = z
   .superRefine((values, ctx) => {
     if (!values.noExpiry && !values.validTill) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['validTill'], message: 'Valid Till date is required' });
+    }
+    if (!values.noExpiry && values.validTill && values.validFrom) {
+      const start = parseGiftVoucherDate(values.validFrom);
+      const end = parseGiftVoucherDate(values.validTill);
+      if (start && end && end < start) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['validTill'], message: 'Valid Till date cannot be before Valid From date' });
+      }
+    }
+    if (values.voucherType === 'Percentage Discount' && Number(values.voucherValue) > 100) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['voucherValue'], message: 'Percentage value cannot exceed 100%' });
     }
   });
 

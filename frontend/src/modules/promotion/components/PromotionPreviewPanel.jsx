@@ -5,9 +5,7 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import SellOutlinedIcon from '@mui/icons-material/SellOutlined';
 
 import { MAXIMUM_USAGE_OPTIONS, MAXIMUM_USAGE_DESCRIPTIONS } from '../createPromotionSchema';
-import { PRODUCTS } from '../../masters/product/productMockData';
-
-const PRODUCT_NAME_BY_CODE = Object.fromEntries(PRODUCTS.map((p) => [p.code, p.name]));
+import { useGetProductsQuery } from '../../../api/productApi';
 
 const STATIC_TERMS = [
   'Offer applicable on listed items only.',
@@ -36,6 +34,8 @@ function SummaryField({ label, value }) {
 export default function PromotionPreviewPanel({ onSelectItems }) {
   const { control } = useFormContext();
   const values = useWatch({ control });
+  const { data: products = [] } = useGetProductsQuery({});
+  const productNameByCode = Object.fromEntries(products.map((p) => [p.code, p.name]));
 
   const discountValueDisplay = values.discountValue
     ? (values.discountUnit === '₹' ? `₹${values.discountValue}` : `${values.discountValue}%`)
@@ -124,7 +124,7 @@ export default function PromotionPreviewPanel({ onSelectItems }) {
                     <Chip
                       key={val}
                       size="small"
-                      label={isCategoryMode ? val : (PRODUCT_NAME_BY_CODE[val] || val)}
+                      label={isCategoryMode ? val : (productNameByCode[val] || val)}
                       sx={{ fontWeight: 600, bgcolor: 'rgba(242,107,33,0.1)', color: 'primary.main' }}
                     />
                   ))}

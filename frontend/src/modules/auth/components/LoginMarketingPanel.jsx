@@ -10,7 +10,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AppLogo from '../../../components/common/AppLogo';
 
 const FEATURES = [
-  { icon: BoltIcon, label: 'Fast Billing' },
+  { icon: BoltIcon, label: 'Fast\nBilling' },
   { icon: Inventory2Icon, label: 'Smart Inventory' },
   { icon: InsightsIcon, label: 'Real-time Reports' },
   { icon: GroupsIcon, label: 'Happy Customers' },
@@ -56,25 +56,8 @@ export default function LoginMarketingPanel() {
             px: 12,
           }}
         >
-          <Paper
-            elevation={0}
-            sx={{
-              display: 'inline-block',
-              px: 3,
-              py: 1.5,
-              borderRadius: 4,
-              // Glassmorphism: same low-opacity white + blur treatment as the
-              // stats bar below, so the whole copy block (logo, headline,
-              // description and feature icons) reads as one translucent
-              // panel over the photo instead of floating text.
-              bgcolor: 'rgba(255, 255, 255, 0)',
-              backdropFilter: 'blur(0px)',
-              border: '0px solid rgba(255, 255, 255, 0)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.6)',
-            }}
-          >
             <Box sx={{ mb: 0.75 }}>
-              <AppLogo iconSize={32} titleFontSize="1.05rem" subtitleFontSize="0.56rem" />
+              <AppLogo iconSize={40} titleFontSize="1.25rem" subtitleFontSize="0.70rem" />
             </Box>
             <Typography
               sx={{
@@ -127,11 +110,12 @@ export default function LoginMarketingPanel() {
               sx={{ mt: 1.4, flexWrap: 'wrap' }}
             >
             {FEATURES.map(({ icon: Icon, label }) => (
-              <Stack key={label} spacing={0.5} sx={{ width: 50, alignItems: 'center', mt: "-5px" }}>
+              <Stack key={label} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Box
                   sx={{
-                    width: 38,
-                    height: 38,
+                    flexShrink: 0,
+                    width: 32,
+                    height: 32,
                     borderRadius: '50%',
                     border: '2px solid',
                     borderColor: 'primary.main',
@@ -147,14 +131,15 @@ export default function LoginMarketingPanel() {
                 </Box>
                 <Typography
                   variant="caption"
-                  align="center"
+                  align="left"
                   sx={{
                     color: '#313030',
                     fontWeight: 600,
                     lineHeight: 1.2,
                     fontSize: 11,
                     borderRadius: 0.75,
-                    px: 0.5,
+                    maxWidth: 64,
+                    whiteSpace: 'pre-line',
                   }}
                 >
                   {label}
@@ -162,7 +147,6 @@ export default function LoginMarketingPanel() {
               </Stack>
             ))}
           </Stack>
-          </Paper>
         </Box>
 
         {/* Spacer so the copy stays pinned to the top and the stats bar to

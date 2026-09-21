@@ -5,15 +5,16 @@ import {
 } from '@mui/material';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import CloseIcon from '@mui/icons-material/Close';
-import { PRODUCTS, PRODUCT_GROUP_OPTIONS } from '../../masters/product/productMockData';
+import { useGetProductsQuery } from '../../../api/productApi';
 
 /**
  * Multi-select picker behind the "Applies To" → Specific Items / Category
  * choice on Create/Edit Promotion. One dialog serves both modes:
- * `mode="category"` lists the Product master's product groups,
- * `mode="items"` lists individual products (the Promotion module has no
- * catalog of its own yet, so it reuses the Product master's mock list —
- * swap for a real items API once one exists).
+ * `mode="category"` lists the distinct product groups found in the real
+ * Product master, `mode="items"` lists individual real products (both
+ * pulled from `useGetProductsQuery`, the same live catalog Line Sale's item
+ * picker and the Product master page itself use — no separate mock catalog
+ * for Promotion).
  *
  * Selection is held in local state while the dialog is open and only
  * handed back via `onApply` when the person confirms, so closing/cancelling
@@ -21,11 +22,12 @@ import { PRODUCTS, PRODUCT_GROUP_OPTIONS } from '../../masters/product/productMo
  */
 export default function PromotionItemPickerDialog({ open, mode, initialSelected, onApply, onClose }) {
   const isCategoryMode = mode === 'category';
+  const { data: products = [] } = useGetProductsQuery({}, { skip: !open });
   const options = useMemo(
     () => (isCategoryMode
-      ? PRODUCT_GROUP_OPTIONS.map((group) => ({ value: group, label: group }))
-      : PRODUCTS.map((p) => ({ value: p.code, label: p.name, secondary: `${p.code} · ${p.group}` }))),
-    [isCategoryMode],
+      ? [...new Set(products.map((p) => p.group).filter(Boolean))].sort().map((group) => ({ value: group, label: group }))
+      : products.map((p) => ({ value: p.code, label: p.name, secondary: `${p.code} · ${p.group}` }))),
+    [isCategoryMode, products],
   );
 
   const [query, setQuery] = useState('');

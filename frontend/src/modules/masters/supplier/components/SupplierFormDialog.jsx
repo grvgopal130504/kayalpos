@@ -9,20 +9,25 @@ import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
 import { SUPPLIER_GROUP_OPTIONS, CITY_OPTIONS, STATE_OPTIONS } from '../supplierMockData';
+import { useCreateSupplierMutation, useUpdateSupplierMutation, useNextSupplierCode } from '../../../../api/supplierApi';
 
 const EMPTY_VALUES = {
   code: '', name: '', group: SUPPLIER_GROUP_OPTIONS[0], phone: '', email: '',
   city: CITY_OPTIONS[0], state: STATE_OPTIONS[0], gstNo: '', paymentTerms: '30 Days', status: 'Active',
 };
 
-/**
- * Add/Edit dialog for the Supplier master. No Supplier backend module
- * exists yet, so Save/Update just toasts and closes.
- */
+/** Add/Edit dialog for the Supplier master, backed by the real Supplier API. */
 export default function SupplierFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
   const [values, setValues] = useState(EMPTY_VALUES);
+  const [submitting, setSubmitting] = useState(false);
   const isEdit = mode === 'edit';
+
+  const [createSupplier] = useCreateSupplierMutation();
+  const [updateSupplier] = useUpdateSupplierMutation();
+  // Only fetched while the dialog is open in Add mode — skipped for Edit
+  // (real code already known) and while closed.
+  const nextCode = useNextSupplierCode(open && !isEdit);
 
   useEffect(() => {
     if (open) setValues(isEdit && initialValues ? { ...EMPTY_VALUES, ...initialValues } : EMPTY_VALUES);
@@ -30,10 +35,40 @@ export default function SupplierFormDialog({ open, mode = 'add', initialValues, 
 
   const setField = (field) => (e) => setValues((prev) => ({ ...prev, [field]: e.target.value }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    dispatch(showToast(isEdit ? 'Supplier updated successfully' : 'Supplier saved successfully', 'success'));
-    onClose?.();
+    if (!values.name.trim()) {
+      dispatch(showToast('Supplier name is required', 'error'));
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        name: values.name.trim(),
+        group: values.group || undefined,
+        phone: values.phone?.trim() || undefined,
+        email: values.email?.trim() || undefined,
+        gstNo: values.gstNo?.trim() || undefined,
+        city: values.city || undefined,
+        state: values.state || undefined,
+        paymentTerms: values.paymentTerms?.trim() || undefined,
+        status: values.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
+      };
+
+      if (isEdit) {
+        await updateSupplier({ id: values.id, ...payload }).unwrap();
+        dispatch(showToast('Supplier updated successfully', 'success'));
+      } else {
+        await createSupplier(payload).unwrap();
+        dispatch(showToast('Supplier saved successfully', 'success'));
+      }
+      onClose?.();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save supplier', 'error'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -51,11 +86,10 @@ export default function SupplierFormDialog({ open, mode = 'add', initialValues, 
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 label="Supplier Code *"
-                value={isEdit ? values.code : 'Auto generated'}
-                onChange={setField('code')}
-                disabled={!isEdit}
+                value={isEdit ? values.code : (nextCode || 'Auto generated')}
+                disabled
                 fullWidth
-                slotProps={{ input: { readOnly: !isEdit } }}
+                slotProps={{ input: { readOnly: true } }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
@@ -98,7 +132,7 @@ export default function SupplierFormDialog({ open, mode = 'add', initialValues, 
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained">{isEdit ? 'Update' : 'Save'}</Button>
+          <Button type="submit" variant="contained" disabled={submitting}>{isEdit ? 'Update' : 'Save'}</Button>
         </DialogActions>
       </form>
     </Dialog>

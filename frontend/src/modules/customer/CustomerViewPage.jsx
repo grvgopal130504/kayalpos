@@ -8,18 +8,19 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CustomerDetailsCard from './components/CustomerDetailsCard';
 import CustomerTransactionsCard from './components/CustomerTransactionsCard';
 import CustomerLoyaltySummary from './components/CustomerLoyaltySummary';
-import { RECENT_TRANSACTIONS, LOYALTY_SUMMARY } from './customerMockData';
-import { toCustomerDetails } from './customerApiHelpers';
+import { toCustomerDetails, toRecentTransactions, toLoyaltySummary } from './customerApiHelpers';
 import { useGetCustomersQuery } from '../../api/customerApi';
+import { useCustomerSalesQuery } from '../../api/saleApi';
 
 /**
  * Read-only "View Customer" destination for CustomerTable's row menu —
  * reuses the exact same CustomerDetailsCard/CustomerTransactionsCard/
  * CustomerLoyaltySummary cards CustomerPage already shows for the selected
  * row, just addressed by :code as its own full page instead of a side
- * panel, and wired to the real Customer API. Recent transactions / loyalty
- * summary are still mock placeholders — they need the Sales Invoice/Payment
- * and Loyalty modules, which don't exist yet.
+ * panel. Fully wired to the real backend: Total Purchase/Outstanding,
+ * Recent Transactions and the Loyalty Summary all come from this
+ * customer's actual Sale rows (see backend/src/modules/sale's
+ * getCustomerPurchaseSummary) and their real `loyaltyPoints` column.
  */
 export default function CustomerViewPage({ code: propCode, onBack, onEdit }) {
   const navigate = useNavigate();
@@ -27,7 +28,8 @@ export default function CustomerViewPage({ code: propCode, onBack, onEdit }) {
   const code = propCode ?? paramCode;
   const { data: customerRows = [] } = useGetCustomersQuery({});
   const row = customerRows.find((c) => c.code === code);
-  const customer = row ? toCustomerDetails(row) : null;
+  const { data: customerSales } = useCustomerSalesQuery(row?.id, { skip: !row });
+  const customer = row ? toCustomerDetails(row, customerSales) : null;
 
   const handleBack = () => (onBack ? onBack() : navigate('/customer'));
   const handleEdit = () => (onEdit ? onEdit() : navigate(`/customer/edit/${code}`));
@@ -64,10 +66,10 @@ export default function CustomerViewPage({ code: propCode, onBack, onEdit }) {
           <CustomerDetailsCard customer={customer} onEdit={handleEdit} />
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <CustomerTransactionsCard transactions={RECENT_TRANSACTIONS} />
+          <CustomerTransactionsCard transactions={toRecentTransactions(customerSales)} />
         </Grid>
         <Grid size={12}>
-          <CustomerLoyaltySummary summary={LOYALTY_SUMMARY} />
+          <CustomerLoyaltySummary summary={toLoyaltySummary(row, customerSales)} />
         </Grid>
       </Grid>
     </Stack>

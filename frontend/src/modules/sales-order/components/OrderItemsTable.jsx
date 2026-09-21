@@ -1,16 +1,23 @@
 import {
   Box, Table, TableHead, TableBody, TableRow, TableCell, TextField, MenuItem,
-  IconButton, InputAdornment, Stack, Button,
+  IconButton, Stack, Button,
 } from '@mui/material';
 import {
   Controller, useFormContext, useFieldArray, useWatch,
 } from 'react-hook-form';
-import SearchIcon from '@mui/icons-material/Search';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import AddIcon from '@mui/icons-material/Add';
 
+import ItemCodeAutocomplete from '../../../components/form/ItemCodeAutocomplete';
 import { UNIT_OPTIONS, TAX_CODE_OPTIONS, emptyItemRow } from '../createSalesOrderSchema';
 import { formatCurrency } from '../../../utils/format';
+
+// Only autofill the Unit select when the picked product's own uom matches
+// one of this grid's fixed dropdown values — see QuotationItemsTable's own
+// comment.
+function matchUnit(value) {
+  return UNIT_OPTIONS.some((opt) => opt.value === value) ? value : '';
+}
 
 const COLUMNS = [
   { key: 'itemCode', label: 'Item Code *', minWidth: 160 },
@@ -35,7 +42,7 @@ function toNumber(value) {
  * mirrors QuotationItemsTable exactly (same spreadsheet-style row entry,
  * "+ Add Row" / "+ Add Item" controls, horizontal-scroll wrapper).
  */
-export default function OrderItemsTable({ onAddItem }) {
+export default function OrderItemsTable({ onAddItem, products = [] }) {
   const { control } = useFormContext();
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
@@ -54,7 +61,7 @@ export default function OrderItemsTable({ onAddItem }) {
           </TableHead>
           <TableBody>
             {fields.map((field, index) => (
-              <ItemRow key={field.id} index={index} control={control} onRemove={() => remove(index)} removable={fields.length > 1} />
+              <ItemRow key={field.id} index={index} control={control} onRemove={() => remove(index)} removable={fields.length > 1} products={products} />
             ))}
           </TableBody>
         </Table>
@@ -84,7 +91,10 @@ export default function OrderItemsTable({ onAddItem }) {
   );
 }
 
-function ItemRow({ index, control, onRemove, removable }) {
+function ItemRow({
+  index, control, onRemove, removable, products,
+}) {
+  const { setValue } = useFormContext();
   const qty = useWatchField(control, `items.${index}.qty`);
   const unitPrice = useWatchField(control, `items.${index}.unitPrice`);
   const discountPercent = useWatchField(control, `items.${index}.discountPercent`);
@@ -97,18 +107,15 @@ function ItemRow({ index, control, onRemove, removable }) {
     <TableRow sx={{ '& td': { py: 0.75 } }}>
       <TableCell sx={{ color: 'text.secondary' }}>{index + 1}</TableCell>
       <TableCell>
-        <Controller
-          name={`items.${index}.itemCode`}
+        <ItemCodeAutocomplete
           control={control}
-          render={({ field }) => (
-            <TextField
-              {...field}
-              size="small"
-              fullWidth
-              placeholder="Search Item Code"
-              slotProps={{ input: { endAdornment: <InputAdornment position="end"><SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> } }}
-            />
-          )}
+          name={`items.${index}.itemCode`}
+          products={products}
+          onSelectProduct={(product) => {
+            setValue(`items.${index}.itemName`, product.name, { shouldDirty: true });
+            setValue(`items.${index}.hsnCode`, product.hsnSac || '', { shouldDirty: true });
+            setValue(`items.${index}.unit`, matchUnit(product.uom), { shouldDirty: true });
+          }}
         />
       </TableCell>
       <TableCell>

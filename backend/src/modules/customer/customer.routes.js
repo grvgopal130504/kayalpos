@@ -7,8 +7,9 @@ const router = createCrudRouter({
   createSchema: createCustomerSchema,
   updateSchema: updateCustomerSchema,
   searchFields: ['code', 'name', 'mobile', 'email'],
-  codePrefix: 'CUS-',
-  codeLength: 4,
+  // crudFactory's nextCode() inserts the dash itself (PREFIX-NNNN) — pass the
+  // bare prefix so this doesn't come out as "CUS--0001".
+  codePrefix: 'CUS',
 });
 
 export default router;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -15,44 +15,41 @@ import StockIndentSummaryCards from './components/StockIndentSummaryCards';
 import StockIndentTable from './components/StockIndentTable';
 import IndentDetailsCard from './components/IndentDetailsCard';
 import IndentTermsAndNotes from './components/IndentTermsAndNotes';
-import { SUMMARY, INDENTS, INDENT_DETAILS } from './stockIndentMockData';
-
-const INDENT_BY_CODE = Object.fromEntries(INDENTS.map((ind) => [ind.code, ind]));
+import { useGetStockIndentsQuery, useStockIndentSummaryQuery } from '../../api/stockIndentApi';
+import { toIndentRow, toIndentDetails, buildSummary } from './stockIndentDisplay';
 
 /**
  * Stock Indent list/detail page — summary tiles, the indent table with a
  * detail panel for whichever row is selected, and a Terms & Conditions /
- * Notes strip below. Mirrors SalesInvoiceOverviewPage's structure; the
- * Stock Indent backend module doesn't exist yet so everything is driven
- * by stockIndentMockData.js.
+ * Notes strip below. Fully wired to the real backend (see
+ * backend/src/modules/stock-indent): every tile, row and detail field comes
+ * from the actual StockIndent table, so a tenant with no indents yet
+ * honestly shows zeros/empty states instead of this page's old static mock
+ * data.
  */
 export default function StockIndentOverviewPage({ tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(INDENT_DETAILS.code);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const selectedRow = INDENT_BY_CODE[selectedCode];
-  const indentDetails = selectedCode === INDENT_DETAILS.code
-    ? INDENT_DETAILS
-    : {
-        ...INDENT_DETAILS,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        status: selectedRow.status,
-        department: selectedRow.department,
-        fromOutlet: selectedRow.fromOutlet,
-        toOutlet: selectedRow.toOutlet,
-        requiredDate: selectedRow.requiredDate,
-        estimatedValue: selectedRow.estimatedValue,
-      };
+  const { data: indents = [], isLoading, isError } = useGetStockIndentsQuery({});
+  const { data: summaryData } = useStockIndentSummaryQuery();
 
-  const handleSelectIndent = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => indents.map(toIndentRow), [indents]);
+  const summary = useMemo(() => buildSummary(summaryData), [summaryData]);
+  const indentById = useMemo(() => Object.fromEntries(indents.map((i) => [i.id, i])), [indents]);
+
+  const effectiveSelectedId = selectedId && indentById[selectedId] ? selectedId : indents[0]?.id;
+  const selectedIndent = effectiveSelectedId ? indentById[effectiveSelectedId] : null;
+  const indentDetails = selectedIndent ? toIndentDetails(selectedIndent) : null;
+
+  const handleSelectIndent = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return onView ? onView(row.code) : navigate(`/stock-indent/view/${row.code}`);
-    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/stock-indent/edit/${row.code}`);
-    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/stock-indent/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/stock-indent/edit/${row.id}`);
+    return dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleCreate = () => {
@@ -98,14 +95,14 @@ export default function StockIndentOverviewPage({ tab, onTabChange, onCreate, on
         </Stack>
       </Stack>
 
-      <StockIndentSummaryCards summary={SUMMARY} />
+      <StockIndentSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 640 } }}>
             <StockIndentTable
-              indents={INDENTS}
-              selectedCode={selectedCode}
+              indents={rows}
+              selectedId={effectiveSelectedId}
               onSelectIndent={handleSelectIndent}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -116,7 +113,17 @@ export default function StockIndentOverviewPage({ tab, onTabChange, onCreate, on
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: { lg: 640 }, overflow: 'auto' }}>
-            <IndentDetailsCard indent={indentDetails} />
+            {isLoading ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>Loading indents…</Typography>
+            ) : isError ? (
+              <Typography variant="body2" color="error" sx={{ p: 2 }}>Failed to load indents.</Typography>
+            ) : indentDetails ? (
+              <IndentDetailsCard indent={indentDetails} showApprovedFields={indentDetails.status === 'approved'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No indents yet — create one to get started.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

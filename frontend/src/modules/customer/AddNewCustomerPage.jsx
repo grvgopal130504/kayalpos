@@ -23,7 +23,7 @@ import {
   CUSTOMER_TYPE_OPTIONS, GROUP_OPTIONS, PRICE_CATEGORY_OPTIONS,
   OPENING_BALANCE_TYPE_OPTIONS, SALES_REP_OPTIONS, TERRITORY_OPTIONS, SAVE_OPTION_VALUES,
 } from './createCustomerSchema';
-import { useGetCustomersQuery, useCreateCustomerMutation, useUpdateCustomerMutation } from '../../api/customerApi';
+import { useGetCustomersQuery, useCreateCustomerMutation, useUpdateCustomerMutation, useNextCustomerCode } from '../../api/customerApi';
 
 /**
  * Add New Customer form, also doubling as the Edit Customer page when
@@ -44,6 +44,7 @@ export default function AddNewCustomerPage({ code: propCode, onBack }) {
   const existingCustomer = isEditMode ? existingRow : null;
   const [createCustomer] = useCreateCustomerMutation();
   const [updateCustomer] = useUpdateCustomerMutation();
+  const nextCode = useNextCustomerCode(!isEditMode);
 
   const methods = useForm({
     resolver: zodResolver(createCustomerSchema),
@@ -167,7 +168,7 @@ export default function AddNewCustomerPage({ code: propCode, onBack }) {
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           label="Customer Code *"
-                          value={isEditMode ? existingCustomer.code : 'Auto generated'}
+                          value={isEditMode ? existingCustomer.code : (nextCode || 'Auto generated')}
                           disabled
                           fullWidth
                           slotProps={{ input: { readOnly: true } }}
@@ -177,7 +178,13 @@ export default function AddNewCustomerPage({ code: propCode, onBack }) {
                         <FormTextField name="customerName" label="Customer Name *" placeholder="Enter customer name" />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="mobileNumber" label="Mobile Number *" placeholder="Enter mobile number" />
+                        <FormTextField
+                          name="mobileNumber"
+                          label="Mobile Number *"
+                          placeholder="10-digit mobile number"
+                          numeric
+                          maxLength={10}
+                        />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <FormTextField name="email" label="Email" placeholder="Enter email address" />

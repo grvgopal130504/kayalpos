@@ -30,7 +30,7 @@ import { useHealthStatus } from '../../hooks/useHealthStatus';
 import { useGetPublicOutletsQuery } from '../../api/outletApi';
 import { loginSchema, loginDefaultValues } from './loginSchema';
 import LoginMarketingPanel from './components/LoginMarketingPanel';
-import loginBackground from '../../assets/LoginImage3.jpeg';
+import loginBackground from '../../assets/LoginImage4.png';
 
 const APP_VERSION = '1.0.0';
 const TENANT_NAME = 'Kayal Agro Foods'; // TODO: replace with tenant context once multi-tenant lookup exists

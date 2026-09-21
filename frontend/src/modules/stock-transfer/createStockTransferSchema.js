@@ -1,26 +1,17 @@
 import { z } from 'zod';
-import { INDENTS } from '../stock-indent/stockIndentMockData';
+import { formatPickerDate } from '../../components/form/FormDatePicker';
 
-export const STOCK_INDENT_OPTIONS = [
-  { value: '', label: 'Select Stock Indent' },
-  ...INDENTS.filter((ind) => ind.status === 'approved').map((ind) => ({ value: ind.code, label: ind.code })),
-];
-
-export const OUTLET_OPTIONS = [
-  { value: '', label: 'Select From Outlet', disabled: true },
-  { value: 'rs-puram', label: 'RS Puram Outlet' },
-  { value: 'anna-nagar', label: 'Anna Nagar Outlet' },
-  { value: 'market-street', label: 'Market Street Outlet' },
-  { value: 'main-warehouse', label: 'Main Warehouse' },
-];
-
-export const TO_OUTLET_OPTIONS = [
-  { value: '', label: 'Select To Outlet / HO', disabled: true },
-  { value: 'main-warehouse', label: 'Main Warehouse' },
-  { value: 'head-office', label: 'Head Office' },
-  { value: 'rs-puram', label: 'RS Puram Outlet' },
-  { value: 'anna-nagar', label: 'Anna Nagar Outlet' },
-];
+// `fromOutlet`/`toOutlet` options now come from the real Outlet API (see
+// CreateStockTransferPage, which builds them from useGetOutletsQuery) — the
+// old mock-data version hardcoded both as fixed lists of specific outlet
+// names. `stockIndentRef` options now come from the real Stock Indent API,
+// filtered to indents with a real status of 'approved' — the old mock
+// version filtered a fixed local INDENTS array the same way, so this list
+// will honestly stay empty until a real approval-workflow action exists
+// (see backend/src/modules/stock-indent's model comment). The remaining
+// lists below have no backing master table yet (there's no Department/
+// Cost-Center model in the schema), so they stay fixed, same scope decision
+// every other module makes for its own non-modeled dropdowns.
 
 export const DEPARTMENT_OPTIONS = [
   { value: '', label: 'Select Department / Section', disabled: true },
@@ -54,19 +45,12 @@ export const UOM_OPTIONS = [
   { value: 'box', label: 'Box' },
 ];
 
-// Rough per-unit lookups for a handful of demo items, used to populate the
-// read-only Available Qty / Unit Cost columns once an item code is
-// entered, matching the reference design's grayed lookup cells.
-export const ITEM_AVAILABLE_QTY = {
-  'ITM-0001': 12, 'ITM-0002': 25, 'ITM-0003': 15, 'ITM-0004': 30, 'ITM-0005': 18,
-};
-export const ITEM_UNIT_COST = {
-  'ITM-0001': 55, 'ITM-0002': 42, 'ITM-0003': 118, 'ITM-0004': 125, 'ITM-0005': 140,
-};
-
+// Both dates are entered via FormDatePicker, which stores/parses the
+// "DD Mon YYYY" format (e.g. "19 Sep 2026") — same convention Stock
+// Indent/Sales Order/Sales Invoice/Barcode & Label already use for their
+// own date defaults.
 function todayFormatted() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  return formatPickerDate(new Date());
 }
 
 export function emptyItemRow() {
@@ -80,29 +64,56 @@ export function emptyItemRow() {
   };
 }
 
+// A plain non-negative decimal amount, entered as free text — same
+// convention as the sales-cycle modules' own decimalString() helper.
+const decimalString = (message) => z.string().trim()
+  .refine((v) => v === '' || (/^\d+(\.\d{1,3})?$/.test(v) && Number(v) >= 0), message);
+
 const itemRowSchema = z.object({
   itemCode: z.string().trim(),
   itemName: z.string().trim(),
   hsnCode: z.string().trim(),
   uom: z.string().trim(),
-  transferQty: z.string().trim(),
+  transferQty: decimalString('Enter a valid transfer quantity'),
   remarks: z.string().trim(),
 });
 
-export const createStockTransferSchema = z.object({
-  transferDate: z.string().trim().min(1, 'Transfer date is required'),
-  stockIndentRef: z.string().trim().optional(),
-  fromOutlet: z.string().trim().min(1, 'Select a from outlet'),
-  toOutlet: z.string().trim().min(1, 'Select a to outlet / HO'),
-  department: z.string().trim().optional(),
-  purposeRemarks: z.string().trim().optional(),
-  priority: z.string().trim().optional(),
-  referenceNo: z.string().trim().optional(),
-  costCenter: z.string().trim().optional(),
-  remarks: z.string().trim().optional(),
-  notes: z.string().trim().optional(),
-  items: z.array(itemRowSchema),
-});
+// Every row with a non-blank Item Code is part of the document — same
+// "filled row" convention Stock Indent/Sales Quotation/Order/Invoice use.
+export function isBlankItemRow(row) {
+  return !row?.itemCode?.trim();
+}
+
+export const createStockTransferSchema = z
+  .object({
+    transferDate: z.string().trim().min(1, 'Transfer date is required'),
+    stockIndentRef: z.string().trim().optional(),
+    fromOutlet: z.string().trim().min(1, 'Select a from outlet'),
+    toOutlet: z.string().trim().min(1, 'Select a to outlet'),
+    department: z.string().trim().optional(),
+    purposeRemarks: z.string().trim().optional(),
+    priority: z.string().trim().optional(),
+    referenceNo: z.string().trim().optional(),
+    costCenter: z.string().trim().optional(),
+    remarks: z.string().trim().optional(),
+    notes: z.string().trim().optional(),
+    items: z.array(itemRowSchema),
+  })
+  .superRefine((values, ctx) => {
+    const filledRows = values.items.filter((row) => !isBlankItemRow(row));
+    values.items.forEach((row, index) => {
+      if (isBlankItemRow(row)) return;
+      if (!row.itemName?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'itemName'], message: 'Item name is required' });
+      }
+      if (!row.transferQty?.trim() || Number(row.transferQty) <= 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'transferQty'], message: 'Transfer qty must be greater than 0' });
+      }
+    });
+    if (filledRows.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items'], message: 'Add at least one item' });
+    }
+  });
 
 export const createStockTransferDefaultValues = {
   transferDate: todayFormatted(),

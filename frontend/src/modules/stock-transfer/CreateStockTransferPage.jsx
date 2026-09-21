@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,87 +20,104 @@ import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
+import { useGetOutletsQuery } from '../../api/outletApi';
+import { useGetProductsQuery } from '../../api/productApi';
+import { useGetStockIndentsQuery } from '../../api/stockIndentApi';
+import {
+  useGetStockTransferQuery, useNextStockTransferCodeQuery,
+  useCreateStockTransferMutation, useUpdateStockTransferMutation,
+} from '../../api/stockTransferApi';
 
 import TransferItemsTable from './components/TransferItemsTable';
 import TransferSummaryTotals from './components/TransferSummaryTotals';
 import { DEFAULT_TERMS } from './components/TransferTermsAndNotes';
-import { TRANSFERS, getTransferDetails } from './stockTransferMockData';
 import {
-  createStockTransferSchema, createStockTransferDefaultValues,
-  STOCK_INDENT_OPTIONS, OUTLET_OPTIONS, TO_OUTLET_OPTIONS, DEPARTMENT_OPTIONS,
-  PRIORITY_OPTIONS, COST_CENTER_OPTIONS,
+  createStockTransferSchema, createStockTransferDefaultValues, emptyItemRow, isBlankItemRow,
+  DEPARTMENT_OPTIONS, PRIORITY_OPTIONS, COST_CENTER_OPTIONS,
 } from './createStockTransferSchema';
-
-function nextTransferCode() {
-  const maxNum = TRANSFERS.reduce((max, t) => Math.max(max, Number(t.code.slice(4))), 0);
-  return `TRF-${String(maxNum + 1).padStart(5, '0')}`;
-}
-
-// The mock detail record's items don't carry the create form's exact field
-// shape (uom is a raw label here, not an option value) — best effort
-// prefill, still fully editable.
-function itemToRow(item) {
-  return {
-    itemCode: item.code,
-    itemName: item.name,
-    hsnCode: item.hsn,
-    uom: '',
-    transferQty: String(item.transferQty),
-    remarks: '',
-  };
-}
+import { transferToFormValues, formValuesToPayload } from './stockTransferDisplay';
 
 /**
- * "New Stock Transfer" screen — matches the reference design's full
- * create form: a Transfer Details card (narrower left, single-column)
- * beside an Other Details card (single-column too, since this form has
- * fewer fields than Stock Indent's Request Details), a full-width
- * editable items grid with read-only Available Qty/Unit Cost/Total Cost
- * lookups, and a 3-column row below it (Terms & Conditions / Notes /
- * Summary) — same layout pattern as CreateStockIndentPage.
+ * "New Stock Transfer" screen, also doubling as the Edit Transfer form when
+ * StockTransferPage renders it with an `id` prop — everything (list,
+ * create, edit, view) lives on the one /stock-transfer page. Fully wired to
+ * the real backend (see backend/src/modules/stock-transfer): From Outlet/
+ * To Outlet come from the real Outlet table (see useGetOutletsQuery), Stock
+ * Indent comes from the real, approved Stock Indent rows (see
+ * useGetStockIndentsQuery — honestly empty until a real approval-workflow
+ * action exists), the Transfer No. is a live preview of the next real code,
+ * Available Qty/Unit Cost in the item grid and the summary totals all look
+ * up the real Product master, and both "Save as Draft" and "Save & Send"
+ * actually create/update a StockTransfer row with the same validations
+ * enforced again server-side. "Save & Send" saves with status 'in-transit'
+ * — sending a transfer means the goods have been physically dispatched.
  *
- * Stock Indent, From Outlet, To Outlet/HO, Department/Section, and Cost
- * Center each get an inline "+" add button in the reference, matching the
- * Customer field's "+" pattern on the other create forms. Transfer No. is
- * read-only with a settings-gear adornment (numbering configuration).
- * Attachment is a simple local file picker (no upload endpoint yet).
- * Saving is mocked (no Stock Transfer backend module yet).
+ * Attachment stays a local-only file picker (there's no upload endpoint
+ * yet), same as the reference design.
  */
-export default function CreateStockTransferPage({ code: propCode, onBack }) {
+export default function CreateStockTransferPage({ id: propId, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code: paramCode } = useParams();
-  const code = propCode ?? paramCode;
-  const isEditMode = Boolean(code);
-  const existingTransfer = isEditMode ? getTransferDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [attachmentName, setAttachmentName] = useState('');
-  const transferCode = useMemo(() => (isEditMode ? code : nextTransferCode()), [isEditMode, code]);
+
+  const { data: existingTransfer, isLoading: isLoadingTransfer } = useGetStockTransferQuery(id, { skip: !isEditMode });
+  const { data: nextCode } = useNextStockTransferCodeQuery(undefined, { skip: isEditMode });
+  const { data: outlets = [] } = useGetOutletsQuery({});
+  const { data: products = [] } = useGetProductsQuery({});
+  const { data: indents = [] } = useGetStockIndentsQuery({});
+  const [createTransfer, { isLoading: isCreating }] = useCreateStockTransferMutation();
+  const [updateTransfer, { isLoading: isUpdating }] = useUpdateStockTransferMutation();
+  const isSaving = isCreating || isUpdating;
+
+  const transferCode = isEditMode ? existingTransfer?.code : nextCode;
+
+  // Real Outlet options shared by From Outlet / To Outlet — the old mock
+  // version hardcoded two different fixed lists of specific outlet names;
+  // both dropdowns now draw from the same actual Outlet master instead.
+  const outletOptions = useMemo(() => [
+    { value: '', label: 'Select Outlet', disabled: true },
+    ...outlets.map((o) => ({ value: o.id, label: o.name })),
+  ], [outlets]);
+  // Only real StockIndent rows already marked 'approved' by that module's
+  // own workflow can be referenced here — same restriction the old mock
+  // data applied to its fixed INDENTS array. Nothing can move an indent to
+  // 'approved' yet (see backend/src/modules/stock-indent's model comment),
+  // so this list stays honestly empty until that workflow exists.
+  const stockIndentOptions = useMemo(() => [
+    { value: '', label: 'Select Stock Indent' },
+    ...indents.filter((ind) => ind.status === 'approved').map((ind) => ({ value: ind.code, label: ind.code })),
+  ], [indents]);
+  const productByCode = useMemo(() => Object.fromEntries(products.map((p) => [p.code, p])), [products]);
 
   const methods = useForm({
     resolver: zodResolver(createStockTransferSchema),
-    defaultValues: existingTransfer
-      ? {
-          ...createStockTransferDefaultValues,
-          transferDate: existingTransfer.date,
-          stockIndentRef: '',
-          items: existingTransfer.items?.length ? existingTransfer.items.map(itemToRow) : createStockTransferDefaultValues.items,
-        }
-      : createStockTransferDefaultValues,
+    defaultValues: createStockTransferDefaultValues,
     mode: 'onTouched',
   });
-  const { handleSubmit } = methods;
+  const { handleSubmit, reset } = methods;
+
+  // The edit-mode fetch is async, so the form can't be seeded via useForm's
+  // defaultValues (that only runs once, before the data exists) — reset()
+  // re-seeds every field once the real transfer row arrives.
+  useEffect(() => {
+    if (isEditMode && existingTransfer) {
+      reset(transferToFormValues(existingTransfer, emptyItemRow));
+    }
+  }, [isEditMode, existingTransfer, reset]);
 
   const handleBack = () => {
     if (onBack) return onBack();
-    if (isEditMode) return navigate(`/stock-transfer/view/${code}`);
+    if (isEditMode) return navigate(`/stock-transfer/view/${id}`);
     navigate('/stock-transfer');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleAddIndent = () => dispatch(showToast('Stock Indent picker is coming soon', 'info'));
-  const handleAddFromOutlet = () => dispatch(showToast('Outlet picker is coming soon', 'info'));
-  const handleAddToOutlet = () => dispatch(showToast('Outlet / HO picker is coming soon', 'info'));
+  const handleAddOutlet = () => dispatch(showToast('Outlet picker is coming soon', 'info'));
   const handleAddDepartment = () => dispatch(showToast('Department / Section picker is coming soon', 'info'));
   const handleAddCostCenter = () => dispatch(showToast('Cost Center picker is coming soon', 'info'));
   const handleAddItemRow = () => dispatch(showToast('Item picker is coming soon', 'info'));
@@ -110,16 +127,47 @@ export default function CreateStockTransferPage({ code: propCode, onBack }) {
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Transfer ${transferCode} updated successfully` : `Transfer ${transferCode} saved as draft`, 'success'));
-    handleBack();
-  });
-  const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Transfer ${transferCode} updated successfully` : `Transfer ${transferCode} saved and sent`, 'success'));
-    handleBack();
+  const onSaveAsDraft = handleSubmit(async (values) => {
+    try {
+      const payload = formValuesToPayload(values, { status: 'draft', isBlankItemRow });
+      if (isEditMode) {
+        await updateTransfer({ id, ...payload }).unwrap();
+        dispatch(showToast(`Transfer ${transferCode} updated successfully`, 'success'));
+      } else {
+        const created = await createTransfer(payload).unwrap();
+        dispatch(showToast(`Transfer ${created.code} saved as draft`, 'success'));
+      }
+      handleBack();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the transfer', 'error'));
+    }
   });
 
-  if (isEditMode && !existingTransfer) {
+  const onSaveAndSend = handleSubmit(async (values) => {
+    try {
+      const payload = formValuesToPayload(values, { status: 'in-transit', isBlankItemRow });
+      if (isEditMode) {
+        await updateTransfer({ id, ...payload }).unwrap();
+        dispatch(showToast(`Transfer ${transferCode} updated successfully`, 'success'));
+      } else {
+        const created = await createTransfer(payload).unwrap();
+        dispatch(showToast(`Transfer ${created.code} saved and sent`, 'success'));
+      }
+      handleBack();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the transfer', 'error'));
+    }
+  });
+
+  if (isEditMode && isLoadingTransfer) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading transfer…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && !isLoadingTransfer && !existingTransfer) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Transfer not found</Typography>
@@ -134,7 +182,7 @@ export default function CreateStockTransferPage({ code: propCode, onBack }) {
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Transfer (Edit ${transferCode})` : 'Stock Transfer (New)'}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Transfer (Edit ${transferCode || ''})` : 'Stock Transfer (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/stock-transfer" underline="hover" color="text.secondary">Stock Transfer</MuiLink>
@@ -159,18 +207,18 @@ export default function CreateStockTransferPage({ code: propCode, onBack }) {
           <Menu anchorEl={moreActionsAnchor} open={Boolean(moreActionsAnchor)} onClose={() => setMoreActionsAnchor(null)}>
             <MenuItem onClick={() => handleMoreAction('Save as Template')}>Save as Template</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
-            <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
+            <MenuItem onClick={() => reset(createStockTransferDefaultValues)}>Reset Form</MenuItem>
           </Menu>
           {isEditMode ? (
-            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
               Update Transfer
             </Button>
           ) : (
             <>
-              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
                 Save as Draft
               </Button>
-              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend} disabled={isSaving}>
                 Save &amp; Send
               </Button>
             </>
@@ -187,7 +235,7 @@ export default function CreateStockTransferPage({ code: propCode, onBack }) {
                 <Stack spacing={2}>
                   <TextField
                     label="Transfer No."
-                    value={transferCode}
+                    value={transferCode || ''}
                     disabled
                     fullWidth
                     slotProps={{
@@ -200,7 +248,7 @@ export default function CreateStockTransferPage({ code: propCode, onBack }) {
                   <FormDatePicker name="transferDate" label="Transfer Date *" />
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <FormSelect name="stockIndentRef" label="Stock Indent" options={STOCK_INDENT_OPTIONS} />
+                      <FormSelect name="stockIndentRef" label="Stock Indent" options={stockIndentOptions} />
                     </Box>
                     <IconButton
                       onClick={handleAddIndent}
@@ -212,10 +260,10 @@ export default function CreateStockTransferPage({ code: propCode, onBack }) {
                   </Stack>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <FormSelect name="fromOutlet" label="From Outlet *" options={OUTLET_OPTIONS} />
+                      <FormSelect name="fromOutlet" label="From Outlet *" options={outletOptions} />
                     </Box>
                     <IconButton
-                      onClick={handleAddFromOutlet}
+                      onClick={handleAddOutlet}
                       sx={{ mt: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
                       aria-label="Add from outlet"
                     >
@@ -224,12 +272,12 @@ export default function CreateStockTransferPage({ code: propCode, onBack }) {
                   </Stack>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <FormSelect name="toOutlet" label="To Outlet / HO *" options={TO_OUTLET_OPTIONS} />
+                      <FormSelect name="toOutlet" label="To Outlet *" options={outletOptions} />
                     </Box>
                     <IconButton
-                      onClick={handleAddToOutlet}
+                      onClick={handleAddOutlet}
                       sx={{ mt: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
-                      aria-label="Add to outlet / HO"
+                      aria-label="Add to outlet"
                     >
                       <AddIcon fontSize="small" />
                     </IconButton>
@@ -287,10 +335,10 @@ export default function CreateStockTransferPage({ code: propCode, onBack }) {
 
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
-            <TransferItemsTable onAddItem={handleAddItemRow} />
+            <TransferItemsTable onAddItem={handleAddItemRow} productByCode={productByCode} />
           </Paper>
 
-          <BottomRow />
+          <BottomRow productByCode={productByCode} />
         </Stack>
       </FormProvider>
     </Stack>
@@ -299,7 +347,7 @@ export default function CreateStockTransferPage({ code: propCode, onBack }) {
 
 // Terms & Conditions / Notes / Summary totals, laid out as a 3-column row
 // matching the reference, with Notes bound to the form's `notes` field.
-function BottomRow() {
+function BottomRow({ productByCode }) {
   return (
     <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
       <Grid size={{ xs: 12, md: 6, lg: 4 }}>
@@ -318,7 +366,7 @@ function BottomRow() {
         <NotesField />
       </Grid>
       <Grid size={{ xs: 12, lg: 4 }}>
-        <TransferSummaryTotals />
+        <TransferSummaryTotals productByCode={productByCode} />
       </Grid>
     </Grid>
   );

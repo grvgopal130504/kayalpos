@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -25,9 +25,8 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 import SalesQuotationTable from './components/SalesQuotationTable';
 import QuotationDetailsCard from './components/QuotationDetailsCard';
 import QuotationTermsAndNotes from './components/QuotationTermsAndNotes';
-import { QUOTATIONS, STATUS_DETAILS, STATUS_STATS } from './salesQuotationMockData';
-
-const QUOTATION_BY_CODE = Object.fromEntries(QUOTATIONS.map((q) => [q.code, q]));
+import { useGetSalesQuotationsQuery, useSalesQuotationStatusSummaryQuery } from '../../api/salesQuotationApi';
+import { toQuotationRow, toQuotationDetails, buildStatusStats } from './salesQuotationDisplay';
 
 const STATUS_META = {
   draft: { label: 'Draft Quotations', pageTitle: 'Draft', icon: DescriptionOutlinedIcon, iconColor: 'info' },
@@ -36,7 +35,8 @@ const STATUS_META = {
 };
 
 // The 3 "extra" stat tile icons/colors per status, in the same order as
-// each status's STATUS_STATS.extra array.
+// buildStatusStats()'s extra array (Total Amount / Average Value / Total
+// Line Items — all real aggregates, see salesQuotationDisplay.js).
 const EXTRA_TILE_STYLE = {
   draft: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
@@ -58,45 +58,42 @@ const EXTRA_TILE_STYLE = {
 /**
  * Shared page for the Draft / Converted / Expired cards on the Sales
  * Quotation landing grid — same list+details+terms layout as the "All
- * Quotations" overview page, scoped by `status`. Stat tiles and the
- * selected-quotation detail panel are pulled from salesQuotationMockData's
- * per-status records (STATUS_STATS / STATUS_DETAILS); only Draft has a
- * reference screenshot, so Converted/Expired reuse the same shape with
- * plausible placeholder figures.
+ * Quotations" overview page, scoped by `status`. Fully wired to the real
+ * backend: the table's rows and the 4 stat tiles both come from actual
+ * SalesQuotation rows (see backend/src/modules/sales-quotation's
+ * getSalesQuotationStatusSummary), so a status with zero quotations
+ * honestly shows zeros/empty states rather than this page's old
+ * placeholder figures.
  */
 export default function SalesQuotationStatusPage({ status, tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const meta = STATUS_META[status];
-  const stats = STATUS_STATS[status];
-  const detailsTemplate = STATUS_DETAILS[status];
   const extraStyle = EXTRA_TILE_STYLE[status];
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const firstOfStatus = QUOTATIONS.find((q) => q.status === status) || QUOTATIONS[0];
-  const [selectedCode, setSelectedCode] = useState(firstOfStatus.code);
-  const selectedRow = QUOTATION_BY_CODE[selectedCode] || firstOfStatus;
-  const quotationDetails = selectedCode === detailsTemplate.code
-    ? detailsTemplate
-    : {
-        ...detailsTemplate,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        totalAmount: selectedRow.amount,
-        validTill: selectedRow.validTill,
-        customer: { ...detailsTemplate.customer, name: selectedRow.customer },
-        ...(selectedRow.convertedOn ? { convertedOn: selectedRow.convertedOn, convertedTo: selectedRow.convertedTo } : {}),
-      };
+  const { data: quotations = [] } = useGetSalesQuotationsQuery({});
+  const { data: statusSummaryData } = useSalesQuotationStatusSummaryQuery(status);
 
-  const handleSelectQuotation = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => quotations.map(toQuotationRow), [quotations]);
+  const statusRows = useMemo(() => rows.filter((r) => r.status === status), [rows, status]);
+  const stats = useMemo(() => buildStatusStats(status, statusSummaryData), [status, statusSummaryData]);
+  const quotationById = useMemo(() => Object.fromEntries(quotations.map((q) => [q.id, q])), [quotations]);
+
+  const effectiveSelectedId = (selectedId && quotationById[selectedId]?.status === status ? selectedId : statusRows[0]?.id);
+  const selectedQuotation = effectiveSelectedId ? quotationById[effectiveSelectedId] : null;
+  const quotationDetails = selectedQuotation ? toQuotationDetails(selectedQuotation) : null;
+
+  const handleSelectQuotation = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return onView ? onView(row.code) : navigate(`/sales-quotation/view/${row.code}`);
-    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/sales-quotation/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/sales-quotation/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/sales-quotation/edit/${row.id}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleConvertToOrder = () => dispatch(showToast(`Convert "${quotationDetails.code}" to Sales Order is coming soon`, 'info'));
+  const handleConvertToOrder = () => dispatch(showToast(`Convert "${quotationDetails?.code || ''}" to Sales Order is coming soon`, 'info'));
   const handleCreate = () => {
     if (onCreate) onCreate(); else navigate('/sales-quotation/create');
   };
@@ -112,7 +109,7 @@ export default function SalesQuotationStatusPage({ status, tab, onTabChange, onC
       icon: extraStyle[i].icon,
       iconColor: extraStyle[i].iconColor,
       label: tile.label,
-      value: tile.isText ? tile.value : (tile.currency ? formatCurrency(tile.value, { decimals: true }) : formatNumber(tile.value)),
+      value: tile.currency ? formatCurrency(tile.value, { decimals: true }) : formatNumber(tile.value),
       caption: tile.caption,
     })),
   ];
@@ -132,7 +129,7 @@ export default function SalesQuotationStatusPage({ status, tab, onTabChange, onC
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
-          <Button variant="outlined" color="inherit" startIcon={<SwapHorizOutlinedIcon fontSize="small" />} onClick={handleConvertToOrder}>
+          <Button variant="outlined" color="inherit" startIcon={<SwapHorizOutlinedIcon fontSize="small" />} onClick={handleConvertToOrder} disabled={!quotationDetails}>
             Convert to Sales Order
           </Button>
           <Button
@@ -166,8 +163,8 @@ export default function SalesQuotationStatusPage({ status, tab, onTabChange, onC
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <SalesQuotationTable
-              quotations={QUOTATIONS}
-              selectedCode={selectedCode}
+              quotations={rows}
+              selectedId={effectiveSelectedId}
               onSelectQuotation={handleSelectQuotation}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -183,7 +180,13 @@ export default function SalesQuotationStatusPage({ status, tab, onTabChange, onC
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: '100%', overflow: 'auto' }}>
-            <QuotationDetailsCard quotation={quotationDetails} title={`Quotation Details (${meta.pageTitle})`} showConvertedFields={status === 'converted'} />
+            {quotationDetails ? (
+              <QuotationDetailsCard quotation={quotationDetails} title={`Quotation Details (${meta.pageTitle})`} showConvertedFields={status === 'converted'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No {meta.pageTitle.toLowerCase()} quotations yet.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

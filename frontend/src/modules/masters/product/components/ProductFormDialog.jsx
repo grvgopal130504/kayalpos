@@ -9,7 +9,7 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
 import { PRODUCT_GROUP_OPTIONS, PRODUCT_TYPE_OPTIONS, BRAND_OPTIONS, UOM_OPTIONS } from '../productMockData';
-import { useCreateProductMutation, useUpdateProductMutation } from '../../../../api/productApi';
+import { useCreateProductMutation, useUpdateProductMutation, useNextProductCode } from '../../../../api/productApi';
 
 const EMPTY_VALUES = {
   code: '', name: '', group: PRODUCT_GROUP_OPTIONS[0], brand: BRAND_OPTIONS[0], uom: UOM_OPTIONS[0],
@@ -25,6 +25,9 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
 
   const [createProduct] = useCreateProductMutation();
   const [updateProduct] = useUpdateProductMutation();
+  // Only fetched while the dialog is open in Add mode — skipped for Edit
+  // (real code already known) and while closed.
+  const nextCode = useNextProductCode(open && !isEdit);
 
   useEffect(() => {
     if (open) setValues(isEdit && initialValues ? { ...EMPTY_VALUES, ...initialValues } : EMPTY_VALUES);
@@ -84,7 +87,7 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 label="Product Code *"
-                value={isEdit ? values.code : 'Auto generated'}
+                value={isEdit ? values.code : (nextCode || 'Auto generated')}
                 disabled
                 fullWidth
                 slotProps={{ input: { readOnly: true } }}

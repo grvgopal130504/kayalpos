@@ -11,7 +11,7 @@ export default function PromotionActivityCard({ title, columns, rows, linkLabel 
   const fullColumns = [{ key: 'index', label: '#', render: (_row, i) => i + 1 }, ...columns];
 
   return (
-    <InfoCard title={title} link={{ label: linkLabel, to: '/promotion' }}>
+    <InfoCard title={title} link={linkLabel ? { label: linkLabel, to: '/promotion' } : undefined}>
       <DataTable columns={fullColumns} rows={rows} getRowKey={(r) => `${r.date}-${r.action || r.name}`} />
     </InfoCard>
   );

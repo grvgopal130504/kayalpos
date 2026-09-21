@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AddIcon from '@mui/icons-material/Add';
@@ -18,23 +18,28 @@ import CustomerTransactionsCard from './components/CustomerTransactionsCard';
 import CustomerLoyaltySummary from './components/CustomerLoyaltySummary';
 import AddNewCustomerPage from './AddNewCustomerPage';
 import CustomerViewPage from './CustomerViewPage';
-import { SUMMARY, RECENT_TRANSACTIONS, LOYALTY_SUMMARY } from './customerMockData';
-import { toCustomerRow, toCustomerDetails } from './customerApiHelpers';
+import { toCustomerRow, toCustomerDetails, toRecentTransactions, toLoyaltySummary } from './customerApiHelpers';
 import { useGetCustomersQuery, useDeleteCustomerMutation } from '../../api/customerApi';
+import {
+  useSalesOverviewSummaryQuery, useCustomerSalesSummariesQuery, useCustomerSalesQuery,
+} from '../../api/saleApi';
 
 /**
  * Customer List / dashboard page — summary tiles, the customer table with a
  * detail panel for whichever row is selected, recent transactions, and a
- * loyalty summary. Wired to the real Customer API (see api/customerApi.js)
- * for the list, detail panel, and Add/Edit/Delete. Recent Transactions and
- * the Loyalty Summary are still mock placeholders — those need the Sales
- * Invoice/Payment and Loyalty modules, which don't exist yet. Add/Edit/View
- * swap in via local state instead of separate /add, /edit/:code, /view/:code
- * routes.
+ * loyalty summary. Fully wired to the real backend: the list, detail panel,
+ * Add/Edit/Delete come from the Customer API; the summary tiles,
+ * per-row/detail Total Purchase & Outstanding, Recent Transactions, and
+ * Loyalty Summary all come from real Sale rows via the sale API (see
+ * backend/src/modules/sale's getSalesOverviewSummary /
+ * getCustomerPurchaseSummaries / getCustomerPurchaseSummary) and the
+ * Customer's own real `loyaltyPoints` column — nothing on this page is mock
+ * data, so a fresh tenant with no customers or sales honestly shows zeros
+ * and empty states. Add/Edit/View swap in via local state instead of
+ * separate /add, /edit/:code, /view/:code routes.
  */
 export default function CustomerPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [tab, setTab] = useState('list');
   const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
@@ -42,15 +47,24 @@ export default function CustomerPage() {
 
   const { data: customerRows = [] } = useGetCustomersQuery({});
   const [deleteCustomer] = useDeleteCustomerMutation();
+  const { data: overviewSummary } = useSalesOverviewSummaryQuery();
+  const { data: purchaseSummaries = {} } = useCustomerSalesSummariesQuery();
 
   // Computed unconditionally (before the create/edit/view early returns
   // below) so hook order stays stable across renders.
-  const viewRows = useMemo(() => customerRows.map(toCustomerRow), [customerRows]);
+  const viewRows = useMemo(
+    () => customerRows.map((row) => toCustomerRow(row, purchaseSummaries[row.id])),
+    [customerRows, purchaseSummaries],
+  );
   const byCode = useMemo(() => Object.fromEntries(customerRows.map((c) => [c.code, c])), [customerRows]);
 
   const goToList = () => { setActiveCode(null); setTab('list'); };
   const openEdit = (code) => { setActiveCode(code); setTab('edit'); };
   const openView = (code) => { setActiveCode(code); setTab('view'); };
+
+  const effectiveSelectedCode = selectedCode && byCode[selectedCode] ? selectedCode : customerRows[0]?.code;
+  const selectedCustomer = effectiveSelectedCode ? byCode[effectiveSelectedCode] : null;
+  const { data: selectedCustomerSales } = useCustomerSalesQuery(selectedCustomer?.id, { skip: !selectedCustomer });
 
   if (tab === 'create' || tab === 'edit') {
     return (
@@ -65,10 +79,17 @@ export default function CustomerPage() {
     return <CustomerViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
   }
 
-  const effectiveSelectedCode = selectedCode && byCode[selectedCode] ? selectedCode : customerRows[0]?.code;
-  const customerDetails = effectiveSelectedCode && byCode[effectiveSelectedCode]
-    ? toCustomerDetails(byCode[effectiveSelectedCode])
+  const customerDetails = selectedCustomer
+    ? toCustomerDetails(selectedCustomer, purchaseSummaries[selectedCustomer.id])
     : null;
+
+  const summary = {
+    totalCustomers: customerRows.length,
+    activeCustomers: customerRows.filter((c) => c.status === 'ACTIVE').length,
+    loyalCustomers: customerRows.filter((c) => (c.loyaltyPoints || 0) > 0).length,
+    totalSalesThisMonth: overviewSummary?.totalSalesThisMonth || 0,
+    outstandingAmount: overviewSummary?.outstandingAmount || 0,
+  };
 
   const handleSelectCustomer = (row) => setSelectedCode(row.code);
   const handleRowAction = async (label, row) => {
@@ -128,7 +149,7 @@ export default function CustomerPage() {
         </Stack>
       </Stack>
 
-      <CustomerSummaryCards summary={SUMMARY} />
+      <CustomerSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
@@ -153,12 +174,16 @@ export default function CustomerPage() {
           )}
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 7 }}>
-          <CustomerLoyaltySummary summary={LOYALTY_SUMMARY} />
-        </Grid>
-        <Grid size={{ xs: 12, lg: 5 }}>
-          <CustomerTransactionsCard transactions={RECENT_TRANSACTIONS} />
-        </Grid>
+        {customerDetails && (
+          <>
+            <Grid size={{ xs: 12, lg: 7 }}>
+              <CustomerLoyaltySummary summary={toLoyaltySummary(selectedCustomer, selectedCustomerSales)} />
+            </Grid>
+            <Grid size={{ xs: 12, lg: 5 }}>
+              <CustomerTransactionsCard transactions={toRecentTransactions(selectedCustomerSales)} />
+            </Grid>
+          </>
+        )}
       </Grid>
     </Stack>
   );

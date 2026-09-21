@@ -8,7 +8,7 @@ import ReceiptOutlinedIcon from '@mui/icons-material/ReceiptOutlined';
 
 import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
-import { useCreateBrandMutation, useUpdateBrandMutation } from '../../../../api/brandApi';
+import { useCreateBrandMutation, useUpdateBrandMutation, useNextBrandCode } from '../../../../api/brandApi';
 import { CATEGORY_OPTIONS } from '../brandMockData';
 
 const EMPTY_VALUES = { code: '', name: '', description: '', category: CATEGORY_OPTIONS[0], status: 'Active' };
@@ -22,6 +22,7 @@ export default function BrandFormDialog({ open, mode = 'add', initialValues, onC
 
   const [createBrand] = useCreateBrandMutation();
   const [updateBrand] = useUpdateBrandMutation();
+  const nextCode = useNextBrandCode(open && !isEdit);
 
   useEffect(() => {
     if (open) setValues(isEdit && initialValues ? { ...EMPTY_VALUES, ...initialValues } : EMPTY_VALUES);
@@ -75,7 +76,7 @@ export default function BrandFormDialog({ open, mode = 'add', initialValues, onC
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 label="Brand Code *"
-                value={isEdit ? values.code : 'Auto generated'}
+                value={isEdit ? values.code : (nextCode || 'Auto generated')}
                 disabled
                 fullWidth
                 slotProps={{ input: { readOnly: true } }}

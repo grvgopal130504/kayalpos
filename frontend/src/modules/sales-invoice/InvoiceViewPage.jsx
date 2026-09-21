@@ -8,25 +8,38 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import InvoiceDetailsCard from './components/InvoiceDetailsCard';
 import InvoiceTermsAndNotes from './components/InvoiceTermsAndNotes';
-import { getInvoiceDetails } from './salesInvoiceMockData';
+import { useGetSalesInvoiceQuery } from '../../api/salesInvoiceApi';
+import { toInvoiceDetails } from './salesInvoiceDisplay';
 
 /**
- * Read-only "View Invoice" destination for SalesInvoiceTable's row menu —
- * reuses the exact same InvoiceDetailsCard/InvoiceTermsAndNotes cards the
- * Overview/Status pages already show for the selected row, just addressed
- * by :code as its own full page instead of a side panel.
+ * Read-only "View Invoice" body for SalesInvoiceTable's row menu — reuses
+ * the exact same InvoiceDetailsCard/InvoiceTermsAndNotes cards the
+ * Overview/Status pages already show for the selected row. Rendered by
+ * SalesInvoicePage via props (`id`/`onBack`/`onEdit`) as part of the single
+ * /sales-invoice page rather than its own route. Fully wired to the real
+ * backend — every field here comes from the actual SalesInvoice row fetched
+ * by GET /api/sales-invoices/:id.
  */
-export default function InvoiceViewPage({ code: propCode, onBack, onEdit }) {
+export default function InvoiceViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code: paramCode } = useParams();
-  const code = propCode ?? paramCode;
-  const invoice = getInvoiceDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: row, isLoading, isError } = useGetSalesInvoiceQuery(id, { skip: !id });
+  const invoice = row ? toInvoiceDetails(row) : null;
   const [notes, setNotes] = useState('');
 
   const handleBack = () => (onBack ? onBack() : navigate('/sales-invoice'));
-  const handleEdit = () => (onEdit ? onEdit() : navigate(`/sales-invoice/edit/${code}`));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/sales-invoice/edit/${id}`));
 
-  if (!invoice) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading invoice…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !invoice) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Invoice not found</Typography>

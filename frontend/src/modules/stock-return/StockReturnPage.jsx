@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -16,79 +16,76 @@ import StockReturnTable from './components/StockReturnTable';
 import StockReturnDetailsCard from './components/StockReturnDetailsCard';
 import CreateStockReturnPage from './CreateStockReturnPage';
 import ReturnViewPage from './ReturnViewPage';
-import { SUMMARY, RETURNS, TOTAL_RETURN_COUNT, RETURN_DETAILS } from './stockReturnMockData';
-
-const RETURN_BY_CODE = Object.fromEntries(RETURNS.map((r) => [r.code, r]));
+import { useGetStockReturnsQuery, useStockReturnSummaryQuery } from '../../api/stockReturnApi';
+import { toReturnRow, toReturnDetails, buildSummary } from './stockReturnDisplay';
 
 /**
  * Landing page for the sidebar's Stock Return item — summary tiles, the
  * return list with a detail panel for whichever row is selected, plus the
  * create/edit form and the read-only view, all swapped in via local state
- * instead of separate /create, /edit/:code, /view/:code routes. The Stock
- * Return backend module doesn't exist yet, so everything is driven by
- * stockReturnMockData.js — selecting a row other than RRT-00030 falls back
- * to reusing RETURN_DETAILS' shape (only the top-level fields differ)
- * since we don't have full mock detail records for every row.
+ * instead of separate /create, /edit/:id, /view/:id routes. Fully wired to
+ * the real backend (see backend/src/modules/stock-return): every tile, row
+ * and detail field comes from the actual StockReturn table, so a tenant
+ * with no returns yet honestly shows zeros/empty states instead of this
+ * page's old static mock data. Rows are keyed/selected by real `id` (not
+ * `code`), same convention every other module's table adopted once it was
+ * wired to a real backend.
  */
 export default function StockReturnPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [tab, setTab] = useState('list');
-  const [activeCode, setActiveCode] = useState(null);
+  const [activeId, setActiveId] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(RETURN_DETAILS.code);
+  const [selectedId, setSelectedId] = useState(null);
+
+  const { data: returns = [], isLoading, isError } = useGetStockReturnsQuery({});
+  const { data: summaryData } = useStockReturnSummaryQuery();
+
+  const rows = useMemo(() => returns.map(toReturnRow), [returns]);
+  const summary = useMemo(() => buildSummary(summaryData), [summaryData]);
+  const returnById = useMemo(() => Object.fromEntries(returns.map((r) => [r.id, r])), [returns]);
 
   const goToList = () => {
-    setActiveCode(null);
+    setActiveId(null);
     setTab('list');
   };
-  const openEdit = (code) => {
-    setActiveCode(code);
+  const openEdit = (id) => {
+    setActiveId(id);
     setTab('edit');
   };
-  const openView = (code) => {
-    setActiveCode(code);
+  const openView = (id) => {
+    setActiveId(id);
     setTab('view');
   };
 
   if (tab === 'create' || tab === 'edit') {
     return (
       <CreateStockReturnPage
-        code={tab === 'edit' ? activeCode : undefined}
-        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+        id={tab === 'edit' ? activeId : undefined}
+        onBack={(savedId) => (tab === 'edit' ? openView(savedId || activeId) : goToList())}
       />
     );
   }
 
   if (tab === 'view') {
-    return <ReturnViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+    return <ReturnViewPage id={activeId} onBack={goToList} onEdit={() => openEdit(activeId)} />;
   }
 
-  const selectedRow = RETURN_BY_CODE[selectedCode];
-  const returnDetails = selectedCode === RETURN_DETAILS.code
-    ? RETURN_DETAILS
-    : {
-        ...RETURN_DETAILS,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        supplier: selectedRow.supplier,
-        returnType: selectedRow.returnType,
-        referenceNo: selectedRow.referenceNo,
-        items: selectedRow.items,
-        totalValue: selectedRow.totalValue,
-        status: selectedRow.status,
-      };
+  const effectiveSelectedId = selectedId && returnById[selectedId] ? selectedId : returns[0]?.id;
+  const selectedReturn = effectiveSelectedId ? returnById[effectiveSelectedId] : null;
+  const returnDetails = selectedReturn ? toReturnDetails(selectedReturn) : null;
 
-  const handleSelectReturn = (row) => setSelectedCode(row.code);
+  const handleSelectReturn = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return openView(row.code);
-    if (label === 'Edit') return openEdit(row.code);
+    if (label === 'View') return openView(row.id);
+    if (label === 'Edit') return openEdit(row.id);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Returns is coming soon', 'info'));
   const handleCreate = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => openEdit(selectedCode);
+  const handleEdit = () => openEdit(effectiveSelectedId);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
@@ -127,15 +124,14 @@ export default function StockReturnPage() {
         </Stack>
       </Stack>
 
-      <StockReturnSummaryCards summary={SUMMARY} />
+      <StockReturnSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <StockReturnTable
-              returns={RETURNS}
-              totalCount={TOTAL_RETURN_COUNT}
-              selectedCode={selectedCode}
+              returns={rows}
+              selectedId={effectiveSelectedId}
               onSelectReturn={handleSelectReturn}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -143,8 +139,18 @@ export default function StockReturnPage() {
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <Box sx={{ height: { lg: 560 } }}>
-            <StockReturnDetailsCard returnRecord={returnDetails} onEdit={handleEdit} />
+          <Box sx={{ height: { lg: 560 }, overflow: 'auto' }}>
+            {isLoading ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>Loading returns…</Typography>
+            ) : isError ? (
+              <Typography variant="body2" color="error" sx={{ p: 2 }}>Failed to load returns.</Typography>
+            ) : returnDetails ? (
+              <StockReturnDetailsCard returnRecord={returnDetails} onEdit={handleEdit} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No returns yet — create one to get started.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

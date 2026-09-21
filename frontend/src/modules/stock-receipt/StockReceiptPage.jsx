@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -16,79 +16,76 @@ import StockReceiptTable from './components/StockReceiptTable';
 import StockReceiptDetailsCard from './components/StockReceiptDetailsCard';
 import CreateStockReceiptPage from './CreateStockReceiptPage';
 import ReceiptViewPage from './ReceiptViewPage';
-import { SUMMARY, RECEIPTS, TOTAL_RECEIPT_COUNT, RECEIPT_DETAILS } from './stockReceiptMockData';
-
-const RECEIPT_BY_CODE = Object.fromEntries(RECEIPTS.map((r) => [r.code, r]));
+import { useGetStockReceiptsQuery, useStockReceiptSummaryQuery } from '../../api/stockReceiptApi';
+import { toReceiptRow, toReceiptDetails, buildSummary } from './stockReceiptDisplay';
 
 /**
  * Landing page for the sidebar's Stock Receipt item — summary tiles, the
  * receipt list with a detail panel for whichever row is selected, plus the
  * create/edit form and the read-only view, all swapped in via local state
- * instead of separate /create, /edit/:code, /view/:code routes. The Stock
- * Receipt backend module doesn't exist yet, so everything is driven by
- * stockReceiptMockData.js — selecting a row other than RCPT-00030 falls
- * back to reusing RECEIPT_DETAILS' shape (only the top-level fields differ)
- * since we don't have full mock detail records for every row.
+ * instead of separate /create, /edit/:id, /view/:id routes. Fully wired to
+ * the real backend (see backend/src/modules/stock-receipt): every tile, row
+ * and detail field comes from the actual StockReceipt table, so a tenant
+ * with no receipts yet honestly shows zeros/empty states instead of this
+ * page's old static mock data. Rows are keyed/selected by real `id` (not
+ * `code`), same convention every other module's table adopted once it was
+ * wired to a real backend.
  */
 export default function StockReceiptPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [tab, setTab] = useState('list');
-  const [activeCode, setActiveCode] = useState(null);
+  const [activeId, setActiveId] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(RECEIPT_DETAILS.code);
+  const [selectedId, setSelectedId] = useState(null);
+
+  const { data: receipts = [], isLoading, isError } = useGetStockReceiptsQuery({});
+  const { data: summaryData } = useStockReceiptSummaryQuery();
+
+  const rows = useMemo(() => receipts.map(toReceiptRow), [receipts]);
+  const summary = useMemo(() => buildSummary(summaryData), [summaryData]);
+  const receiptById = useMemo(() => Object.fromEntries(receipts.map((r) => [r.id, r])), [receipts]);
 
   const goToList = () => {
-    setActiveCode(null);
+    setActiveId(null);
     setTab('list');
   };
-  const openEdit = (code) => {
-    setActiveCode(code);
+  const openEdit = (id) => {
+    setActiveId(id);
     setTab('edit');
   };
-  const openView = (code) => {
-    setActiveCode(code);
+  const openView = (id) => {
+    setActiveId(id);
     setTab('view');
   };
 
   if (tab === 'create' || tab === 'edit') {
     return (
       <CreateStockReceiptPage
-        code={tab === 'edit' ? activeCode : undefined}
-        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+        id={tab === 'edit' ? activeId : undefined}
+        onBack={(savedId) => (tab === 'edit' ? openView(savedId || activeId) : goToList())}
       />
     );
   }
 
   if (tab === 'view') {
-    return <ReceiptViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+    return <ReceiptViewPage id={activeId} onBack={goToList} onEdit={() => openEdit(activeId)} />;
   }
 
-  const selectedRow = RECEIPT_BY_CODE[selectedCode];
-  const receiptDetails = selectedCode === RECEIPT_DETAILS.code
-    ? RECEIPT_DETAILS
-    : {
-        ...RECEIPT_DETAILS,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        supplier: selectedRow.supplier,
-        purchaseType: selectedRow.purchaseType,
-        invoiceNo: selectedRow.invoiceNo,
-        items: selectedRow.items,
-        totalValue: selectedRow.totalValue,
-        status: selectedRow.status,
-      };
+  const effectiveSelectedId = selectedId && receiptById[selectedId] ? selectedId : receipts[0]?.id;
+  const selectedReceipt = effectiveSelectedId ? receiptById[effectiveSelectedId] : null;
+  const receiptDetails = selectedReceipt ? toReceiptDetails(selectedReceipt) : null;
 
-  const handleSelectReceipt = (row) => setSelectedCode(row.code);
+  const handleSelectReceipt = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return openView(row.code);
-    if (label === 'Edit') return openEdit(row.code);
+    if (label === 'View') return openView(row.id);
+    if (label === 'Edit') return openEdit(row.id);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Receipts is coming soon', 'info'));
   const handleCreate = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => openEdit(selectedCode);
+  const handleEdit = () => openEdit(effectiveSelectedId);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
@@ -127,15 +124,14 @@ export default function StockReceiptPage() {
         </Stack>
       </Stack>
 
-      <StockReceiptSummaryCards summary={SUMMARY} />
+      <StockReceiptSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <StockReceiptTable
-              receipts={RECEIPTS}
-              totalCount={TOTAL_RECEIPT_COUNT}
-              selectedCode={selectedCode}
+              receipts={rows}
+              selectedId={effectiveSelectedId}
               onSelectReceipt={handleSelectReceipt}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -143,8 +139,18 @@ export default function StockReceiptPage() {
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <Box sx={{ height: { lg: 560 } }}>
-            <StockReceiptDetailsCard receipt={receiptDetails} onEdit={handleEdit} />
+          <Box sx={{ height: { lg: 560 }, overflow: 'auto' }}>
+            {isLoading ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>Loading receipts…</Typography>
+            ) : isError ? (
+              <Typography variant="body2" color="error" sx={{ p: 2 }}>Failed to load receipts.</Typography>
+            ) : receiptDetails ? (
+              <StockReceiptDetailsCard receipt={receiptDetails} onEdit={handleEdit} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No receipts yet — create one to get started.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

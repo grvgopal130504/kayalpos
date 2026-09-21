@@ -46,13 +46,16 @@ function RowActions({ onAction }) {
  * Indent list: tab filter (All/Draft/Pending Approval/Approved/Rejected),
  * search, a page-size selector, a Filters button, the paginated table
  * itself, and a row-click to load that indent into the details panel on
- * the right. Mirrors SalesInvoiceTable/BarcodeLabelTable's structure and
- * its controlled-tab support — when the caller passes both `tab` and
- * `onTabChange`, this single visible tab row drives which whole page body
- * (Overview vs a status page) is showing, not just a local row filter.
+ * the right. Rows are keyed/selected by real `id` (not `code`) — same
+ * convention every other module's table adopted once it was wired to a
+ * real backend (Sales Order, Sales Invoice, Barcode & Label). Mirrors
+ * BarcodeLabelTable's structure and its controlled-tab support — when the
+ * caller passes both `tab` and `onTabChange`, this single visible tab row
+ * drives which whole page body (Overview vs a status page) is showing, not
+ * just a local row filter.
  */
 export default function StockIndentTable({
-  indents, selectedCode, onSelectIndent, onRowAction, onFilters,
+  indents, selectedId, onSelectIndent, onRowAction, onFilters,
   defaultTab = 'all', statusColumn = true, createdByColumn = false,
   tab: controlledTab, onTabChange,
 }) {
@@ -95,7 +98,7 @@ export default function StockIndentTable({
         <Typography
           variant="body2"
           noWrap
-          sx={{ fontWeight: 600, color: row.code === selectedCode ? 'primary.main' : 'text.primary', cursor: 'pointer' }}
+          sx={{ fontWeight: 600, color: row.id === selectedId ? 'primary.main' : 'text.primary', cursor: 'pointer' }}
           onClick={() => onSelectIndent(row)}
         >
           {row.code}
@@ -180,7 +183,7 @@ export default function StockIndentTable({
         <DataTable
           columns={columns}
           rows={visibleRows}
-          getRowKey={(r) => r.code}
+          getRowKey={(r) => r.id}
           emptyMessage="No indents match your search"
         />
       </Box>

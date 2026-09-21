@@ -47,28 +47,53 @@ export const POINTS_EXPIRY_OPTIONS = [
   { value: '24-months', label: '24 Months' },
 ];
 
-export const createLoyaltyProgramSchema = z.object({
-  programName: z.string().trim().min(1, 'Program name is required'),
-  description: z.string().trim().optional(),
-  status: z.string().trim().min(1, 'Select a status'),
-  earnPointsOn: z.string().trim().min(1, 'Select how points are earned'),
-  pointsType: z.string().trim().min(1, 'Select a points type'),
-  pointsValue: z.string().trim().min(1, 'Enter points value'),
-  redemptionType: z.string().trim().min(1, 'Select a redemption type'),
-  redemptionValue: z.string().trim().min(1, 'Enter redemption value'),
-  minimumPointsRequired: z.string().trim().min(1, 'Enter minimum points required'),
-  maximumDiscountPerTransaction: z.string().trim(),
-  applyOn: z.string().trim().min(1, 'Select who this applies to'),
-  membershipValidity: z.string().trim().min(1, 'Select membership validity'),
-  validityPeriodMonths: z.string().trim(),
-  pointsExpiry: z.string().trim().min(1, 'Select points expiry'),
-  welcomePointsEnabled: z.boolean(),
-  welcomePointsValue: z.string().trim(),
-  allowPointsRedemption: z.boolean(),
-  showLoyaltyDetailsInInvoice: z.boolean(),
-  allowNegativePoints: z.boolean(),
-  pointsExpiryNotification: z.boolean(),
-});
+// A plain (optional) non-negative decimal amount, entered as free text
+// (money/points fields allow a "." so they can't use FormTextField's
+// `numeric` digit-stripping prop) — validated here instead so "12.5.3",
+// "-5" or "abc" are caught before they ever reach the backend.
+const decimalAmount = (message) => z.string().trim()
+  .refine((v) => v === '' || (/^\d+(\.\d{1,2})?$/.test(v) && Number(v) >= 0), message);
+
+const wholeNumber = (message) => z.string().trim()
+  .refine((v) => v === '' || /^\d+$/.test(v), message);
+
+export const createLoyaltyProgramSchema = z
+  .object({
+    programName: z.string().trim().min(1, 'Program name is required'),
+    description: z.string().trim().optional(),
+    status: z.string().trim().min(1, 'Select a status'),
+    earnPointsOn: z.string().trim().min(1, 'Select how points are earned'),
+    pointsType: z.string().trim().min(1, 'Select a points type'),
+    pointsValue: decimalAmount('Enter a valid, non-negative points value')
+      .refine((v) => v !== '', 'Enter points value'),
+    redemptionType: z.string().trim().min(1, 'Select a redemption type'),
+    redemptionValue: decimalAmount('Enter a valid, non-negative redemption value')
+      .refine((v) => v !== '', 'Enter redemption value'),
+    minimumPointsRequired: wholeNumber('Enter a whole number')
+      .refine((v) => v !== '', 'Enter minimum points required'),
+    maximumDiscountPerTransaction: decimalAmount('Enter a valid, non-negative amount'),
+    applyOn: z.string().trim().min(1, 'Select who this applies to'),
+    membershipValidity: z.string().trim().min(1, 'Select membership validity'),
+    validityPeriodMonths: wholeNumber('Enter a whole number'),
+    pointsExpiry: z.string().trim().min(1, 'Select points expiry'),
+    welcomePointsEnabled: z.boolean(),
+    welcomePointsValue: wholeNumber('Enter a whole number'),
+    allowPointsRedemption: z.boolean(),
+    showLoyaltyDetailsInInvoice: z.boolean(),
+    allowNegativePoints: z.boolean(),
+    pointsExpiryNotification: z.boolean(),
+  })
+  .superRefine((values, ctx) => {
+    if (values.membershipValidity === 'fixed-period' && (!values.validityPeriodMonths || Number(values.validityPeriodMonths) <= 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['validityPeriodMonths'], message: 'Enter a validity period greater than 0' });
+    }
+    if (values.welcomePointsEnabled && (!values.welcomePointsValue || Number(values.welcomePointsValue) <= 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['welcomePointsValue'], message: 'Enter a welcome points value greater than 0' });
+    }
+    if (values.pointsType === 'percentage' && Number(values.pointsValue) > 100) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['pointsValue'], message: 'Percentage cannot exceed 100%' });
+    }
+  });
 
 export const createLoyaltyProgramDefaultValues = {
   programName: '',

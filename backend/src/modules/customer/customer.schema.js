@@ -6,7 +6,11 @@ import { z } from 'zod';
 export const createCustomerSchema = z.object({
   code: z.string().trim().min(1).optional(),
   name: z.string().trim().min(1, 'Customer name is required'),
-  mobile: z.string().trim().min(1, 'Mobile number is required'),
+  // Exactly 10 digits, numeric only — no spaces, dashes, +91, letters, etc.
+  // The frontend also blocks non-digit keystrokes and caps input at 10
+  // characters (see FormTextField's `numeric`/`maxLength` props), so this is
+  // the server-side backstop for any client that doesn't.
+  mobile: z.string().trim().regex(/^\d{10}$/, 'Enter a valid 10-digit mobile number'),
   email: z.string().trim().email('Enter a valid email').optional().or(z.literal('')).nullable(),
   gstin: z.string().trim().optional().nullable(),
   customerType: z.string().trim().min(1, 'Select a customer type'),

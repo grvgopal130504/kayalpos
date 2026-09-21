@@ -7,6 +7,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import AddIcon from '@mui/icons-material/Add';
 
+import ItemCodeAutocomplete from '../../../components/form/ItemCodeAutocomplete';
 import { emptyItemRow } from '../createBarcodeLabelSchema';
 
 const COLUMNS = [
@@ -26,9 +27,12 @@ const COLUMNS = [
  * InvoiceItemsTable, but with a per-row selection checkbox (Total
  * Items/Labels below only count checked rows, matching the reference,
  * where every row starts unchecked and the totals read 0.00) and no
- * pricing columns since a label batch isn't a priced document.
+ * pricing columns since a label batch isn't a priced document. Item Code is
+ * a searchable select (ItemCodeAutocomplete) backed by the real Product
+ * master; picking a product autofills Item Name/HSN/UoM only — Print Qty
+ * and the serial/batch range are always left for manual entry.
  */
-export default function LabelItemsTable({ onAddItem }) {
+export default function LabelItemsTable({ onAddItem, products = [] }) {
   const { control } = useFormContext();
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
@@ -48,7 +52,7 @@ export default function LabelItemsTable({ onAddItem }) {
           </TableHead>
           <TableBody>
             {fields.map((field, index) => (
-              <ItemRow key={field.id} index={index} control={control} onRemove={() => remove(index)} removable={fields.length > 1} />
+              <ItemRow key={field.id} index={index} control={control} onRemove={() => remove(index)} removable={fields.length > 1} products={products} />
             ))}
           </TableBody>
         </Table>
@@ -78,7 +82,10 @@ export default function LabelItemsTable({ onAddItem }) {
   );
 }
 
-function ItemRow({ index, control, onRemove, removable }) {
+function ItemRow({
+  index, control, onRemove, removable, products,
+}) {
+  const { setValue } = useFormContext();
   return (
     <TableRow sx={{ '& td': { py: 0.75 } }}>
       <TableCell sx={{ color: 'text.secondary' }}>{index + 1}</TableCell>
@@ -96,10 +103,15 @@ function ItemRow({ index, control, onRemove, removable }) {
         />
       </TableCell>
       <TableCell>
-        <Controller
-          name={`items.${index}.itemCode`}
+        <ItemCodeAutocomplete
           control={control}
-          render={({ field }) => <TextField {...field} size="small" fullWidth placeholder="Item Code" />}
+          name={`items.${index}.itemCode`}
+          products={products}
+          onSelectProduct={(product) => {
+            setValue(`items.${index}.itemName`, product.name, { shouldDirty: true });
+            setValue(`items.${index}.hsnCode`, product.hsnSac || '', { shouldDirty: true });
+            setValue(`items.${index}.uom`, product.uom || '', { shouldDirty: true });
+          }}
         />
       </TableCell>
       <TableCell>

@@ -6,24 +6,36 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import StockReturnDetailsCard from './components/StockReturnDetailsCard';
-import { getReturnDetails } from './stockReturnMockData';
+import { useGetStockReturnQuery } from '../../api/stockReturnApi';
+import { toReturnDetails } from './stockReturnDisplay';
 
 /**
- * Read-only "View Return" destination for StockReturnTable's row menu —
- * reuses the exact same StockReturnDetailsCard the list page already shows
- * for the selected row, just addressed by :code as its own full page
- * instead of a side panel.
+ * Read-only "View Return" body for StockReturnTable's row menu — reuses the
+ * exact same StockReturnDetailsCard the list page already shows for the
+ * selected row. Rendered by StockReturnPage via props (`id`/`onBack`/
+ * `onEdit`) as part of the single /stock-return page rather than its own
+ * route. Fully wired to the real backend — every field here comes from the
+ * actual StockReturn row fetched by GET /api/stock-returns/:id.
  */
-export default function ReturnViewPage({ code: propCode, onBack, onEdit }) {
+export default function ReturnViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code: paramCode } = useParams();
-  const code = propCode ?? paramCode;
-  const returnRecord = getReturnDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: row, isLoading, isError } = useGetStockReturnQuery(id, { skip: !id });
+  const returnRecord = row ? toReturnDetails(row) : null;
 
   const handleBack = () => (onBack ? onBack() : navigate('/stock-return'));
-  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-return/edit/${code}`));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-return/edit/${id}`));
 
-  if (!returnRecord) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading return…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !returnRecord) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Return not found</Typography>

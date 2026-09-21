@@ -2,6 +2,13 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/validateRequest.js';
 import { ApiError } from '../middleware/errorHandler.js';
+import { createMemoryCache } from './memoryCache.js';
+
+const MAX_PAGE_SIZE = 200;
+// Safety cap for the unpaginated (legacy) list call — existing pages that
+// don't pass page/pageSize keep getting a flat array back, but never an
+// unbounded one, however large the table grows.
+const UNPAGINATED_LIMIT = 1000;
 
 /**
  * Generic CRUD router factory over a Prisma delegate (e.g. prisma.brand).
@@ -25,6 +32,10 @@ import { ApiError } from '../middleware/errorHandler.js';
  * @param {string} [opts.codePrefix] - e.g. 'BR' to auto-generate BR001, BR002...
  * @param {string} [opts.codeField] - field name the generated code is written to (default 'code')
  * @param {number} [opts.codeLength] - digits to zero-pad the sequence to (default 3, e.g. BR001; pass 4 for PROD0001)
+ * @param {object} [opts.listSelect] - Prisma `select` object to trim the list
+ *   response to only the columns the UI needs (e.g. omit tenantId). Omit to
+ *   return full rows (get/create/update always return full rows regardless).
+ * @param {number} [opts.cacheTtlMs] - list-response cache TTL; 0 disables caching.
  */
 export function createCrudRouter({
   model,
@@ -35,26 +46,74 @@ export function createCrudRouter({
   codePrefix,
   codeField = 'code',
   codeLength = 3,
+  listSelect,
+  cacheTtlMs = 15_000,
 }) {
   const router = Router();
   router.use(requireAuth);
 
+  // One cache instance per router (i.e. per entity — Brand, Product,
+  // Customer each get their own), keyed by tenant + query shape. Any write
+  // below clears it, so a save is visible on the very next list call.
+  const listCache = createMemoryCache({ ttlMs: cacheTtlMs });
+
+  function buildWhere(req) {
+    const { search, status } = req.query;
+    const where = { tenantId: req.user.tenantId };
+
+    if (status && status !== 'All') {
+      where.status = String(status).toUpperCase();
+    }
+    if (search && searchFields.length) {
+      where.OR = searchFields.map((field) => ({
+        [field]: { contains: String(search), mode: 'insensitive' },
+      }));
+    }
+    return where;
+  }
+
   router.get('/', async (req, res, next) => {
     try {
-      const { search, status } = req.query;
-      const where = { tenantId: req.user.tenantId };
+      const where = buildWhere(req);
+      const { page, pageSize } = req.query;
+      const isPaginated = page !== undefined || pageSize !== undefined;
 
-      if (status && status !== 'All') {
-        where.status = String(status).toUpperCase();
-      }
-      if (search && searchFields.length) {
-        where.OR = searchFields.map((field) => ({
-          [field]: { contains: String(search), mode: 'insensitive' },
-        }));
+      const cacheKey = JSON.stringify({ tenantId: req.user.tenantId, query: req.query });
+      if (cacheTtlMs > 0) {
+        const cached = listCache.get(cacheKey);
+        if (cached) return res.json(cached);
       }
 
-      const rows = await model.findMany({ where, orderBy });
-      res.json({ success: true, data: rows });
+      let payload;
+      if (isPaginated) {
+        const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
+        const size = Math.min(MAX_PAGE_SIZE, Math.max(1, Number.parseInt(pageSize, 10) || 50));
+
+        const [rows, total] = await Promise.all([
+          model.findMany({
+            where,
+            orderBy,
+            select: listSelect,
+            skip: (pageNum - 1) * size,
+            take: size,
+          }),
+          model.count({ where }),
+        ]);
+
+        payload = {
+          success: true,
+          data: rows,
+          meta: { page: pageNum, pageSize: size, total, totalPages: Math.max(1, Math.ceil(total / size)) },
+        };
+      } else {
+        // Legacy shape (no meta) for existing callers — still bounded so an
+        // old client can never pull an unbounded table into memory.
+        const rows = await model.findMany({ where, orderBy, select: listSelect, take: UNPAGINATED_LIMIT });
+        payload = { success: true, data: rows };
+      }
+
+      if (cacheTtlMs > 0) listCache.set(cacheKey, payload);
+      res.json(payload);
     } catch (err) {
       next(err);
     }
@@ -79,6 +138,7 @@ export function createCrudRouter({
       }
 
       const row = await model.create({ data });
+      listCache.clear();
       res.status(201).json({ success: true, data: row });
     } catch (err) {
       next(prismaKnownError(err));
@@ -91,6 +151,7 @@ export function createCrudRouter({
       if (!existing) throw new ApiError(404, 'Record not found');
 
       const row = await model.update({ where: { id: req.params.id }, data: req.body });
+      listCache.clear();
       res.json({ success: true, data: row });
     } catch (err) {
       next(prismaKnownError(err));
@@ -103,6 +164,7 @@ export function createCrudRouter({
       if (!existing) throw new ApiError(404, 'Record not found');
 
       await model.delete({ where: { id: req.params.id } });
+      listCache.clear();
       res.json({ success: true, data: { id: req.params.id } });
     } catch (err) {
       next(prismaKnownError(err));

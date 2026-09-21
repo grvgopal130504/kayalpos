@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -18,24 +18,24 @@ import AutorenewOutlinedIcon from '@mui/icons-material/AutorenewOutlined';
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import StatCard from '../../components/common/StatCard';
-import { formatCurrency, formatNumber } from '../../utils/format';
+import { formatNumber, formatCurrency } from '../../utils/format';
 
 import StockIndentTable from './components/StockIndentTable';
 import IndentDetailsCard from './components/IndentDetailsCard';
 import IndentTermsAndNotes from './components/IndentTermsAndNotes';
-import { INDENTS, STATUS_DETAILS, STATUS_STATS } from './stockIndentMockData';
-
-const INDENT_BY_CODE = Object.fromEntries(INDENTS.map((ind) => [ind.code, ind]));
+import { useGetStockIndentsQuery, useStockIndentStatusSummaryQuery } from '../../api/stockIndentApi';
+import { toIndentRow, toIndentDetails, buildStatusStats } from './stockIndentDisplay';
 
 const STATUS_META = {
   draft: { label: 'Draft Indents', pageTitle: 'Draft', icon: EditNoteOutlinedIcon, iconColor: 'warning' },
-  'pending-approval': { label: 'Pending Approval Indents', pageTitle: 'Pending Approval', icon: HourglassEmptyOutlinedIcon, iconColor: 'info' },
+  'pending-approval': { label: 'Pending Approval Indents', pageTitle: 'Pending Approval', icon: HourglassEmptyOutlinedIcon, iconColor: 'error' },
   approved: { label: 'Approved Indents', pageTitle: 'Approved', icon: CheckCircleOutlinedIcon, iconColor: 'success' },
   rejected: { label: 'Rejected Indents', pageTitle: 'Rejected', icon: CancelOutlinedIcon, iconColor: 'error' },
 };
 
 // The 3 "extra" stat tile icons/colors per status, in the same order as
-// each status's STATUS_STATS.extra array.
+// buildStatusStats()'s extra array (Total Estimated Value / Average Indent
+// Value / Total Line Items — all real aggregates, see stockIndentDisplay.js).
 const EXTRA_TILE_STYLE = {
   draft: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
@@ -44,59 +44,60 @@ const EXTRA_TILE_STYLE = {
   ],
   'pending-approval': [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
-    { icon: HourglassEmptyOutlinedIcon, iconColor: 'warning' },
-    { icon: AutorenewOutlinedIcon, iconColor: '#8B5CF6' },
+    { icon: AutorenewOutlinedIcon, iconColor: 'warning' },
+    { icon: DescriptionOutlinedIcon, iconColor: '#8B5CF6' },
   ],
   approved: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
-    { icon: CheckCircleOutlinedIcon, iconColor: 'warning' },
-    { icon: AutorenewOutlinedIcon, iconColor: '#8B5CF6' },
+    { icon: AutorenewOutlinedIcon, iconColor: 'warning' },
+    { icon: DescriptionOutlinedIcon, iconColor: '#8B5CF6' },
   ],
   rejected: [
-    { icon: CardGiftcardOutlinedIcon, iconColor: 'error' },
-    { icon: CancelOutlinedIcon, iconColor: 'warning' },
-    { icon: AutorenewOutlinedIcon, iconColor: '#8B5CF6' },
+    { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
+    { icon: AutorenewOutlinedIcon, iconColor: 'warning' },
+    { icon: DescriptionOutlinedIcon, iconColor: '#8B5CF6' },
   ],
 };
 
 /**
- * Shared page for the Draft / Pending Approval / Approved / Rejected
- * cards on the Stock Indent landing grid — same list+details+terms layout
- * as the "All Indents" overview page, scoped by `status`. Mirrors
- * SalesInvoiceStatusPage/BarcodeLabelStatusPage.
+ * Shared page for the Draft / Pending Approval / Approved / Rejected cards
+ * on the Stock Indent landing grid — same list+details+terms layout as the
+ * "All Indents" overview page, scoped by `status`. Fully wired to the real
+ * backend: the table's rows and the 4 stat tiles both come from actual
+ * StockIndent rows (see backend/src/modules/stock-indent's
+ * getStockIndentStatusSummary), so a status with zero indents honestly
+ * shows zeros/empty states rather than fabricated figures. The Approved/
+ * Rejected tabs in particular will genuinely show zero until a real
+ * approval-workflow backend action exists (see the StockIndent model
+ * comment in schema.prisma) — nothing sets those statuses yet, so that's
+ * the honest state, not a bug.
  */
 export default function StockIndentStatusPage({ status, tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const meta = STATUS_META[status];
-  const stats = STATUS_STATS[status];
-  const detailsTemplate = STATUS_DETAILS[status];
   const extraStyle = EXTRA_TILE_STYLE[status];
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const firstOfStatus = INDENTS.find((ind) => ind.status === status) || INDENTS[0];
-  const [selectedCode, setSelectedCode] = useState(firstOfStatus.code);
-  const selectedRow = INDENT_BY_CODE[selectedCode] || firstOfStatus;
-  const indentDetails = selectedCode === detailsTemplate.code
-    ? detailsTemplate
-    : {
-        ...detailsTemplate,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        department: selectedRow.department,
-        fromOutlet: selectedRow.fromOutlet,
-        toOutlet: selectedRow.toOutlet,
-        requiredDate: selectedRow.requiredDate,
-        estimatedValue: selectedRow.estimatedValue,
-        ...(selectedRow.status === 'approved' ? { approvedOn: selectedRow.date, approvedBy: 'Admin' } : {}),
-      };
+  const { data: indents = [] } = useGetStockIndentsQuery({});
+  const { data: statusSummaryData } = useStockIndentStatusSummaryQuery(status);
 
-  const handleSelectIndent = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => indents.map(toIndentRow), [indents]);
+  const statusRows = useMemo(() => rows.filter((r) => r.status === status), [rows, status]);
+  const stats = useMemo(() => buildStatusStats(status, statusSummaryData), [status, statusSummaryData]);
+  const indentById = useMemo(() => Object.fromEntries(indents.map((i) => [i.id, i])), [indents]);
+
+  const effectiveSelectedId = (selectedId && indentById[selectedId] && rows.find((r) => r.id === selectedId)?.status === status ? selectedId : statusRows[0]?.id);
+  const selectedIndent = effectiveSelectedId ? indentById[effectiveSelectedId] : null;
+  const indentDetails = selectedIndent ? toIndentDetails(selectedIndent) : null;
+
+  const handleSelectIndent = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return onView ? onView(row.code) : navigate(`/stock-indent/view/${row.code}`);
-    if (label === 'Edit') return onEdit ? onEdit(row.code) : navigate(`/stock-indent/edit/${row.code}`);
-    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/stock-indent/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/stock-indent/edit/${row.id}`);
+    return dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleCreate = () => {
@@ -114,7 +115,7 @@ export default function StockIndentStatusPage({ status, tab, onTabChange, onCrea
       icon: extraStyle[i].icon,
       iconColor: extraStyle[i].iconColor,
       label: tile.label,
-      value: tile.isText ? tile.value : (tile.currency ? formatCurrency(tile.value, { decimals: true }) : formatNumber(tile.value)),
+      value: i === 0 ? formatCurrency(tile.value, { decimals: true }) : (i === 1 ? formatCurrency(tile.value, { decimals: true }) : formatNumber(tile.value)),
       caption: tile.caption,
     })),
   ];
@@ -165,8 +166,8 @@ export default function StockIndentStatusPage({ status, tab, onTabChange, onCrea
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <StockIndentTable
-              indents={INDENTS}
-              selectedCode={selectedCode}
+              indents={rows}
+              selectedId={effectiveSelectedId}
               onSelectIndent={handleSelectIndent}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -174,13 +175,19 @@ export default function StockIndentStatusPage({ status, tab, onTabChange, onCrea
               tab={tab}
               onTabChange={onTabChange}
               statusColumn={false}
-              createdByColumn={status !== 'approved'}
+              createdByColumn={status !== 'rejected'}
             />
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: { lg: 560 }, overflow: 'auto' }}>
-            <IndentDetailsCard indent={indentDetails} title={`Indent Details (${meta.pageTitle})`} showApprovedFields={status === 'approved'} />
+            {indentDetails ? (
+              <IndentDetailsCard indent={indentDetails} title={`Indent Details (${meta.pageTitle})`} showApprovedFields={status === 'approved'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No {meta.pageTitle.toLowerCase()} indents yet.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

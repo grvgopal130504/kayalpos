@@ -1,4 +1,14 @@
 import { z } from 'zod';
+import { formatPickerDate } from '../../components/form/FormDatePicker';
+
+// `supplier`/`fromOutlet` options now come from the real Supplier/Outlet
+// APIs (see CreateStockReceiptPage, which builds them from
+// useGetSuppliersQuery/useGetOutletsQuery) — the old mock-data version
+// hardcoded both as fixed lists of specific supplier/outlet names.
+// Purchase Type/Cost Center/UoM/Warehouse have no backing master table yet
+// (there's no Purchase-Type/Cost-Center/Warehouse model in the schema), so
+// they stay fixed, same scope decision every other module makes for its own
+// non-modeled dropdowns.
 
 export const PURCHASE_TYPE_OPTIONS = [
   { value: '', label: 'Select Purchase Type', disabled: true },
@@ -6,23 +16,6 @@ export const PURCHASE_TYPE_OPTIONS = [
   { value: 'Purchase Return Reversal', label: 'Purchase Return Reversal' },
   { value: 'Consignment', label: 'Consignment' },
   { value: 'Direct Receipt', label: 'Direct Receipt' },
-];
-
-export const SUPPLIER_OPTIONS = [
-  { value: '', label: 'Select Supplier', disabled: true },
-  { value: 'sri-krishna-traders', label: 'Sri Krishna Traders' },
-  { value: 'anna-nagar-distributors', label: 'Anna Nagar Distributors' },
-  { value: 'metro-wholesale-foods', label: 'Metro Wholesale Foods' },
-  { value: 'coimbatore-agro-supplies', label: 'Coimbatore Agro Supplies' },
-];
-
-export const OUTLET_OPTIONS = [
-  { value: '', label: 'Select From Outlet / HO', disabled: true },
-  { value: 'rs-puram', label: 'RS Puram Outlet' },
-  { value: 'anna-nagar', label: 'Anna Nagar Outlet' },
-  { value: 'market-street', label: 'Market Street Outlet' },
-  { value: 'main-warehouse', label: 'Main Warehouse' },
-  { value: 'head-office', label: 'Head Office' },
 ];
 
 export const COST_CENTER_OPTIONS = [
@@ -47,14 +40,17 @@ export const WAREHOUSE_OPTIONS = [
   { value: 'cold-storage', label: 'Cold Storage' },
 ];
 
+// Dates are entered via FormDatePicker, which stores/parses the "DD Mon
+// YYYY" format (e.g. "19 Sep 2026") — same convention Stock Indent/Stock
+// Transfer already use for their own date defaults.
 function todayFormatted() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  return formatPickerDate(new Date());
 }
 
 // Ordered/Received Qty come pre-filled per row (e.g. from a linked Purchase
 // Order / GRN) while the item itself is still unselected, matching the
-// reference design's default 5-row grid.
+// reference design's default 5-row grid — same convention the old mock
+// used, just now feeding a real backend instead of a fake save.
 export function emptyItemRow({ orderedQty = '', receivedQty = '' } = {}) {
   return {
     itemCode: '',
@@ -73,46 +69,73 @@ export function emptyItemRow({ orderedQty = '', receivedQty = '' } = {}) {
   };
 }
 
+// A plain non-negative decimal amount, entered as free text — same
+// convention as Stock Transfer's own decimalString() helper.
+const decimalString = (message) => z.string().trim()
+  .refine((v) => v === '' || (/^\d+(\.\d{1,3})?$/.test(v) && Number(v) >= 0), message);
+
 const itemRowSchema = z.object({
   itemCode: z.string().trim(),
   itemName: z.string().trim(),
   hsnCode: z.string().trim(),
   uom: z.string().trim(),
-  orderedQty: z.string().trim(),
-  receivedQty: z.string().trim(),
-  unitCost: z.string().trim(),
-  discount: z.string().trim(),
-  tax: z.string().trim(),
+  orderedQty: decimalString('Enter a valid ordered quantity'),
+  receivedQty: decimalString('Enter a valid received quantity'),
+  unitCost: decimalString('Enter a valid unit cost'),
+  discount: decimalString('Enter a valid discount'),
+  tax: decimalString('Enter a valid tax'),
   warehouse: z.string().trim(),
   batchNo: z.string().trim(),
   expiryDate: z.string().trim(),
   remarks: z.string().trim(),
 });
 
-export const createStockReceiptSchema = z.object({
-  receiptDate: z.string().trim().min(1, 'Receipt date is required'),
-  purchaseType: z.string().trim().min(1, 'Select a purchase type'),
-  purchaseInvoiceNo: z.string().trim().optional(),
-  purchaseInvoiceDate: z.string().trim().optional(),
-  grnDcNo: z.string().trim().optional(),
-  grnDcDate: z.string().trim().optional(),
-  receiptRemarks: z.string().trim().optional(),
+// Every row with a non-blank Item Code is part of the document — same
+// "filled row" convention Stock Indent/Stock Transfer use.
+export function isBlankItemRow(row) {
+  return !row?.itemCode?.trim();
+}
 
-  supplier: z.string().trim().min(1, 'Select a supplier'),
-  fromOutlet: z.string().trim().min(1, 'Select a from outlet / HO'),
-  costCenter: z.string().trim().optional(),
-  contactPerson: z.string().trim().optional(),
-  mobileNo: z.string().trim().optional(),
+export const createStockReceiptSchema = z
+  .object({
+    receiptDate: z.string().trim().min(1, 'Receipt date is required'),
+    purchaseType: z.string().trim().min(1, 'Select a purchase type'),
+    purchaseInvoiceNo: z.string().trim().optional(),
+    purchaseInvoiceDate: z.string().trim().optional(),
+    grnDcNo: z.string().trim().optional(),
+    grnDcDate: z.string().trim().optional(),
+    receiptRemarks: z.string().trim().optional(),
 
-  referenceNo: z.string().trim().optional(),
-  vehicleNo: z.string().trim().optional(),
-  transporter: z.string().trim().optional(),
-  deliveryChallanNo: z.string().trim().optional(),
-  otherRemarks: z.string().trim().optional(),
+    supplier: z.string().trim().min(1, 'Select a supplier'),
+    fromOutlet: z.string().trim().min(1, 'Select a from outlet / HO'),
+    costCenter: z.string().trim().optional(),
+    contactPerson: z.string().trim().optional(),
+    mobileNo: z.string().trim().optional(),
 
-  notes: z.string().trim().optional(),
-  items: z.array(itemRowSchema),
-});
+    referenceNo: z.string().trim().optional(),
+    vehicleNo: z.string().trim().optional(),
+    transporter: z.string().trim().optional(),
+    deliveryChallanNo: z.string().trim().optional(),
+    otherRemarks: z.string().trim().optional(),
+
+    notes: z.string().trim().optional(),
+    items: z.array(itemRowSchema),
+  })
+  .superRefine((values, ctx) => {
+    const filledRows = values.items.filter((row) => !isBlankItemRow(row));
+    values.items.forEach((row, index) => {
+      if (isBlankItemRow(row)) return;
+      if (!row.itemName?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'itemName'], message: 'Item name is required' });
+      }
+      if (!row.receivedQty?.trim() || Number(row.receivedQty) <= 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'receivedQty'], message: 'Received qty must be greater than 0' });
+      }
+    });
+    if (filledRows.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items'], message: 'Add at least one item' });
+    }
+  });
 
 export const createStockReceiptDefaultValues = {
   receiptDate: todayFormatted(),

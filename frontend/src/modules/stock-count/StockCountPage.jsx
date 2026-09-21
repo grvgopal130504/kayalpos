@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -16,78 +16,76 @@ import StockCountTable from './components/StockCountTable';
 import StockCountDetailsCard from './components/StockCountDetailsCard';
 import CreateStockCountPage from './CreateStockCountPage';
 import CountViewPage from './CountViewPage';
-import { SUMMARY, COUNTS, TOTAL_COUNT_COUNT, COUNT_DETAILS } from './stockCountMockData';
-
-const COUNT_BY_CODE = Object.fromEntries(COUNTS.map((c) => [c.code, c]));
+import { useGetStockCountsQuery, useStockCountSummaryQuery } from '../../api/stockCountApi';
+import { toCountRow, toCountDetails, buildSummary } from './stockCountDisplay';
 
 /**
  * Landing page for the sidebar's Stock Count item — summary tiles, the
  * count list with a detail panel for whichever row is selected, plus the
  * create/edit form and the read-only view, all swapped in via local state
- * instead of separate /create, /edit/:code, /view/:code routes. The Stock
- * Count backend module doesn't exist yet, so everything is driven by
- * stockCountMockData.js — selecting a row other than CNT-00030 falls back
- * to reusing COUNT_DETAILS' shape (only the top-level fields differ)
- * since we don't have full mock detail records for every row.
+ * instead of separate /create, /edit/:id, /view/:id routes. Fully wired to
+ * the real backend (see backend/src/modules/stock-count): every tile, row
+ * and detail field comes from the actual StockCount table, so a tenant with
+ * no counts yet honestly shows zeros/empty states instead of this page's
+ * old static mock data. Rows are keyed/selected by real `id` (not `code`),
+ * same convention every other module's table adopted once it was wired to
+ * a real backend.
  */
 export default function StockCountPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [tab, setTab] = useState('list');
-  const [activeCode, setActiveCode] = useState(null);
+  const [activeId, setActiveId] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(COUNT_DETAILS.code);
+  const [selectedId, setSelectedId] = useState(null);
+
+  const { data: counts = [], isLoading, isError } = useGetStockCountsQuery({});
+  const { data: summaryData } = useStockCountSummaryQuery();
+
+  const rows = useMemo(() => counts.map(toCountRow), [counts]);
+  const summary = useMemo(() => buildSummary(summaryData), [summaryData]);
+  const countById = useMemo(() => Object.fromEntries(counts.map((c) => [c.id, c])), [counts]);
 
   const goToList = () => {
-    setActiveCode(null);
+    setActiveId(null);
     setTab('list');
   };
-  const openEdit = (code) => {
-    setActiveCode(code);
+  const openEdit = (id) => {
+    setActiveId(id);
     setTab('edit');
   };
-  const openView = (code) => {
-    setActiveCode(code);
+  const openView = (id) => {
+    setActiveId(id);
     setTab('view');
   };
 
   if (tab === 'create' || tab === 'edit') {
     return (
       <CreateStockCountPage
-        code={tab === 'edit' ? activeCode : undefined}
-        onBack={tab === 'edit' ? () => openView(activeCode) : goToList}
+        id={tab === 'edit' ? activeId : undefined}
+        onBack={(savedId) => (tab === 'edit' ? openView(savedId || activeId) : goToList())}
       />
     );
   }
 
   if (tab === 'view') {
-    return <CountViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+    return <CountViewPage id={activeId} onBack={goToList} onEdit={() => openEdit(activeId)} />;
   }
 
-  const selectedRow = COUNT_BY_CODE[selectedCode];
-  const countDetails = selectedCode === COUNT_DETAILS.code
-    ? COUNT_DETAILS
-    : {
-        ...COUNT_DETAILS,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        warehouse: selectedRow.warehouse,
-        countType: selectedRow.countType,
-        items: selectedRow.items,
-        varianceValue: selectedRow.varianceValue,
-        status: selectedRow.status,
-      };
+  const effectiveSelectedId = selectedId && countById[selectedId] ? selectedId : counts[0]?.id;
+  const selectedCount = effectiveSelectedId ? countById[effectiveSelectedId] : null;
+  const countDetails = selectedCount ? toCountDetails(selectedCount) : null;
 
-  const handleSelectCount = (row) => setSelectedCode(row.code);
+  const handleSelectCount = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return openView(row.code);
-    if (label === 'Edit') return openEdit(row.code);
+    if (label === 'View') return openView(row.id);
+    if (label === 'Edit') return openEdit(row.id);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Counts is coming soon', 'info'));
   const handleCreate = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => openEdit(selectedCode);
+  const handleEdit = () => openEdit(effectiveSelectedId);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
@@ -126,15 +124,14 @@ export default function StockCountPage() {
         </Stack>
       </Stack>
 
-      <StockCountSummaryCards summary={SUMMARY} />
+      <StockCountSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <StockCountTable
-              counts={COUNTS}
-              totalCount={TOTAL_COUNT_COUNT}
-              selectedCode={selectedCode}
+              counts={rows}
+              selectedId={effectiveSelectedId}
               onSelectCount={handleSelectCount}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -142,8 +139,18 @@ export default function StockCountPage() {
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <Box sx={{ height: { lg: 560 } }}>
-            <StockCountDetailsCard count={countDetails} onEdit={handleEdit} />
+          <Box sx={{ height: { lg: 560 }, overflow: 'auto' }}>
+            {isLoading ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>Loading counts…</Typography>
+            ) : isError ? (
+              <Typography variant="body2" color="error" sx={{ p: 2 }}>Failed to load counts.</Typography>
+            ) : countDetails ? (
+              <StockCountDetailsCard count={countDetails} onEdit={handleEdit} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No counts yet — create one to get started.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

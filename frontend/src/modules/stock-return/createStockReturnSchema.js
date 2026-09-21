@@ -1,4 +1,17 @@
 import { z } from 'zod';
+import { formatPickerDate } from '../../components/form/FormDatePicker';
+
+// `supplier`/`fromOutlet` options now come from the real Supplier/Outlet
+// APIs (see CreateStockReturnPage, which builds them from
+// useGetSuppliersQuery/useGetOutletsQuery) — the old mock-data version
+// hardcoded both as fixed lists of specific supplier/outlet names. Return
+// Type/Reference Type/Cost Center/UoM/Warehouse have no backing master
+// table yet (there's no such model in the schema), so they stay fixed, same
+// scope decision Stock Receipt makes for its own Purchase Type/Cost Center/
+// UoM/Warehouse. Reference No. used to be a fixed dropdown of fabricated
+// invoice numbers (PINV-00021, ...) — there is no real Purchase Invoice/GRN
+// master to select from, so it's now plain free text, matching how Stock
+// Receipt's own analogous "Reference (if any)" field is handled.
 
 export const RETURN_TYPE_OPTIONS = [
   { value: '', label: 'Select Return Type', disabled: true },
@@ -14,30 +27,6 @@ export const REFERENCE_TYPE_OPTIONS = [
   { value: 'Stock Receipt', label: 'Stock Receipt' },
   { value: 'GRN', label: 'GRN' },
   { value: 'None', label: 'None' },
-];
-
-export const REFERENCE_NO_OPTIONS = [
-  { value: '', label: 'Select Purchase Invoice', disabled: true },
-  { value: 'PINV-00021', label: 'PINV-00021' },
-  { value: 'PINV-00020', label: 'PINV-00020' },
-  { value: 'PINV-00019', label: 'PINV-00019' },
-];
-
-export const SUPPLIER_OPTIONS = [
-  { value: '', label: 'Select Supplier', disabled: true },
-  { value: 'sri-krishna-traders', label: 'Sri Krishna Traders' },
-  { value: 'anna-nagar-distributors', label: 'Anna Nagar Distributors' },
-  { value: 'metro-wholesale-foods', label: 'Metro Wholesale Foods' },
-  { value: 'coimbatore-agro-supplies', label: 'Coimbatore Agro Supplies' },
-];
-
-export const OUTLET_OPTIONS = [
-  { value: '', label: 'Select From Outlet / HO', disabled: true },
-  { value: 'rs-puram', label: 'RS Puram Outlet' },
-  { value: 'anna-nagar', label: 'Anna Nagar Outlet' },
-  { value: 'market-street', label: 'Market Street Outlet' },
-  { value: 'main-warehouse', label: 'Main Warehouse' },
-  { value: 'head-office', label: 'Head Office' },
 ];
 
 export const COST_CENTER_OPTIONS = [
@@ -62,9 +51,11 @@ export const WAREHOUSE_OPTIONS = [
   { value: 'cold-storage', label: 'Cold Storage' },
 ];
 
+// Dates are entered via FormDatePicker, which stores/parses the "DD Mon
+// YYYY" format (e.g. "19 Sep 2026") — same convention Stock Receipt/Stock
+// Indent/Stock Transfer already use for their own date defaults.
 function todayFormatted() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  return formatPickerDate(new Date());
 }
 
 export function emptyItemRow() {
@@ -73,7 +64,7 @@ export function emptyItemRow() {
     itemName: '',
     hsnCode: '',
     uom: '',
-    returnedQty: '0.00',
+    returnedQty: '',
     unitCost: '0.00',
     discount: '0.00',
     tax: '0.00',
@@ -84,45 +75,72 @@ export function emptyItemRow() {
   };
 }
 
+// A plain non-negative decimal amount, entered as free text — same
+// convention as Stock Receipt's own decimalString() helper.
+const decimalString = (message) => z.string().trim()
+  .refine((v) => v === '' || (/^\d+(\.\d{1,3})?$/.test(v) && Number(v) >= 0), message);
+
 const itemRowSchema = z.object({
   itemCode: z.string().trim(),
   itemName: z.string().trim(),
   hsnCode: z.string().trim(),
   uom: z.string().trim(),
-  returnedQty: z.string().trim(),
-  unitCost: z.string().trim(),
-  discount: z.string().trim(),
-  tax: z.string().trim(),
+  returnedQty: decimalString('Enter a valid returned quantity'),
+  unitCost: decimalString('Enter a valid unit cost'),
+  discount: decimalString('Enter a valid discount'),
+  tax: decimalString('Enter a valid tax'),
   warehouse: z.string().trim(),
   batchNo: z.string().trim(),
   expiryDate: z.string().trim(),
   remarks: z.string().trim(),
 });
 
-export const createStockReturnSchema = z.object({
-  returnDate: z.string().trim().min(1, 'Return date is required'),
-  returnType: z.string().trim().min(1, 'Select a return type'),
-  referenceType: z.string().trim().min(1, 'Select a reference type'),
-  referenceNo: z.string().trim().min(1, 'Select a reference number'),
-  referenceDate: z.string().trim().optional(),
-  returnReason: z.string().trim().optional(),
-  returnRemarks: z.string().trim().optional(),
+// Every row with a non-blank Item Code is part of the document — same
+// "filled row" convention Stock Receipt/Stock Indent/Stock Transfer use.
+export function isBlankItemRow(row) {
+  return !row?.itemCode?.trim();
+}
 
-  supplier: z.string().trim().min(1, 'Select a supplier'),
-  fromOutlet: z.string().trim().min(1, 'Select a from outlet / HO'),
-  costCenter: z.string().trim().optional(),
-  contactPerson: z.string().trim().optional(),
-  mobileNo: z.string().trim().optional(),
+export const createStockReturnSchema = z
+  .object({
+    returnDate: z.string().trim().min(1, 'Return date is required'),
+    returnType: z.string().trim().min(1, 'Select a return type'),
+    referenceType: z.string().trim().min(1, 'Select a reference type'),
+    referenceNo: z.string().trim().optional(),
+    referenceDate: z.string().trim().optional(),
+    returnReason: z.string().trim().optional(),
+    returnRemarks: z.string().trim().optional(),
 
-  grnDcNo: z.string().trim().optional(),
-  grnDcDate: z.string().trim().optional(),
-  vehicleNo: z.string().trim().optional(),
-  transporter: z.string().trim().optional(),
-  otherRemarks: z.string().trim().optional(),
+    supplier: z.string().trim().min(1, 'Select a supplier'),
+    fromOutlet: z.string().trim().min(1, 'Select a from outlet / HO'),
+    costCenter: z.string().trim().optional(),
+    contactPerson: z.string().trim().optional(),
+    mobileNo: z.string().trim().optional(),
 
-  notes: z.string().trim().optional(),
-  items: z.array(itemRowSchema),
-});
+    grnDcNo: z.string().trim().optional(),
+    grnDcDate: z.string().trim().optional(),
+    vehicleNo: z.string().trim().optional(),
+    transporter: z.string().trim().optional(),
+    otherRemarks: z.string().trim().optional(),
+
+    notes: z.string().trim().optional(),
+    items: z.array(itemRowSchema),
+  })
+  .superRefine((values, ctx) => {
+    const filledRows = values.items.filter((row) => !isBlankItemRow(row));
+    values.items.forEach((row, index) => {
+      if (isBlankItemRow(row)) return;
+      if (!row.itemName?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'itemName'], message: 'Item name is required' });
+      }
+      if (!row.returnedQty?.trim() || Number(row.returnedQty) <= 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'returnedQty'], message: 'Returned qty must be greater than 0' });
+      }
+    });
+    if (filledRows.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items'], message: 'Add at least one item' });
+    }
+  });
 
 export const createStockReturnDefaultValues = {
   returnDate: todayFormatted(),

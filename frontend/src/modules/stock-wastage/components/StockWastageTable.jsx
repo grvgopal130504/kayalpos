@@ -39,10 +39,13 @@ function RowActions({ onAction }) {
 /**
  * Stock Wastage list: tab filter (All/Draft/Approved), search, page-size
  * selector, Filters button, the paginated table, and a row-click that loads
- * that wastage into StockWastageDetailsCard on the right.
+ * that wastage into StockWastageDetailsCard on the right. Rows are keyed/
+ * selected by real `id` (not `code`) — same convention every other module's
+ * table adopted once it was wired to a real backend (Stock Receipt, Stock
+ * Return, Stock Indent, Stock Transfer).
  */
 export default function StockWastageTable({
-  wastages, totalCount, selectedCode, onSelectWastage, onRowAction, onFilters,
+  wastages, selectedId, onSelectWastage, onRowAction, onFilters,
 }) {
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
@@ -56,13 +59,10 @@ export default function StockWastageTable({
     return w.outlet.toLowerCase().includes(q) || w.code.toLowerCase().includes(q);
   });
 
-  const isFiltering = tab !== 'all' || query.trim().length > 0;
-  const effectiveTotal = isFiltering ? filtered.length : (totalCount ?? filtered.length);
-
-  const pageCount = Math.max(1, Math.ceil(effectiveTotal / pageSize));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount);
-  const rangeStart = effectiveTotal === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const rangeEnd = Math.min(safePage * pageSize, effectiveTotal);
+  const rangeStart = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, filtered.length);
   const visibleRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleTabChange = (v) => { setTab(v); setPage(1); };
@@ -79,7 +79,7 @@ export default function StockWastageTable({
           <Typography
             variant="body2"
             noWrap
-            sx={{ fontWeight: 600, color: row.code === selectedCode ? 'primary.main' : 'text.primary' }}
+            sx={{ fontWeight: 600, color: row.id === selectedId ? 'primary.main' : 'text.primary' }}
           >
             {row.code}
           </Typography>
@@ -164,7 +164,7 @@ export default function StockWastageTable({
         <DataTable
           columns={columns}
           rows={visibleRows}
-          getRowKey={(r) => r.code}
+          getRowKey={(r) => r.id}
           emptyMessage="No wastages match your search"
         />
       </Box>
@@ -175,9 +175,9 @@ export default function StockWastageTable({
         sx={{ px: 2, py: 1.5, alignItems: 'center', justifyContent: 'space-between' }}
       >
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {effectiveTotal === 0
+          {filtered.length === 0
             ? 'No entries'
-            : `Showing ${rangeStart} to ${rangeEnd} of ${formatNumber(effectiveTotal)} entries`}
+            : `Showing ${rangeStart} to ${rangeEnd} of ${formatNumber(filtered.length)} entries`}
         </Typography>
         {pageCount > 1 && (
           <Pagination

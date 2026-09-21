@@ -8,26 +8,38 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import QuotationDetailsCard from './components/QuotationDetailsCard';
 import QuotationTermsAndNotes from './components/QuotationTermsAndNotes';
-import { getQuotationDetails } from './salesQuotationMockData';
+import { useGetSalesQuotationQuery } from '../../api/salesQuotationApi';
+import { toQuotationDetails } from './salesQuotationDisplay';
 
 /**
  * Read-only "View Quotation" body for SalesQuotationTable's row menu —
  * reuses the exact same QuotationDetailsCard/QuotationTermsAndNotes cards
  * the Overview/Status pages already show for the selected row. Rendered by
- * SalesQuotationPage via props (`code`/`onBack`/`onEdit`) as part of the
- * single /sales-quotation page rather than its own route.
+ * SalesQuotationPage via props (`id`/`onBack`/`onEdit`) as part of the
+ * single /sales-quotation page rather than its own route. Fully wired to
+ * the real backend — every field here comes from the actual SalesQuotation
+ * row fetched by GET /api/sales-quotations/:id.
  */
-export default function QuotationViewPage({ code: propCode, onBack, onEdit }) {
+export default function QuotationViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code: paramCode } = useParams();
-  const code = propCode ?? paramCode;
-  const quotation = getQuotationDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: row, isLoading, isError } = useGetSalesQuotationQuery(id, { skip: !id });
+  const quotation = row ? toQuotationDetails(row) : null;
   const [notes, setNotes] = useState('');
 
   const handleBack = () => (onBack ? onBack() : navigate('/sales-quotation'));
-  const handleEdit = () => (onEdit ? onEdit() : navigate(`/sales-quotation/edit/${code}`));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/sales-quotation/edit/${id}`));
 
-  if (!quotation) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading quotation…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !quotation) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Quotation not found</Typography>

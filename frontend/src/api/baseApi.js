@@ -20,6 +20,6 @@ export const baseApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'Brand', 'Outlet', 'Product', 'Customer'],
+  tagTypes: ['Auth', 'Brand', 'Outlet', 'Product', 'Customer', 'Supplier', 'Sale', 'Promotion', 'GiftVoucher', 'LoyaltyProgram', 'SalesQuotation', 'SalesReturn', 'SalesOrder', 'SalesInvoice', 'BarcodeLabel', 'StockIndent', 'StockTransfer', 'StockReceipt', 'StockReturn', 'StockWastage', 'StockCount'],
   endpoints: () => ({}),
 });
