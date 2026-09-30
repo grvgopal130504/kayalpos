@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,117 +19,162 @@ import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
-import { CUSTOMERS } from '../customer/customerMockData';
+import { useGetCustomersQuery } from '../../api/customerApi';
+import { useGetProductsQuery } from '../../api/productApi';
+import { useGetSalesQuotationsQuery } from '../../api/salesQuotationApi';
+import {
+  useGetSalesOrderQuery, useNextSalesOrderCodeQuery,
+  useCreateSalesOrderMutation, useUpdateSalesOrderMutation,
+} from '../../api/salesOrderApi';
 
 import OrderItemsTable from './components/OrderItemsTable';
 import OrderTotalsCard from './components/OrderTotalsCard';
 import OrderTermsAndNotes from './components/OrderTermsAndNotes';
-import { ORDERS, getOrderDetails } from './salesOrderMockData';
 import {
-  createSalesOrderSchema, createSalesOrderDefaultValues,
-  CUSTOMER_OPTIONS, CONTACT_PERSON_OPTIONS, PAYMENT_TERMS_OPTIONS, SALES_PERSON_OPTIONS,
-  CURRENCY_OPTIONS, PRICE_LIST_OPTIONS, QUOTATION_REFERENCE_OPTIONS,
+  createSalesOrderSchema, createSalesOrderDefaultValues, emptyItemRow, isBlankItemRow,
+  CONTACT_PERSON_OPTIONS, PAYMENT_TERMS_OPTIONS, SALES_PERSON_OPTIONS,
+  CURRENCY_OPTIONS, PRICE_LIST_OPTIONS,
 } from './createSalesOrderSchema';
-
-function nextOrderCode() {
-  const maxNum = ORDERS.reduce((max, o) => Math.max(max, Number(o.code.slice(3))), 0);
-  return `SO-${String(maxNum + 1).padStart(5, '0')}`;
-}
-
-// The mock detail record only carries the customer's name, not their code —
-// best-effort match it back to a CUSTOMERS row so the Customer select can be
-// prefilled in edit mode; falls back to blank (still selectable manually)
-// when no match is found.
-function findCustomerIdByName(name) {
-  const match = CUSTOMERS.find((c) => c.name === name);
-  return match ? match.code : '';
-}
-
-function itemToRow(item) {
-  const lineTotal = item.qty * item.unitPrice;
-  const discountPercent = lineTotal > 0 ? Math.round((item.discount / lineTotal) * 10000) / 100 : 0;
-  return {
-    itemCode: item.code,
-    itemName: item.name,
-    hsnCode: item.hsn,
-    qty: String(item.qty),
-    unit: '',
-    unitPrice: String(item.unitPrice),
-    discountPercent: discountPercent ? String(discountPercent) : '',
-    taxCode: '',
-  };
-}
+import { orderToFormValues, formValuesToPayload } from './salesOrderDisplay';
 
 /**
- * "New Sales Order" screen, also doubling as the Edit Order page when
- * reached via `/sales-order/edit/:code` — the Sales Order module has no
- * backend yet, so "editing" prefills from getOrderDetails() the same way
- * the Overview/Status pages' own detail panel does. Mirrors
- * CreateSalesQuotationPage's structure exactly: Customer Details + Order
- * Details cards, an editable line-items grid with a live totals summary,
- * and Terms & Conditions / Notes below.
+ * "New Sales Order" screen, also doubling as the Edit Order form when
+ * SalesOrderPage renders it with an `id` prop — everything (list, create,
+ * edit, view) lives on the one /sales-order page. Fully wired to the real
+ * backend (see backend/src/modules/sales-order): Customer comes from the
+ * real Customer table, the Order No. is a live preview of the next real
+ * code, "Quotation Ref." lists real converted Sales Quotations, and both
+ * "Save as Draft" and "Save & Confirm" actually create/update a SalesOrder
+ * row with the same validations enforced again server-side.
  *
- * Note: the reference mockup appears to swap its "Delivery Date" and
- * "Payment Terms" labels/placeholders (a "Delivery Date" field shows a
- * "Select Payment Terms" placeholder and vice versa). Following the same
- * judgment call made on the Sales Quotation form, that mismatch is treated
- * as a mockup typo and corrected here rather than replicated literally —
- * each field's label matches its own placeholder/behavior.
+ * Note: "Save as Draft" saves with status 'pending' rather than a literal
+ * 'draft' — the Sales Order module has no separate draft state (its list
+ * only ever filters by Pending/Confirmed/Delivered, unlike Sales Quotation's
+ * Draft/Pending split), so a not-yet-confirmed order is honestly "pending"
+ * even before it's formally confirmed. Same judgment call the earlier Sales
+ * Quotation/Sales Return work made when the reference mockup's copy didn't
+ * quite match its own underlying data model.
  */
-export default function CreateSalesOrderPage({ onBack }) {
+export default function CreateSalesOrderPage({ id: propId, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
-  const isEditMode = Boolean(code);
-  const existingOrder = isEditMode ? getOrderDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const orderCode = useMemo(() => (isEditMode ? code : nextOrderCode()), [isEditMode, code]);
+
+  const { data: customers = [] } = useGetCustomersQuery({});
+  const { data: products = [] } = useGetProductsQuery({});
+  const { data: quotations = [] } = useGetSalesQuotationsQuery({});
+  const { data: existingOrder, isLoading: isLoadingExisting, isError: loadError } = useGetSalesOrderQuery(id, { skip: !isEditMode });
+  const nextCode = useNextSalesOrderCodeQuery(undefined, { skip: isEditMode });
+  const [createSalesOrder, { isLoading: isCreating }] = useCreateSalesOrderMutation();
+  const [updateSalesOrder, { isLoading: isUpdating }] = useUpdateSalesOrderMutation();
+  const isSaving = isCreating || isUpdating;
+
+  const customerOptions = useMemo(() => [
+    { value: '', label: 'Select Customer', disabled: true },
+    ...customers.map((c) => ({ value: c.id, label: c.name })),
+  ], [customers]);
+  const customerById = useMemo(() => Object.fromEntries(customers.map((c) => [c.id, c])), [customers]);
+
+  // Only quotations already marked 'converted' by Sales Quotation's own
+  // live-computed status (see salesQuotation.service.js's computeStatus)
+  // can be referenced here — same restriction the old mock data applied.
+  const quotationRefOptions = useMemo(() => [
+    { value: '', label: 'Select Quotation Reference' },
+    ...quotations.filter((q) => q.status === 'converted').map((q) => ({ value: q.code, label: q.code })),
+  ], [quotations]);
+
+  const orderCode = isEditMode ? existingOrder?.code : nextCode.data;
 
   const methods = useForm({
     resolver: zodResolver(createSalesOrderSchema),
-    defaultValues: existingOrder
-      ? {
-          ...createSalesOrderDefaultValues,
-          customerId: findCustomerIdByName(existingOrder.customer.name),
-          mobile: existingOrder.customer.mobile,
-          email: existingOrder.customer.email,
-          address: existingOrder.customer.address,
-          orderDate: existingOrder.date,
-          deliveryDate: existingOrder.deliveryDate,
-          paymentTerms: (existingOrder.paymentTerms || '').toLowerCase(),
-          salesPerson: (existingOrder.salesPerson || '').toLowerCase(),
-          quotationRef: existingOrder.ref && existingOrder.ref !== '-' ? existingOrder.ref : '',
-          items: existingOrder.items?.length ? existingOrder.items.map(itemToRow) : createSalesOrderDefaultValues.items,
-        }
-      : createSalesOrderDefaultValues,
+    defaultValues: createSalesOrderDefaultValues,
     mode: 'onTouched',
   });
-  const { handleSubmit } = methods;
+  const { watch, reset, handleSubmit, setValue } = methods;
+
+  // The edit-mode fetch is async, so the form can't be seeded via useForm's
+  // defaultValues (that only runs once, before the data exists) — reset()
+  // re-seeds every field once the real order row arrives.
+  useEffect(() => {
+    if (existingOrder) reset(orderToFormValues(existingOrder, emptyItemRow));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingOrder]);
+
+  // Prefilling Mobile/Email/Address from the selected customer's own record
+  // is a convenience, not a requirement — the order stores its own snapshot
+  // of these fields (matching Sale/Sales Quotation's own "frozen at save
+  // time" rule), so the user can still edit them per-order afterwards. Skips
+  // the very first render (including the reset() above landing on an
+  // existing customerId) so it only fires on an actual manual selection.
+  const customerId = watch('customerId');
+  const isFirstCustomerRender = useRef(true);
+  useEffect(() => {
+    if (isFirstCustomerRender.current) {
+      isFirstCustomerRender.current = false;
+      return;
+    }
+    const customer = customerById[customerId];
+    if (!customer) return;
+    setValue('mobile', customer.mobile || '');
+    setValue('email', customer.email || '');
+    setValue('address', customer.address || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/sales-order/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/sales-order/overview');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/sales-order/view/${id}`);
+    navigate('/sales-order');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleAddCustomer = () => navigate('/customer/add');
+  const handleAddCustomer = () => navigate('/customer');
   const handleAddItem = () => dispatch(showToast('Item picker is coming soon', 'info'));
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Order ${orderCode} updated successfully` : `Order ${orderCode} saved as draft`, 'success'));
-    handleBack();
-  });
-  const onSaveAndConfirm = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Order ${orderCode} updated successfully` : `Order ${orderCode} saved and confirmed`, 'success'));
-    handleBack();
-  });
+  const save = async (values, status) => {
+    const payload = formValuesToPayload(values, { status, isBlankItemRow });
+    try {
+      const saved = isEditMode
+        ? await updateSalesOrder({ id, ...payload }).unwrap()
+        : await createSalesOrder(payload).unwrap();
+      dispatch(showToast(
+        isEditMode
+          ? `Order ${saved.code} updated successfully`
+          : `Order ${saved.code} ${status === 'pending' ? 'saved as draft' : 'saved and confirmed'}`,
+        'success',
+      ));
+      if (onBack) onBack(saved.id);
+      else if (isEditMode) navigate(`/sales-order/view/${saved.id}`);
+      else navigate('/sales-order');
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the order', 'error'));
+    }
+  };
 
-  if (isEditMode && !existingOrder) {
+  // Editing an order keeps whatever status it already has — updating one
+  // that's already 'confirmed' shouldn't silently demote it back to
+  // 'pending' just because someone opened it to fix a typo (the same
+  // principle Sales Quotation's own edit-status logic follows).
+  const editingStatus = existingOrder?.status === 'confirmed' ? 'confirmed' : 'pending';
+  const onSaveAsDraft = handleSubmit((values) => save(values, isEditMode ? editingStatus : 'pending'));
+  const onSaveAndConfirm = handleSubmit((values) => save(values, 'confirmed'));
+
+  if (isEditMode && isLoadingExisting) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading order…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && (loadError || !existingOrder)) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Order not found</Typography>
@@ -144,7 +189,7 @@ export default function CreateSalesOrderPage({ onBack }) {
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Sales Order (Edit ${orderCode})` : 'Sales Order (New)'}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Sales Order (Edit ${orderCode || ''})` : 'Sales Order (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/sales-order" underline="hover" color="text.secondary">Sales Order</MuiLink>
@@ -169,19 +214,19 @@ export default function CreateSalesOrderPage({ onBack }) {
           <Menu anchorEl={moreActionsAnchor} open={Boolean(moreActionsAnchor)} onClose={() => setMoreActionsAnchor(null)}>
             <MenuItem onClick={() => handleMoreAction('Save as Template')}>Save as Template</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
-            <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
+            <MenuItem onClick={() => reset(createSalesOrderDefaultValues)}>Reset Form</MenuItem>
           </Menu>
           {isEditMode ? (
-            <Button variant="contained" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-              Update Order
+            <Button variant="contained" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
+              {isSaving ? 'Saving…' : 'Update Order'}
             </Button>
           ) : (
             <>
-              <Button variant="outlined" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-                Save as Draft
+              <Button variant="outlined" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
+                {isSaving ? 'Saving…' : 'Save as Draft'}
               </Button>
-              <Button variant="contained" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndConfirm}>
-                Save &amp; Confirm
+              <Button variant="contained" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndConfirm} disabled={isSaving}>
+                {isSaving ? 'Saving…' : 'Save & Confirm'}
               </Button>
             </>
           )}
@@ -197,7 +242,7 @@ export default function CreateSalesOrderPage({ onBack }) {
                 <Stack spacing={2}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <FormSelect name="customerId" label="Customer *" options={CUSTOMER_OPTIONS} />
+                      <FormSelect name="customerId" label="Customer *" options={customerOptions} />
                     </Box>
                     <IconButton
                       onClick={handleAddCustomer}
@@ -220,16 +265,16 @@ export default function CreateSalesOrderPage({ onBack }) {
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Order Details</Typography>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField label="Order No." value={orderCode} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
+                    <TextField label="Order No." value={orderCode || 'Generating…'} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormDatePicker name="orderDate" label="Order Date *" />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormDatePicker name="deliveryDate" label="Delivery Date *" placeholder="Select Delivery Date" />
+                    <FormDatePicker name="deliveryDate" label="Delivery Date *" />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormSelect name="paymentTerms" label="Payment Terms" placeholder="Select Payment Terms" options={PAYMENT_TERMS_OPTIONS} />
+                    <FormSelect name="paymentTerms" label="Payment Terms" options={PAYMENT_TERMS_OPTIONS} />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormSelect name="salesPerson" label="Sales Person *" options={SALES_PERSON_OPTIONS} />
@@ -238,7 +283,7 @@ export default function CreateSalesOrderPage({ onBack }) {
                     <FormSelect name="currency" label="Currency" options={CURRENCY_OPTIONS} />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormSelect name="quotationRef" label="Quotation Ref." options={QUOTATION_REFERENCE_OPTIONS} />
+                    <FormSelect name="quotationRef" label="Quotation Ref." options={quotationRefOptions} />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormDatePicker name="referenceDate" label="Reference Date" placeholder="Select Date" />
@@ -258,7 +303,7 @@ export default function CreateSalesOrderPage({ onBack }) {
             <Grid size={{ xs: 12, lg: 8 }}>
               <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
-                <OrderItemsTable onAddItem={handleAddItem} />
+                <OrderItemsTable onAddItem={handleAddItem} products={products} />
               </Paper>
             </Grid>
             <Grid size={{ xs: 12, lg: 4 }}>

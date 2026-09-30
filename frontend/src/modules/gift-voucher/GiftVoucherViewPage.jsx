@@ -6,23 +6,34 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import GiftVoucherDetailsCard from './components/GiftVoucherDetailsCard';
-import { getGiftVoucherDetails } from './giftVoucherMockData';
+import { useGetGiftVoucherQuery } from '../../api/giftVoucherApi';
+import { toGiftVoucherDetails } from './giftVoucherDisplay';
 
 /**
  * Read-only "View Gift Voucher" destination for GiftVoucherTable's row
  * menu — reuses the exact same GiftVoucherDetailsCard the list page already
- * shows for the selected row, just addressed by :code as its own full page
- * instead of a side panel.
+ * shows for the selected row, just addressed by :id as its own full page.
+ * Fully wired to the backend: `id` is the real GiftVoucher row's cuid, not
+ * the display code.
  */
-export default function GiftVoucherViewPage() {
+export default function GiftVoucherViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
-  const voucher = getGiftVoucherDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: voucher, isLoading, isError } = useGetGiftVoucherQuery(id, { skip: !id });
 
-  const handleBack = () => navigate('/gift-voucher');
-  const handleEdit = () => navigate(`/gift-voucher/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/gift-voucher'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/gift-voucher/edit/${id}`));
 
-  if (!voucher) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading gift voucher…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !voucher) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Gift voucher not found</Typography>
@@ -33,15 +44,17 @@ export default function GiftVoucherViewPage() {
     );
   }
 
+  const details = toGiftVoucherDetails(voucher);
+
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{voucher.code}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{details.code}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/gift-voucher" underline="hover" color="text.secondary">Gift Voucher</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{voucher.code}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{details.code}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -56,7 +69,7 @@ export default function GiftVoucherViewPage() {
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={12}>
-          <GiftVoucherDetailsCard voucher={voucher} onEdit={handleEdit} />
+          <GiftVoucherDetailsCard voucher={details} onEdit={handleEdit} />
         </Grid>
       </Grid>
     </Stack>

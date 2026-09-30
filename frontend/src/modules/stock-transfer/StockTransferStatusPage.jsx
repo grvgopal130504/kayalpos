@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -18,14 +18,13 @@ import AutorenewOutlinedIcon from '@mui/icons-material/AutorenewOutlined';
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import StatCard from '../../components/common/StatCard';
-import { formatCurrency, formatNumber } from '../../utils/format';
+import { formatNumber, formatCurrency } from '../../utils/format';
 
 import StockTransferTable from './components/StockTransferTable';
 import TransferDetailsCard from './components/TransferDetailsCard';
 import TransferTermsAndNotes from './components/TransferTermsAndNotes';
-import { TRANSFERS, STATUS_DETAILS, STATUS_STATS } from './stockTransferMockData';
-
-const TRANSFER_BY_CODE = Object.fromEntries(TRANSFERS.map((t) => [t.code, t]));
+import { useGetStockTransfersQuery, useStockTransferStatusSummaryQuery } from '../../api/stockTransferApi';
+import { toTransferRow, toTransferDetails, buildStatusStats } from './stockTransferDisplay';
 
 const STATUS_META = {
   draft: { label: 'Draft Transfers', pageTitle: 'Draft', icon: EditNoteOutlinedIcon, iconColor: 'warning' },
@@ -35,7 +34,9 @@ const STATUS_META = {
 };
 
 // The 3 "extra" stat tile icons/colors per status, in the same order as
-// each status's STATUS_STATS.extra array.
+// buildStatusStats()'s extra array (Total Estimated Value / Average
+// Transfer Value / Total Line Items — all real aggregates, see
+// stockTransferDisplay.js).
 const EXTRA_TILE_STYLE = {
   draft: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
@@ -62,41 +63,42 @@ const EXTRA_TILE_STYLE = {
 /**
  * Shared page for the Draft / In Transit / Received / Cancelled cards on
  * the Stock Transfer landing grid — same list+details+terms layout as the
- * "All Transfers" overview page, scoped by `status`. Mirrors
- * StockIndentStatusPage.
+ * "All Transfers" overview page, scoped by `status`. Fully wired to the
+ * real backend: the table's rows and the 4 stat tiles both come from
+ * actual StockTransfer rows (see backend/src/modules/stock-transfer's
+ * getStockTransferStatusSummary), so a status with zero transfers honestly
+ * shows zeros/empty states rather than fabricated figures. The Received/
+ * Cancelled tabs in particular will genuinely show zero until a real
+ * receive/cancel backend action exists (see the StockTransfer model
+ * comment in schema.prisma) — nothing sets those statuses yet, so that's
+ * the honest state, not a bug.
  */
-export default function StockTransferStatusPage({ status, tab, onTabChange, onCreate }) {
+export default function StockTransferStatusPage({ status, tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const meta = STATUS_META[status];
-  const stats = STATUS_STATS[status];
-  const detailsTemplate = STATUS_DETAILS[status];
   const extraStyle = EXTRA_TILE_STYLE[status];
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const firstOfStatus = TRANSFERS.find((t) => t.status === status) || TRANSFERS[0];
-  const [selectedCode, setSelectedCode] = useState(firstOfStatus.code);
-  const selectedRow = TRANSFER_BY_CODE[selectedCode] || firstOfStatus;
-  const transferDetails = selectedCode === detailsTemplate.code
-    ? detailsTemplate
-    : {
-        ...detailsTemplate,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        fromOutlet: selectedRow.fromOutlet,
-        toOutlet: selectedRow.toOutlet,
-        indentRef: selectedRow.indentRef,
-        requiredBy: selectedRow.requiredBy,
-        estimatedValue: selectedRow.estimatedValue,
-        ...(selectedRow.status === 'received' ? { receivedOn: selectedRow.date, receivedBy: 'Admin' } : {}),
-      };
+  const { data: transfers = [] } = useGetStockTransfersQuery({});
+  const { data: statusSummaryData } = useStockTransferStatusSummaryQuery(status);
 
-  const handleSelectTransfer = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => transfers.map(toTransferRow), [transfers]);
+  const statusRows = useMemo(() => rows.filter((r) => r.status === status), [rows, status]);
+  const stats = useMemo(() => buildStatusStats(status, statusSummaryData), [status, statusSummaryData]);
+  const transferById = useMemo(() => Object.fromEntries(transfers.map((t) => [t.id, t])), [transfers]);
+
+  const effectiveSelectedId = (selectedId && transferById[selectedId] && rows.find((r) => r.id === selectedId)?.status === status ? selectedId : statusRows[0]?.id);
+  const selectedTransfer = effectiveSelectedId ? transferById[effectiveSelectedId] : null;
+  const transferDetails = selectedTransfer ? toTransferDetails(selectedTransfer) : null;
+
+  const handleSelectTransfer = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/stock-transfer/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/stock-transfer/edit/${row.code}`);
-    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/stock-transfer/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/stock-transfer/edit/${row.id}`);
+    return dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleCreate = () => {
@@ -114,7 +116,7 @@ export default function StockTransferStatusPage({ status, tab, onTabChange, onCr
       icon: extraStyle[i].icon,
       iconColor: extraStyle[i].iconColor,
       label: tile.label,
-      value: tile.isText ? tile.value : (tile.currency ? formatCurrency(tile.value, { decimals: true }) : formatNumber(tile.value)),
+      value: i === 2 ? formatNumber(tile.value) : formatCurrency(tile.value, { decimals: true }),
       caption: tile.caption,
     })),
   ];
@@ -165,8 +167,8 @@ export default function StockTransferStatusPage({ status, tab, onTabChange, onCr
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <StockTransferTable
-              transfers={TRANSFERS}
-              selectedCode={selectedCode}
+              transfers={rows}
+              selectedId={effectiveSelectedId}
               onSelectTransfer={handleSelectTransfer}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -180,7 +182,13 @@ export default function StockTransferStatusPage({ status, tab, onTabChange, onCr
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: { lg: 560 }, overflow: 'auto' }}>
-            <TransferDetailsCard transfer={transferDetails} title={`Transfer Details (${meta.pageTitle})`} showReceivedFields={status === 'received'} />
+            {transferDetails ? (
+              <TransferDetailsCard transfer={transferDetails} title={`Transfer Details (${meta.pageTitle})`} showReceivedFields={status === 'received'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No {meta.pageTitle.toLowerCase()} transfers yet.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

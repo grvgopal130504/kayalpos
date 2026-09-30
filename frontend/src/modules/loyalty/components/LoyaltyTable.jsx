@@ -42,7 +42,7 @@ function RowActions({ onAction }) {
  * that program into LoyaltyDetailsCard on the right.
  */
 export default function LoyaltyTable({
-  programs, totalCount, selectedCode, onSelectProgram, onRowAction, onFilters,
+  programs, totalCount, selectedId, onSelectProgram, onRowAction, onFilters,
 }) {
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
@@ -79,7 +79,7 @@ export default function LoyaltyTable({
           <Typography
             variant="body2"
             noWrap
-            sx={{ fontWeight: 600, color: row.code === selectedCode ? 'primary.main' : 'text.primary' }}
+            sx={{ fontWeight: 600, color: row.id === selectedId ? 'primary.main' : 'text.primary' }}
           >
             {row.name}
           </Typography>
@@ -164,7 +164,7 @@ export default function LoyaltyTable({
         <DataTable
           columns={columns}
           rows={visibleRows}
-          getRowKey={(r) => r.code}
+          getRowKey={(r) => r.id}
           emptyMessage="No programs match your search"
         />
       </Box>

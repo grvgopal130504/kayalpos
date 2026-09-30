@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -13,10 +13,8 @@ import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import ErrorOutlineOutlinedIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
-import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
+import TrendingUpOutlinedIcon from '@mui/icons-material/TrendingUpOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
-import AutorenewOutlinedIcon from '@mui/icons-material/AutorenewOutlined';
-import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
@@ -26,9 +24,8 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 import SalesInvoiceTable from './components/SalesInvoiceTable';
 import InvoiceDetailsCard from './components/InvoiceDetailsCard';
 import InvoiceTermsAndNotes from './components/InvoiceTermsAndNotes';
-import { INVOICES, STATUS_DETAILS, STATUS_STATS } from './salesInvoiceMockData';
-
-const INVOICE_BY_CODE = Object.fromEntries(INVOICES.map((inv) => [inv.code, inv]));
+import { useGetSalesInvoicesQuery, useSalesInvoiceStatusSummaryQuery } from '../../api/salesInvoiceApi';
+import { toInvoiceRow, toInvoiceDetails, buildStatusStats } from './salesInvoiceDisplay';
 
 const STATUS_META = {
   draft: { label: 'Draft Invoices', pageTitle: 'Draft', icon: EditNoteOutlinedIcon, iconColor: 'warning' },
@@ -38,69 +35,74 @@ const STATUS_META = {
 };
 
 // The 3 "extra" stat tile icons/colors per status, in the same order as
-// each status's STATUS_STATS.extra array.
+// buildStatusStats()'s extra array (Total Amount / Average Invoice Value /
+// Total Line Items — all real aggregates, see salesInvoiceDisplay.js).
 const EXTRA_TILE_STYLE = {
   draft: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
-    { icon: HourglassEmptyOutlinedIcon, iconColor: 'warning' },
+    { icon: TrendingUpOutlinedIcon, iconColor: 'warning' },
     { icon: DescriptionOutlinedIcon, iconColor: '#8B5CF6' },
   ],
   sent: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
-    { icon: HourglassEmptyOutlinedIcon, iconColor: 'warning' },
-    { icon: AutorenewOutlinedIcon, iconColor: '#8B5CF6' },
+    { icon: TrendingUpOutlinedIcon, iconColor: 'warning' },
+    { icon: DescriptionOutlinedIcon, iconColor: '#8B5CF6' },
   ],
   paid: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
-    { icon: CheckCircleOutlinedIcon, iconColor: 'warning' },
-    { icon: AutorenewOutlinedIcon, iconColor: '#8B5CF6' },
+    { icon: TrendingUpOutlinedIcon, iconColor: 'warning' },
+    { icon: DescriptionOutlinedIcon, iconColor: '#8B5CF6' },
   ],
   overdue: [
-    { icon: CardGiftcardOutlinedIcon, iconColor: 'error' },
-    { icon: ErrorOutlineOutlinedIcon, iconColor: 'warning' },
-    { icon: NotificationsActiveOutlinedIcon, iconColor: '#8B5CF6' },
+    { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
+    { icon: TrendingUpOutlinedIcon, iconColor: 'warning' },
+    { icon: DescriptionOutlinedIcon, iconColor: '#8B5CF6' },
   ],
 };
 
 /**
  * Shared page for the Draft / Sent / Paid / Overdue cards on the Sales
  * Invoice landing grid — same list+details+terms layout as the "All
- * Invoices" overview page, scoped by `status`. Mirrors
- * SalesQuotationStatusPage/SalesOrderStatusPage.
+ * Invoices" overview page, scoped by `status`. Fully wired to the real
+ * backend: the table's rows and the 4 stat tiles both come from actual
+ * SalesInvoice rows (see backend/src/modules/sales-invoice's
+ * getSalesInvoiceStatusSummary), so a status with zero invoices honestly
+ * shows zeros/empty states rather than fabricated figures. The Paid tab in
+ * particular will genuinely show zero until a "Record Payment" backend
+ * action exists (see the SalesInvoice model comment in schema.prisma) —
+ * nothing currently sets status 'paid', so that's the honest state, not a
+ * bug. Overdue is live-derived from dueDate (see computeStatus in
+ * salesInvoice.service.js), not a stored column.
  */
-export default function SalesInvoiceStatusPage({ status, tab, onTabChange, onCreate }) {
+export default function SalesInvoiceStatusPage({ status, tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const meta = STATUS_META[status];
-  const stats = STATUS_STATS[status];
-  const detailsTemplate = STATUS_DETAILS[status];
   const extraStyle = EXTRA_TILE_STYLE[status];
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const firstOfStatus = INVOICES.find((inv) => inv.status === status) || INVOICES[0];
-  const [selectedCode, setSelectedCode] = useState(firstOfStatus.code);
-  const selectedRow = INVOICE_BY_CODE[selectedCode] || firstOfStatus;
-  const invoiceDetails = selectedCode === detailsTemplate.code
-    ? detailsTemplate
-    : {
-        ...detailsTemplate,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        totalAmount: selectedRow.amount,
-        dueDate: selectedRow.dueDate,
-        customer: { ...detailsTemplate.customer, name: selectedRow.customer },
-        ...(selectedRow.status === 'paid' ? { paidOn: selectedRow.dueDate } : {}),
-      };
+  const { data: invoices = [] } = useGetSalesInvoicesQuery({});
+  const { data: statusSummaryData } = useSalesInvoiceStatusSummaryQuery(status);
 
-  const handleSelectInvoice = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => invoices.map(toInvoiceRow), [invoices]);
+  const statusRows = useMemo(() => rows.filter((r) => r.status === status), [rows, status]);
+  const stats = useMemo(() => buildStatusStats(status, statusSummaryData), [status, statusSummaryData]);
+  const invoiceById = useMemo(() => Object.fromEntries(invoices.map((i) => [i.id, i])), [invoices]);
+
+  const effectiveSelectedId = (selectedId && invoiceById[selectedId] && rows.find((r) => r.id === selectedId)?.status === status ? selectedId : statusRows[0]?.id);
+  const selectedInvoice = effectiveSelectedId ? invoiceById[effectiveSelectedId] : null;
+  const invoiceDetails = selectedInvoice ? toInvoiceDetails(selectedInvoice) : null;
+
+  const handleSelectInvoice = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/sales-invoice/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/sales-invoice/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/sales-invoice/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/sales-invoice/edit/${row.id}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleRecordPayment = () => dispatch(showToast(`Record Payment for "${invoiceDetails.code}" is coming soon`, 'info'));
+  const handleRecordPayment = () => dispatch(showToast(`Record Payment for "${invoiceDetails?.code || ''}" is coming soon`, 'info'));
   const handleCreate = () => {
     if (onCreate) onCreate(); else navigate('/sales-invoice/create');
   };
@@ -116,7 +118,7 @@ export default function SalesInvoiceStatusPage({ status, tab, onTabChange, onCre
       icon: extraStyle[i].icon,
       iconColor: extraStyle[i].iconColor,
       label: tile.label,
-      value: tile.isText ? tile.value : (tile.currency ? formatCurrency(tile.value, { decimals: true }) : formatNumber(tile.value)),
+      value: tile.currency ? formatCurrency(tile.value, { decimals: true }) : formatNumber(tile.value),
       caption: tile.caption,
     })),
   ];
@@ -136,7 +138,7 @@ export default function SalesInvoiceStatusPage({ status, tab, onTabChange, onCre
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
-          <Button variant="outlined" color="inherit" startIcon={<PaymentsOutlinedIcon fontSize="small" />} onClick={handleRecordPayment}>
+          <Button variant="outlined" color="inherit" startIcon={<PaymentsOutlinedIcon fontSize="small" />} onClick={handleRecordPayment} disabled={!invoiceDetails}>
             Record Payment
           </Button>
           <Button
@@ -170,8 +172,8 @@ export default function SalesInvoiceStatusPage({ status, tab, onTabChange, onCre
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <SalesInvoiceTable
-              invoices={INVOICES}
-              selectedCode={selectedCode}
+              invoices={rows}
+              selectedId={effectiveSelectedId}
               onSelectInvoice={handleSelectInvoice}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -186,7 +188,13 @@ export default function SalesInvoiceStatusPage({ status, tab, onTabChange, onCre
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: '100%', overflow: 'auto' }}>
-            <InvoiceDetailsCard invoice={invoiceDetails} title={`Invoice Details (${meta.pageTitle})`} showPaidFields={status === 'paid'} />
+            {invoiceDetails ? (
+              <InvoiceDetailsCard invoice={invoiceDetails} title={`Invoice Details (${meta.pageTitle})`} showPaidFields={status === 'paid'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No {meta.pageTitle.toLowerCase()} invoices yet.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

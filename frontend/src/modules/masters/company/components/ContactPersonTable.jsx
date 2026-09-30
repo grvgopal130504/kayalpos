@@ -15,11 +15,14 @@ const COLUMNS = [
 ];
 
 /**
- * "Contact Person" grid on the Company Details tab — a plain read-only
- * list (Name / Designation / Email / Phone / a Primary Yes/No chip / row
- * actions) with an "Add Contact Person" button below it. Row edit/delete
- * and the add button aren't wired to a real form yet, so each just
- * surfaces a toast via the handlers passed in.
+ * "Contact Person" grid on the Company Details tab — Name / Designation /
+ * Email / Phone / a Primary Yes/No chip / row actions, backed by the real
+ * Company Contact endpoints (see companyApi.js). `rows` is
+ * `company.contacts` straight off GET /company, so each row's primary flag
+ * is `row.isPrimary` (the Prisma column name), not the older mock's
+ * `primary`. Add opens ContactPersonFormDialog in "add" mode; row Edit
+ * opens it in "edit" mode; row Delete asks for confirmation before calling
+ * the API (handlers passed in from CompanyPage own the actual mutations).
  */
 export default function ContactPersonTable({ rows, onAdd, onEditRow, onDeleteRow }) {
   return (
@@ -36,19 +39,26 @@ export default function ContactPersonTable({ rows, onAdd, onEditRow, onDeleteRow
             </TableRow>
           </TableHead>
           <TableBody>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={COLUMNS.length} sx={{ textAlign: 'center', py: 2.5, color: 'text.secondary' }}>
+                  No contact persons added yet.
+                </TableCell>
+              </TableRow>
+            )}
             {rows.map((row) => (
               <TableRow key={row.id} hover>
                 <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.name}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.designation}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.email}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.phone}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.designation || '—'}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.email || '—'}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.phone || '—'}</TableCell>
                 <TableCell>
                   <Chip
-                    label={row.primary ? 'Yes' : 'No'}
+                    label={row.isPrimary ? 'Yes' : 'No'}
                     size="small"
                     sx={{
-                      bgcolor: row.primary ? 'rgba(34,160,107,0.12)' : 'rgba(107,114,128,0.12)',
-                      color: row.primary ? 'success.main' : 'text.secondary',
+                      bgcolor: row.isPrimary ? 'rgba(34,160,107,0.12)' : 'rgba(107,114,128,0.12)',
+                      color: row.isPrimary ? 'success.main' : 'text.secondary',
                       fontWeight: 700, height: 22,
                     }}
                   />

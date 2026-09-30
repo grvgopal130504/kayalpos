@@ -8,24 +8,38 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import OrderDetailsCard from './components/OrderDetailsCard';
 import OrderTermsAndNotes from './components/OrderTermsAndNotes';
-import { getOrderDetails } from './salesOrderMockData';
+import { useGetSalesOrderQuery } from '../../api/salesOrderApi';
+import { toOrderDetails } from './salesOrderDisplay';
 
 /**
- * Read-only "View Order" destination for SalesOrderTable's row menu —
- * reuses the exact same OrderDetailsCard/OrderTermsAndNotes cards the
- * Overview/Status pages already show for the selected row, just addressed
- * by :code as its own full page instead of a side panel.
+ * Read-only "View Order" body for SalesOrderTable's row menu — reuses the
+ * exact same OrderDetailsCard/OrderTermsAndNotes cards the Overview/Status
+ * pages already show for the selected row. Rendered by SalesOrderPage via
+ * props (`id`/`onBack`/`onEdit`) as part of the single /sales-order page
+ * rather than its own route. Fully wired to the real backend — every field
+ * here comes from the actual SalesOrder row fetched by GET
+ * /api/sales-orders/:id.
  */
-export default function OrderViewPage() {
+export default function OrderViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
-  const order = getOrderDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: row, isLoading, isError } = useGetSalesOrderQuery(id, { skip: !id });
+  const order = row ? toOrderDetails(row) : null;
   const [notes, setNotes] = useState('');
 
-  const handleBack = () => navigate('/sales-order');
-  const handleEdit = () => navigate(`/sales-order/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/sales-order'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/sales-order/edit/${id}`));
 
-  if (!order) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading order…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !order) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Order not found</Typography>

@@ -1,66 +1,75 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
-  TextField, MenuItem, InputAdornment, IconButton, Pagination,
+  TextField, MenuItem, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import AddIcon from '@mui/icons-material/Add';
-import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
-import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
-import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
-import ReceiptOutlinedIcon from '@mui/icons-material/ReceiptOutlined';
+import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
-import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
 import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
+import { useGetBrandsQuery, useDeleteBrandMutation } from '../../../api/brandApi';
+import { CASHIER } from '../mastersMockData';
 
 import BrandTable from './components/BrandTable';
 import BrandFormDialog from './components/BrandFormDialog';
 import BrandViewDialog from './components/BrandViewDialog';
-import { CASHIER } from '../mastersMockData';
-import { BRANDS, CATEGORY_OPTIONS, STATS } from './brandMockData';
 
-// Converts a native <input type="date"> value ("YYYY-MM-DD") into this
-// filter bar's "dd-mm-yyyy" display format.
-function formatDdMmYyyy(isoValue) {
-  if (!isoValue) return '';
-  const [y, m, d] = isoValue.split('-');
-  return `${d}-${m}-${y}`;
+// Maps a Brand row as returned by the API (status: 'ACTIVE'/'INACTIVE') to
+// the shape the table/dialogs expect (status: 'Active'/'Inactive'), same
+// convention as ProductPage's toViewRow.
+function toViewRow(row) {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    category: row.category,
+    description: row.description || '',
+    status: row.status === 'ACTIVE' ? 'Active' : 'Inactive',
+  };
 }
 
 /**
- * Brand — the Brand master's list screen, reached from the Masters
- * page's "Brand" card. Same searchable/filterable list shape as the
- * Product master (filter bar + table + records footer + bottom stat
- * row), sized for a small catalog of brands rather than thousands of
- * products, so all 8 mock rows fit on a single page. Filters run
- * entirely client-side over BRANDS; every row action and the Import/
- * Export/New Brand buttons are mocked — there's no Brand backend module
- * yet.
+ * Brand — the Masters > Brand master, a single page/route
+ * (`/masters/brand`, no separate add/edit/view routes): the list, search/
+ * status filter, and Add/Edit/View all live here, with Add/Edit opening
+ * BrandFormDialog and View opening BrandViewDialog as dialogs over this
+ * same page — the same pattern ProductPage uses, chosen over the
+ * Outlet/Warehouse tabbed full-page pattern because Brand has only a
+ * handful of flat fields (name, category, description, status) and no
+ * sub-resources like Contact Person, so a dialog is enough and avoids the
+ * overhead of a multi-tab detail screen. List/search/status filtering run
+ * server-side against the real Brand API (see api/brandApi.js).
  */
 export default function BrandPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+
   const [searchInput, setSearchInput] = useState('');
   const [status, setStatus] = useState('All');
-  const [category, setCategory] = useState('All');
-  const [createdFrom, setCreatedFrom] = useState('');
-  const [createdTo, setCreatedTo] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const createdFromNativeRef = useRef(null);
-  const createdToNativeRef = useRef(null);
   const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewRow, setViewRow] = useState(null);
+
+  const {
+    data: brandRows = [],
+    isLoading,
+    isError,
+  } = useGetBrandsQuery({
+    search: appliedSearch || undefined,
+    status: status !== 'All' ? status.toUpperCase() : undefined,
+  });
+  const [deleteBrand] = useDeleteBrandMutation();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -68,33 +77,32 @@ export default function BrandPage() {
   };
 
   const handleNewBrand = () => setFormDialog({ open: true, mode: 'add', row: null });
-  const handleImport = () => dispatch(showToast('Import Brands is coming soon', 'info'));
-  const handleExport = () => dispatch(showToast('Export Brands is coming soon', 'info'));
-  const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
+  const handleSearch = () => setAppliedSearch(searchInput.trim());
   const handleReset = () => {
     setSearchInput('');
     setStatus('All');
-    setCategory('All');
-    setCreatedFrom('');
-    setCreatedTo('');
     setAppliedSearch('');
   };
-  const handleViewRow = (row) => setViewRow(row);
+  const handleOpenBrand = (row) => setViewRow(row);
   const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
-  const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
   const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
-
-  const filteredRows = useMemo(() => BRANDS.filter((row) => {
-    if (appliedSearch) {
-      const haystack = `${row.code} ${row.name}`.toLowerCase();
-      if (!haystack.includes(appliedSearch)) return false;
+  const handleDeleteRow = async (row) => {
+    if (!window.confirm(`Delete brand "${row.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteBrand(row.id).unwrap();
+      dispatch(showToast(`${row.name} deleted`, 'success'));
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to delete brand', 'error'));
     }
-    if (status !== 'All' && row.status !== status) return false;
-    if (category !== 'All' && row.category !== category) return false;
-    return true;
-  }), [appliedSearch, status, category]);
+  };
 
-  const isFiltered = Boolean(appliedSearch) || status !== 'All' || category !== 'All' || Boolean(createdFrom) || Boolean(createdTo);
+  const viewRows = useMemo(() => brandRows.map(toViewRow), [brandRows]);
+
+  const stats = useMemo(() => ({
+    total: viewRows.length,
+    active: viewRows.filter((r) => r.status === 'Active').length,
+    inactive: viewRows.filter((r) => r.status === 'Inactive').length,
+  }), [viewRows]);
 
   return (
     <Stack spacing={2}>
@@ -124,42 +132,21 @@ export default function BrandPage() {
         </Stack>
       </Stack>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'space-between' }}>
-        <Paper
-          variant="outlined"
-          sx={{
-            borderRadius: 3, p: { xs: 1.75, sm: 2 }, display: 'flex', alignItems: 'center', gap: 1.5, flex: 1,
-            bgcolor: 'rgba(37,99,235,0.06)', borderColor: 'rgba(37,99,235,0.25)',
-          }}
-        >
-          <Box
-            sx={{
-              width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              bgcolor: '#2563EB', color: '#fff',
-            }}
-          >
-            <InfoOutlinedIcon sx={{ fontSize: 18 }} />
-          </Box>
-          <Typography variant="body2">Manage and organize item brands. Brands help to classify items and generate reports.</Typography>
-        </Paper>
-
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
-          <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={handleNewBrand}>
-            New Brand
-          </Button>
-          <Button variant="outlined" color="primary" startIcon={<MoveToInboxOutlinedIcon fontSize="small" />} onClick={handleImport}>
-            Import
-          </Button>
-          <Button variant="outlined" color="primary" startIcon={<FileUploadOutlinedIcon fontSize="small" />} onClick={handleExport}>
-            Export
-          </Button>
-        </Stack>
-      </Stack>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <StatCard icon={CardGiftcardOutlinedIcon} iconColor="#E5484D" iconShape="circle" label="Total Brands" value={formatNumber(stats.total)} />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Brands" value={formatNumber(stats.active)} />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <StatCard icon={HighlightOffOutlinedIcon} iconColor="error" iconShape="circle" label="Inactive Brands" value={formatNumber(stats.inactive)} />
+        </Grid>
+      </Grid>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Grid container spacing={1.5} sx={{ alignItems: 'flex-end' }}>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
             <TextField
               label="Search Brand"
               placeholder="Search by brand name or code..."
@@ -170,89 +157,26 @@ export default function BrandPage() {
               slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
+          <Grid size={{ xs: 6, sm: 3, md: 2 }}>
             <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               <MenuItem value="Active">Active</MenuItem>
               <MenuItem value="Inactive">Inactive</MenuItem>
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2.2 }}>
-            <TextField select label="Item Group / Category" value={category} onChange={(e) => setCategory(e.target.value)} fullWidth>
-              <MenuItem value="All">All</MenuItem>
-              {CATEGORY_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-            </TextField>
-          </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
-            <TextField
-              label="Created From"
-              placeholder="dd-mm-yyyy"
-              value={createdFrom}
-              onChange={(e) => setCreatedFrom(e.target.value)}
-              fullWidth
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        edge="end"
-                        aria-label="Open Created From date picker"
-                        onClick={() => (createdFromNativeRef.current?.showPicker?.() ?? createdFromNativeRef.current?.click())}
-                      >
-                        <CalendarTodayOutlinedIcon fontSize="small" />
-                      </IconButton>
-                      <input
-                        ref={createdFromNativeRef}
-                        type="date"
-                        onChange={(e) => setCreatedFrom(formatDdMmYyyy(e.target.value))}
-                        style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
-                      />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-          </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
-            <TextField
-              label="Created To"
-              placeholder="dd-mm-yyyy"
-              value={createdTo}
-              onChange={(e) => setCreatedTo(e.target.value)}
-              fullWidth
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        edge="end"
-                        aria-label="Open Created To date picker"
-                        onClick={() => (createdToNativeRef.current?.showPicker?.() ?? createdToNativeRef.current?.click())}
-                      >
-                        <CalendarTodayOutlinedIcon fontSize="small" />
-                      </IconButton>
-                      <input
-                        ref={createdToNativeRef}
-                        type="date"
-                        onChange={(e) => setCreatedTo(formatDdMmYyyy(e.target.value))}
-                        style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
-                      />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-          </Grid>
-          <Grid size={{ xs: 6, sm: 6, md: 1.4 }}>
+          <Grid size={{ xs: 6, sm: 3, md: 1.5 }}>
             <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleSearch} fullWidth>
               Search
             </Button>
           </Grid>
-          <Grid size={{ xs: 6, sm: 6, md: 1 }}>
+          <Grid size={{ xs: 6, sm: 3, md: 1.5 }}>
             <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleReset} fullWidth>
               Reset
+            </Button>
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3, md: 3 }} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
+            <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={handleNewBrand} fullWidth>
+              New Brand
             </Button>
           </Grid>
         </Grid>
@@ -260,36 +184,20 @@ export default function BrandPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Brand List</Typography>
-        <BrandTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Showing {filteredRows.length ? 1 : 0} to {filteredRows.length} of {isFiltered ? filteredRows.length : BRANDS.length} records
+        {isError ? (
+          <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
+            Failed to load brands. Please try again.
           </Typography>
-          <Pagination
-            count={1}
-            page={page}
-            onChange={(_e, value) => setPage(value)}
-            color="primary"
-            shape="rounded"
-          />
-        </Stack>
-      </Paper>
+        ) : (
+          <Box sx={{ opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
+            <BrandTable rows={viewRows} onOpenBrand={handleOpenBrand} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+          </Box>
+        )}
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={ReceiptOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total Brands" value={formatNumber(STATS.totalBrands)} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Brands" value={formatNumber(STATS.activeBrands)} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={CloseIcon} iconColor="error" iconShape="circle" label="Inactive Brands" value={formatNumber(STATS.inactiveBrands)} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={Inventory2OutlinedIcon} iconColor="warning" iconShape="circle" label="Total Items Under Brands" value={formatNumber(STATS.totalItemsUnderBrands)} />
-        </Grid>
-      </Grid>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
+          Showing {viewRows.length} of {viewRows.length} records
+        </Typography>
+      </Paper>
 
       <BrandFormDialog open={formDialog.open} mode={formDialog.mode} initialValues={formDialog.row} onClose={closeFormDialog} />
       <BrandViewDialog

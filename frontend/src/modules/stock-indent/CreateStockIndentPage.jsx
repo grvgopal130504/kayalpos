@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,90 +20,93 @@ import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
+import { useGetOutletsQuery } from '../../api/outletApi';
+import { useGetProductsQuery } from '../../api/productApi';
+import {
+  useGetStockIndentQuery, useNextStockIndentCodeQuery,
+  useCreateStockIndentMutation, useUpdateStockIndentMutation,
+} from '../../api/stockIndentApi';
 
 import IndentItemsTable from './components/IndentItemsTable';
 import IndentSummaryTotals from './components/IndentSummaryTotals';
 import { DEFAULT_TERMS } from './components/IndentTermsAndNotes';
-import { INDENTS, getIndentDetails } from './stockIndentMockData';
 import {
-  createStockIndentSchema, createStockIndentDefaultValues,
-  DEPARTMENT_OPTIONS, OUTLET_OPTIONS, TO_OUTLET_OPTIONS, REQUESTOR_OPTIONS,
-  PRIORITY_OPTIONS, LOCATION_OPTIONS, COST_CENTER_OPTIONS,
+  createStockIndentSchema, createStockIndentDefaultValues, emptyItemRow, isBlankItemRow,
+  DEPARTMENT_OPTIONS, PRIORITY_OPTIONS, COST_CENTER_OPTIONS,
 } from './createStockIndentSchema';
-
-function nextIndentCode() {
-  const maxNum = INDENTS.reduce((max, ind) => Math.max(max, Number(ind.code.slice(4))), 0);
-  return `IND-${String(maxNum + 1).padStart(5, '0')}`;
-}
-
-// The mock detail record's items don't carry the create form's exact field
-// shape (uom/issueWarehouse are raw labels here, not option values) — best
-// effort prefill, still fully editable.
-function itemToRow(item) {
-  return {
-    itemCode: item.code,
-    itemName: item.name,
-    hsnCode: item.hsn,
-    uom: '',
-    requiredQty: String(item.requiredQty),
-    issueWarehouse: '',
-    remarks: item.remarks || '',
-  };
-}
+import { indentToFormValues, formValuesToPayload } from './stockIndentDisplay';
 
 /**
- * "New Stock Indent" screen — matches the reference design's full create
- * form: an Indent Details card (narrower left) beside a wider Request
- * Details card laid out 2-fields-per-row, a full-width editable items
- * grid with a read-only Available Qty column, and a 3-column row below it
- * (Terms & Conditions / Notes / Summary) — same layout pattern as
- * CreateSalesInvoicePage/CreateBarcodeLabelPage.
+ * "New Stock Indent" screen, also doubling as the Edit Indent form when
+ * StockIndentPage renders it with an `id` prop — everything (list, create,
+ * edit, view) lives on the one /stock-indent page. Fully wired to the real
+ * backend (see backend/src/modules/stock-indent): From Outlet/To Outlet/
+ * Location all come from the real Outlet table (see useGetOutletsQuery),
+ * the Indent No. is a live preview of the next real code, Available Qty in
+ * the item grid and Total Estimated Value both look up the real Product
+ * master, and both "Save as Draft" and "Save & Send" actually create/update
+ * a StockIndent row with the same validations enforced again server-side.
  *
- * From Outlet, To Outlet/HO, Requestor, Location, and Cost Center each get
- * an inline "+" add button in the reference, matching the Customer
- * field's "+" pattern on the other create forms. Indent No. is read-only
- * with a settings-gear adornment (numbering configuration) instead of a
- * plain disabled field. Attachment is a simple file picker (local-only —
- * there's no upload endpoint yet). Saving is mocked (no Stock Indent
- * backend module yet).
+ * Requestor is a plain required text field, not a dropdown — there is no
+ * Employee/Requestor master in this schema, so a fixed list of specific
+ * named individuals would be fabricated data (see createStockIndentSchema.js's
+ * own comment on this). Attachment stays a local-only file picker (there's
+ * no upload endpoint yet), same as the reference design.
  */
-export default function CreateStockIndentPage({ onBack }) {
+export default function CreateStockIndentPage({ id: propId, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
-  const isEditMode = Boolean(code);
-  const existingIndent = isEditMode ? getIndentDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [attachmentName, setAttachmentName] = useState('');
-  const indentCode = useMemo(() => (isEditMode ? code : nextIndentCode()), [isEditMode, code]);
+
+  const { data: existingIndent, isLoading: isLoadingIndent } = useGetStockIndentQuery(id, { skip: !isEditMode });
+  const { data: nextCode } = useNextStockIndentCodeQuery(undefined, { skip: isEditMode });
+  const { data: outlets = [] } = useGetOutletsQuery({});
+  const { data: products = [] } = useGetProductsQuery({});
+  const [createIndent, { isLoading: isCreating }] = useCreateStockIndentMutation();
+  const [updateIndent, { isLoading: isUpdating }] = useUpdateStockIndentMutation();
+  const isSaving = isCreating || isUpdating;
+
+  const indentCode = isEditMode ? existingIndent?.code : nextCode;
+
+  // Real Outlet options shared by From Outlet / To Outlet / Location — the
+  // old mock version hardcoded three different fixed lists of specific
+  // outlet names; every one of those dropdowns now draws from the same
+  // actual Outlet master instead.
+  const outletOptions = useMemo(() => [
+    { value: '', label: 'Select Outlet', disabled: true },
+    ...outlets.map((o) => ({ value: o.id, label: o.name })),
+  ], [outlets]);
+  const productByCode = useMemo(() => Object.fromEntries(products.map((p) => [p.code, p])), [products]);
 
   const methods = useForm({
     resolver: zodResolver(createStockIndentSchema),
-    defaultValues: existingIndent
-      ? {
-          ...createStockIndentDefaultValues,
-          indentDate: existingIndent.date,
-          requiredDate: existingIndent.requiredDate,
-          purposeRemarks: '',
-          items: existingIndent.items?.length ? existingIndent.items.map(itemToRow) : createStockIndentDefaultValues.items,
-        }
-      : createStockIndentDefaultValues,
+    defaultValues: createStockIndentDefaultValues,
     mode: 'onTouched',
   });
-  const { handleSubmit } = methods;
+  const { handleSubmit, reset } = methods;
+
+  // The edit-mode fetch is async, so the form can't be seeded via useForm's
+  // defaultValues (that only runs once, before the data exists) — reset()
+  // re-seeds every field once the real indent row arrives.
+  useEffect(() => {
+    if (isEditMode && existingIndent) {
+      reset(indentToFormValues(existingIndent, emptyItemRow));
+    }
+  }, [isEditMode, existingIndent, reset]);
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/stock-indent/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/stock-indent/overview');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/stock-indent/view/${id}`);
+    navigate('/stock-indent');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleAddDepartment = () => dispatch(showToast('Department / Section picker is coming soon', 'info'));
-  const handleAddFromOutlet = () => dispatch(showToast('Outlet picker is coming soon', 'info'));
-  const handleAddToOutlet = () => dispatch(showToast('Outlet / HO picker is coming soon', 'info'));
-  const handleAddRequestor = () => dispatch(showToast('Requestor picker is coming soon', 'info'));
-  const handleAddLocation = () => dispatch(showToast('Location picker is coming soon', 'info'));
+  const handleAddOutlet = () => dispatch(showToast('Outlet picker is coming soon', 'info'));
   const handleAddCostCenter = () => dispatch(showToast('Cost Center picker is coming soon', 'info'));
   const handleAddItemRow = () => dispatch(showToast('Item picker is coming soon', 'info'));
   const handleAttachmentChange = (e) => setAttachmentName(e.target.files?.[0]?.name || '');
@@ -112,16 +115,47 @@ export default function CreateStockIndentPage({ onBack }) {
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Indent ${indentCode} updated successfully` : `Indent ${indentCode} saved as draft`, 'success'));
-    handleBack();
-  });
-  const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Indent ${indentCode} updated successfully` : `Indent ${indentCode} saved and sent for approval`, 'success'));
-    handleBack();
+  const onSaveAsDraft = handleSubmit(async (values) => {
+    try {
+      const payload = formValuesToPayload(values, { status: 'draft', isBlankItemRow });
+      if (isEditMode) {
+        await updateIndent({ id, ...payload }).unwrap();
+        dispatch(showToast(`Indent ${indentCode} updated successfully`, 'success'));
+      } else {
+        const created = await createIndent(payload).unwrap();
+        dispatch(showToast(`Indent ${created.code} saved as draft`, 'success'));
+      }
+      handleBack();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the indent', 'error'));
+    }
   });
 
-  if (isEditMode && !existingIndent) {
+  const onSaveAndSend = handleSubmit(async (values) => {
+    try {
+      const payload = formValuesToPayload(values, { status: 'pending-approval', isBlankItemRow });
+      if (isEditMode) {
+        await updateIndent({ id, ...payload }).unwrap();
+        dispatch(showToast(`Indent ${indentCode} updated successfully`, 'success'));
+      } else {
+        const created = await createIndent(payload).unwrap();
+        dispatch(showToast(`Indent ${created.code} saved and sent for approval`, 'success'));
+      }
+      handleBack();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the indent', 'error'));
+    }
+  });
+
+  if (isEditMode && isLoadingIndent) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading indent…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && !isLoadingIndent && !existingIndent) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Indent not found</Typography>
@@ -136,7 +170,7 @@ export default function CreateStockIndentPage({ onBack }) {
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Indent (Edit ${indentCode})` : 'Stock Indent (New)'}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Indent (Edit ${indentCode || ''})` : 'Stock Indent (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/stock-indent" underline="hover" color="text.secondary">Stock Indent</MuiLink>
@@ -161,18 +195,18 @@ export default function CreateStockIndentPage({ onBack }) {
           <Menu anchorEl={moreActionsAnchor} open={Boolean(moreActionsAnchor)} onClose={() => setMoreActionsAnchor(null)}>
             <MenuItem onClick={() => handleMoreAction('Save as Template')}>Save as Template</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
-            <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
+            <MenuItem onClick={() => reset(createStockIndentDefaultValues)}>Reset Form</MenuItem>
           </Menu>
           {isEditMode ? (
-            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
               Update Indent
             </Button>
           ) : (
             <>
-              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
                 Save as Draft
               </Button>
-              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend} disabled={isSaving}>
                 Save &amp; Send
               </Button>
             </>
@@ -189,7 +223,7 @@ export default function CreateStockIndentPage({ onBack }) {
                 <Stack spacing={2}>
                   <TextField
                     label="Indent No."
-                    value={indentCode}
+                    value={indentCode || ''}
                     disabled
                     fullWidth
                     slotProps={{
@@ -225,10 +259,10 @@ export default function CreateStockIndentPage({ onBack }) {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <FormSelect name="fromOutlet" label="From Outlet *" options={OUTLET_OPTIONS} />
+                        <FormSelect name="fromOutlet" label="From Outlet *" options={outletOptions} />
                       </Box>
                       <IconButton
-                        onClick={handleAddFromOutlet}
+                        onClick={handleAddOutlet}
                         sx={{ mt: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
                         aria-label="Add from outlet"
                       >
@@ -239,12 +273,12 @@ export default function CreateStockIndentPage({ onBack }) {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <FormSelect name="toOutlet" label="To Outlet / HO *" options={TO_OUTLET_OPTIONS} />
+                        <FormSelect name="toOutlet" label="To Outlet *" options={outletOptions} />
                       </Box>
                       <IconButton
-                        onClick={handleAddToOutlet}
+                        onClick={handleAddOutlet}
                         sx={{ mt: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
-                        aria-label="Add to outlet / HO"
+                        aria-label="Add to outlet"
                       >
                         <AddIcon fontSize="small" />
                       </IconButton>
@@ -252,18 +286,7 @@ export default function CreateStockIndentPage({ onBack }) {
                   </Grid>
 
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <FormSelect name="requestor" label="Requestor *" options={REQUESTOR_OPTIONS} />
-                      </Box>
-                      <IconButton
-                        onClick={handleAddRequestor}
-                        sx={{ mt: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
-                        aria-label="Add requestor"
-                      >
-                        <AddIcon fontSize="small" />
-                      </IconButton>
-                    </Stack>
+                    <FormTextField name="requestor" label="Requestor *" placeholder="Enter Requestor Name" />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormSelect name="priority" label="Priority *" options={PRIORITY_OPTIONS} />
@@ -279,10 +302,10 @@ export default function CreateStockIndentPage({ onBack }) {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <FormSelect name="location" label="Location *" options={LOCATION_OPTIONS} />
+                        <FormSelect name="location" label="Location" options={outletOptions} />
                       </Box>
                       <IconButton
-                        onClick={handleAddLocation}
+                        onClick={handleAddOutlet}
                         sx={{ mt: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
                         aria-label="Add location"
                       >
@@ -327,10 +350,10 @@ export default function CreateStockIndentPage({ onBack }) {
 
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
-            <IndentItemsTable onAddItem={handleAddItemRow} />
+            <IndentItemsTable onAddItem={handleAddItemRow} productByCode={productByCode} />
           </Paper>
 
-          <BottomRow />
+          <BottomRow productByCode={productByCode} />
         </Stack>
       </FormProvider>
     </Stack>
@@ -339,7 +362,7 @@ export default function CreateStockIndentPage({ onBack }) {
 
 // Terms & Conditions / Notes / Summary totals, laid out as a 3-column row
 // matching the reference, with Notes bound to the form's `notes` field.
-function BottomRow() {
+function BottomRow({ productByCode }) {
   return (
     <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
       <Grid size={{ xs: 12, md: 6, lg: 4 }}>
@@ -358,7 +381,7 @@ function BottomRow() {
         <NotesField />
       </Grid>
       <Grid size={{ xs: 12, lg: 4 }}>
-        <IndentSummaryTotals />
+        <IndentSummaryTotals productByCode={productByCode} />
       </Grid>
     </Grid>
   );

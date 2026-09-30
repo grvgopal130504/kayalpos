@@ -37,12 +37,12 @@ export default function TaxCodeTable({ rows, onViewRow, onEditRow, onDeleteRow }
         </TableHead>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={row.code} hover>
+            <TableRow key={row.id} hover>
               <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.type}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.category}</TableCell>
-              <TableCell>{row.rate.toFixed(2)}</TableCell>
+              <TableCell>{typeof row.rate === 'number' ? row.rate.toFixed(2) : row.rate}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.calculationType}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.appliesTo}</TableCell>
               <TableCell>

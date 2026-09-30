@@ -1,14 +1,21 @@
+import { useMemo } from 'react';
 import {
   Box, Table, TableHead, TableBody, TableRow, TableCell, TextField, MenuItem,
-  IconButton, InputAdornment, Stack, Button,
+  IconButton, Stack, Button,
 } from '@mui/material';
 import { Controller, useFormContext, useFieldArray, useWatch } from 'react-hook-form';
-import SearchIcon from '@mui/icons-material/Search';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import AddIcon from '@mui/icons-material/Add';
 
-import { UOM_OPTIONS, ITEM_AVAILABLE_QTY, ITEM_UNIT_COST, emptyItemRow } from '../createStockTransferSchema';
+import ItemCodeAutocomplete from '../../../components/form/ItemCodeAutocomplete';
+import { UOM_OPTIONS, emptyItemRow } from '../createStockTransferSchema';
 import { formatCurrency } from '../../../utils/format';
+
+// Only autofill the UoM select when the picked product's own uom matches one
+// of this grid's fixed dropdown values — see IndentItemsTable's own comment.
+function matchUom(value) {
+  return UOM_OPTIONS.some((opt) => opt.value === value) ? value : '';
+}
 
 const COLUMNS = [
   { key: 'itemCode', label: 'Item Code *', minWidth: 150 },
@@ -32,11 +39,17 @@ function toNumber(value) {
  * same spreadsheet-style row entry as IndentItemsTable, but with an
  * Available Qty lookup, a Unit Cost lookup, and a computed Total Cost
  * column (all shaded read-only like the computed columns on the other
- * create forms) alongside the editable Transfer Qty.
+ * create forms) alongside the editable Transfer Qty. Available Qty and
+ * Unit Cost are now real per-row lookups against the actual Product master
+ * (matched by the row's Item Code, via the `productByCode` map built in
+ * CreateStockTransferPage from useGetProductsQuery) instead of the old
+ * fixed 5-item demo lookup tables — an item code with no matching product
+ * honestly shows 0.00 for both rather than a fabricated number.
  */
-export default function TransferItemsTable({ onAddItem }) {
+export default function TransferItemsTable({ onAddItem, productByCode = {} }) {
   const { control } = useFormContext();
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  const products = useMemo(() => Object.values(productByCode), [productByCode]);
 
   return (
     <Stack spacing={1.5}>
@@ -53,7 +66,15 @@ export default function TransferItemsTable({ onAddItem }) {
           </TableHead>
           <TableBody>
             {fields.map((field, index) => (
-              <ItemRow key={field.id} index={index} control={control} onRemove={() => remove(index)} removable={fields.length > 1} />
+              <ItemRow
+                key={field.id}
+                index={index}
+                control={control}
+                onRemove={() => remove(index)}
+                removable={fields.length > 1}
+                productByCode={productByCode}
+                products={products}
+              />
             ))}
           </TableBody>
         </Table>
@@ -83,31 +104,32 @@ export default function TransferItemsTable({ onAddItem }) {
   );
 }
 
-function ItemRow({ index, control, onRemove, removable }) {
+function ItemRow({
+  index, control, onRemove, removable, productByCode, products,
+}) {
+  const { setValue } = useFormContext();
   const itemCode = useWatch({ control, name: `items.${index}.itemCode` });
   const transferQty = useWatch({ control, name: `items.${index}.transferQty` });
 
   const code = itemCode.trim();
-  const availableQty = ITEM_AVAILABLE_QTY[code] || 0;
-  const unitCost = ITEM_UNIT_COST[code] || 0;
+  const matchedProduct = productByCode[code];
+  const availableQty = matchedProduct ? Number(matchedProduct.availableQty) : 0;
+  const unitCost = matchedProduct ? Number(matchedProduct.salePrice) : 0;
   const totalCost = toNumber(transferQty) * unitCost;
 
   return (
     <TableRow sx={{ '& td': { py: 0.75 } }}>
       <TableCell sx={{ color: 'text.secondary' }}>{index + 1}</TableCell>
       <TableCell>
-        <Controller
-          name={`items.${index}.itemCode`}
+        <ItemCodeAutocomplete
           control={control}
-          render={({ field }) => (
-            <TextField
-              {...field}
-              size="small"
-              fullWidth
-              placeholder="Search Item Code"
-              slotProps={{ input: { endAdornment: <InputAdornment position="end"><SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> } }}
-            />
-          )}
+          name={`items.${index}.itemCode`}
+          products={products}
+          onSelectProduct={(product) => {
+            setValue(`items.${index}.itemName`, product.name, { shouldDirty: true });
+            setValue(`items.${index}.hsnCode`, product.hsnSac || '', { shouldDirty: true });
+            setValue(`items.${index}.uom`, matchUom(product.uom), { shouldDirty: true });
+          }}
         />
       </TableCell>
       <TableCell>

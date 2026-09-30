@@ -1,40 +1,69 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton,
-  Stack, Typography, Button, Grid, TextField, MenuItem,
+  Stack, Typography, Button, Grid, TextField, CircularProgress,
 } from '@mui/material';
+import { FormProvider, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import CloseIcon from '@mui/icons-material/Close';
 import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 
 import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
-import { SUPPLIER_GROUP_OPTIONS, CITY_OPTIONS, STATE_OPTIONS } from '../supplierMockData';
-
-const EMPTY_VALUES = {
-  code: '', name: '', group: SUPPLIER_GROUP_OPTIONS[0], phone: '', email: '',
-  city: CITY_OPTIONS[0], state: STATE_OPTIONS[0], gstNo: '', paymentTerms: '30 Days', status: 'Active',
-};
+import FormTextField from '../../../../components/form/FormTextField';
+import FormSelect from '../../../../components/form/FormSelect';
+import { useCreateSupplierMutation, useUpdateSupplierMutation, useNextSupplierCode } from '../../../../api/supplierApi';
+import {
+  createSupplierSchema, createSupplierDefaultValues, supplierToFormValues, supplierFormValuesToPayload,
+  GROUP_SELECT_OPTIONS, CITY_SELECT_OPTIONS, STATE_SELECT_OPTIONS, STATUS_OPTIONS,
+} from '../createSupplierSchema';
 
 /**
- * Add/Edit dialog for the Supplier master. No Supplier backend module
- * exists yet, so Save/Update just toasts and closes.
+ * Add/Edit dialog for the Supplier master, backed by the real Supplier API
+ * (see api/supplierApi.js) — react-hook-form + zod, same shape as
+ * Brand/HSN-SAC/Price List's own form dialogs (FormTextField/FormSelect +
+ * inline per-field errors), validated against the same rules as the
+ * backend's createSupplierSchema (supplier.schema.js) before the request
+ * ever leaves the browser — including the phone/GSTIN format checks, not
+ * just "is it non-empty". Supplier Code is server-generated (SUPP-0001, ...)
+ * and shown read-only, same convention as Product/Brand/Outlet's own codes.
  */
 export default function SupplierFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
-  const [values, setValues] = useState(EMPTY_VALUES);
   const isEdit = mode === 'edit';
 
+  const [createSupplier] = useCreateSupplierMutation();
+  const [updateSupplier] = useUpdateSupplierMutation();
+  // Only fetched while the dialog is open in Add mode — skipped for Edit
+  // (real code already known) and while closed.
+  const nextCode = useNextSupplierCode(open && !isEdit);
+
+  const methods = useForm({
+    resolver: zodResolver(createSupplierSchema),
+    defaultValues: createSupplierDefaultValues,
+    mode: 'onTouched',
+  });
+  const { handleSubmit, reset, formState: { isSubmitting } } = methods;
+
   useEffect(() => {
-    if (open) setValues(isEdit && initialValues ? { ...EMPTY_VALUES, ...initialValues } : EMPTY_VALUES);
-  }, [open, isEdit, initialValues]);
+    if (open) reset(isEdit && initialValues ? supplierToFormValues(initialValues) : createSupplierDefaultValues);
+  }, [open, isEdit, initialValues, reset]);
 
-  const setField = (field) => (e) => setValues((prev) => ({ ...prev, [field]: e.target.value }));
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    dispatch(showToast(isEdit ? 'Supplier updated successfully' : 'Supplier saved successfully', 'success'));
-    onClose?.();
-  };
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      const payload = supplierFormValuesToPayload(values);
+      if (isEdit) {
+        await updateSupplier({ id: initialValues.id, ...payload }).unwrap();
+        dispatch(showToast('Supplier updated successfully', 'success'));
+      } else {
+        await createSupplier(payload).unwrap();
+        dispatch(showToast('Supplier saved successfully', 'success'));
+      }
+      onClose?.();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save supplier', 'error'));
+    }
+  });
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -45,62 +74,61 @@ export default function SupplierFormDialog({ open, mode = 'add', initialValues, 
         </Stack>
         <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
       </DialogTitle>
-      <form onSubmit={handleSubmit} noValidate>
-        <DialogContent dividers>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label="Supplier Code *"
-                value={isEdit ? values.code : 'Auto generated'}
-                onChange={setField('code')}
-                disabled={!isEdit}
-                fullWidth
-                slotProps={{ input: { readOnly: !isEdit } }}
-              />
+      <FormProvider {...methods}>
+        <form onSubmit={onSubmit} noValidate>
+          <DialogContent dividers>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="Supplier Code *"
+                  value={isEdit ? (initialValues?.code || '') : (nextCode || 'Auto generated')}
+                  disabled
+                  fullWidth
+                  slotProps={{ input: { readOnly: true } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="name" label="Supplier Name *" placeholder="Enter supplier name" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="group" label="Supplier Group" options={GROUP_SELECT_OPTIONS} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="phone" label="Phone" placeholder="Enter 10-digit phone number" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="email" label="Email" placeholder="Enter email address" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="gstNo" label="GST No." placeholder="15-character GSTIN" maxLength={15} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="city" label="City" options={CITY_SELECT_OPTIONS} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="state" label="State" options={STATE_SELECT_OPTIONS} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="paymentTerms" label="Payment Terms" placeholder="e.g. 30 Days" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="status" label="Status *" options={STATUS_OPTIONS} />
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Supplier Name *" value={values.name} onChange={setField('name')} placeholder="Enter supplier name" fullWidth required />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Supplier Group" value={values.group} onChange={setField('group')} fullWidth>
-                {SUPPLIER_GROUP_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Phone" value={values.phone} onChange={setField('phone')} placeholder="Enter phone number" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Email" value={values.email} onChange={setField('email')} placeholder="Enter email address" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="GST No." value={values.gstNo} onChange={setField('gstNo')} placeholder="Enter GST number" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="City" value={values.city} onChange={setField('city')} fullWidth>
-                {CITY_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="State" value={values.state} onChange={setField('state')} fullWidth>
-                {STATE_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Payment Terms" value={values.paymentTerms} onChange={setField('paymentTerms')} placeholder="e.g. 30 Days" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Status" value={values.status} onChange={setField('status')} fullWidth>
-                <MenuItem value="Active">Active</MenuItem>
-                <MenuItem value="Inactive">Inactive</MenuItem>
-              </TextField>
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained">{isEdit ? 'Update' : 'Save'}</Button>
-        </DialogActions>
-      </form>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={14} /> : null}
+            >
+              {isEdit ? 'Update' : 'Save'}
+            </Button>
+          </DialogActions>
+        </form>
+      </FormProvider>
     </Dialog>
   );
 }

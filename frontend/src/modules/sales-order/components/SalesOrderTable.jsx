@@ -44,14 +44,13 @@ function RowActions({ onAction }) {
 /**
  * Order list: tab filter (All/Pending/Confirmed/Delivered), search, a
  * page-size selector, a Filters button, the paginated table itself, and a
- * row-click to load that order into the details panel on the right.
- * Mirrors SalesQuotationTable's structure and its controlled-tab support —
- * when the caller passes both `tab` and `onTabChange`, this single visible
- * tab row drives which whole page body (Overview vs a status page) is
- * showing, not just a local row filter.
+ * row-click to load that order into the details panel on the right. Rows
+ * are keyed/selected by real `id` (not `code`) — same convention every
+ * other module's table adopted once it was wired to a real backend (Gift
+ * Voucher, Loyalty, Customer, Sales Quotation).
  */
 export default function SalesOrderTable({
-  orders, selectedCode, onSelectOrder, onRowAction, onFilters,
+  orders, selectedId, onSelectOrder, onRowAction, onFilters,
   defaultTab = 'all', statusColumn = true, createdByColumn = false,
   deliveryDateColumn = true,
   tab: controlledTab, onTabChange,
@@ -95,7 +94,7 @@ export default function SalesOrderTable({
         <Typography
           variant="body2"
           noWrap
-          sx={{ fontWeight: 600, color: row.code === selectedCode ? 'primary.main' : 'text.primary', cursor: 'pointer' }}
+          sx={{ fontWeight: 600, color: row.id === selectedId ? 'primary.main' : 'text.primary', cursor: 'pointer' }}
           onClick={() => onSelectOrder(row)}
         >
           {row.code}
@@ -180,7 +179,7 @@ export default function SalesOrderTable({
         <DataTable
           columns={columns}
           rows={visibleRows}
-          getRowKey={(r) => r.code}
+          getRowKey={(r) => r.id}
           emptyMessage="No orders match your search"
         />
       </Box>

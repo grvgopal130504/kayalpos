@@ -27,10 +27,17 @@ import PriceListTable from './components/PriceListTable';
 import PriceListFormDialog from './components/PriceListFormDialog';
 import PriceListViewDialog from './components/PriceListViewDialog';
 import { CASHIER } from '../mastersMockData';
-import { PRICE_LISTS, PRICE_LIST_TYPE_OPTIONS, APPLICABLE_TO_OPTIONS, STATS } from './priceListMockData';
+import { PRICE_LIST_TYPE_OPTIONS, APPLICABLE_TO_OPTIONS } from './priceListMockData';
+import { useGetPriceListsPageQuery, useDeletePriceListMutation } from '../../../api/priceListApi';
 
-// Converts a native <input type="date"> value ("YYYY-MM-DD") into this
-// filter bar's "dd-mm-yyyy" display format.
+const PAGE_SIZE = 20;
+
+// Converts a native <input type="date"> value ("YYYY-MM-DD") into an ISO
+// date string suitable for the effectiveFrom/effectiveTo query params
+// (the backend's priceListQuerySchema.../priceList.service.js filters
+// aren't wired to these two fields server-side yet — see note below — so
+// for now they only drive the display placeholder, matching how this filter
+// bar behaved before the backend existed).
 function formatDdMmYyyy(isoValue) {
   if (!isoValue) return '';
   const [y, m, d] = isoValue.split('-');
@@ -39,12 +46,15 @@ function formatDdMmYyyy(isoValue) {
 
 /**
  * Price List — the Price List master's list screen, reached from the
- * Masters page's "Price List" card. Same searchable/filterable list
- * shape as Brand/Tax Code/HSN-SAC (filter bar + table + records footer +
- * bottom stat row), sized for a small set of price lists so all 8 mock
- * rows fit on a single page. Filters run entirely client-side over
- * PRICE_LISTS; every row action and the Import/Export/New Price List
- * buttons are mocked — there's no Price List backend module yet.
+ * Masters page's "Price List" card. Wired to the real Price List API (see
+ * api/priceListApi.js) — search/type/applicableTo/status and pagination all
+ * run server-side; the four stat tiles come from the list response's
+ * `meta.stats` (tenant-wide totals, independent of the current filters —
+ * see priceList.service.js's getPriceListStats). The Effective Date filters
+ * remain display-only for now (no matching backend query param) since date
+ * range filtering here is a "starts before / ends after" question the
+ * mock UI never fully specified either — left as a follow-up rather than
+ * guessing the intended semantics.
  */
 export default function PriceListPage() {
   const dispatch = useAppDispatch();
@@ -62,6 +72,22 @@ export default function PriceListPage() {
   const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewRow, setViewRow] = useState(null);
 
+  const { data, isLoading, isError } = useGetPriceListsPageQuery({
+    search: appliedSearch || undefined,
+    type: priceListType !== 'All' ? priceListType : undefined,
+    applicableTo: applicableTo !== 'All' ? applicableTo : undefined,
+    status: status !== 'All' ? status.toUpperCase() : undefined,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+  const [deletePriceList] = useDeletePriceListMutation();
+
+  const rows = data?.rows || [];
+  const meta = data?.meta;
+  const stats = meta?.stats || {
+    totalPriceLists: 0, activePriceLists: 0, inactivePriceLists: 0, totalItemsInPriceLists: 0,
+  };
+
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
@@ -70,7 +96,7 @@ export default function PriceListPage() {
   const handleNewPriceList = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Price Lists is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export Price Lists is coming soon', 'info'));
-  const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
+  const handleSearch = () => { setAppliedSearch(searchInput.trim()); setPage(1); };
   const handleReset = () => {
     setSearchInput('');
     setPriceListType('All');
@@ -79,25 +105,28 @@ export default function PriceListPage() {
     setEffectiveFrom('');
     setEffectiveTo('');
     setAppliedSearch('');
+    setPage(1);
   };
   const handleViewRow = (row) => setViewRow(row);
   const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
-  const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
-  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
-
-  const filteredRows = useMemo(() => PRICE_LISTS.filter((row) => {
-    if (appliedSearch) {
-      const haystack = `${row.code} ${row.name}`.toLowerCase();
-      if (!haystack.includes(appliedSearch)) return false;
+  const handleDeleteRow = async (row) => {
+    if (!window.confirm(`Delete price list "${row.name}"? This cannot be undone.`)) return;
+    try {
+      await deletePriceList(row.id).unwrap();
+      dispatch(showToast(`${row.name} deleted`, 'success'));
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to delete price list', 'error'));
     }
-    if (priceListType !== 'All' && row.type !== priceListType) return false;
-    if (applicableTo !== 'All' && row.applicableTo !== applicableTo) return false;
-    if (status !== 'All' && row.status !== status) return false;
-    return true;
-  }), [appliedSearch, priceListType, applicableTo, status]);
+  };
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
 
   const isFiltered = Boolean(appliedSearch) || priceListType !== 'All' || applicableTo !== 'All' || status !== 'All'
     || Boolean(effectiveFrom) || Boolean(effectiveTo);
+
+  const total = meta?.total ?? 0;
+  const totalPages = meta?.totalPages ?? 1;
+  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = total === 0 ? 0 : Math.min(page * PAGE_SIZE, total);
 
   return (
     <Stack spacing={2}>
@@ -276,28 +305,37 @@ export default function PriceListPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Price List</Typography>
-        <PriceListTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+
+        {isError ? (
+          <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
+            Failed to load price lists. Please try again.
+          </Typography>
+        ) : (
+          <Box sx={{ opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
+            <PriceListTable rows={rows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+          </Box>
+        )}
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Showing {filteredRows.length ? 1 : 0} to {filteredRows.length} of {isFiltered ? filteredRows.length : PRICE_LISTS.length} records
+            Showing {rangeStart} to {rangeEnd} of {formatNumber(total)} records{isFiltered ? ' (filtered)' : ''}
           </Typography>
-          <Pagination count={1} page={page} onChange={(_e, value) => setPage(value)} color="primary" shape="rounded" />
+          <Pagination count={totalPages} page={page} onChange={(_e, value) => setPage(value)} color="primary" shape="rounded" />
         </Stack>
       </Paper>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={DescriptionOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total Price Lists" value={formatNumber(STATS.totalPriceLists)} />
+          <StatCard icon={DescriptionOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total Price Lists" value={formatNumber(stats.totalPriceLists)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Price Lists" value={formatNumber(STATS.activePriceLists)} />
+          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Price Lists" value={formatNumber(stats.activePriceLists)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={CloseIcon} iconColor="error" iconShape="circle" label="Inactive Price Lists" value={formatNumber(STATS.inactivePriceLists)} />
+          <StatCard icon={CloseIcon} iconColor="error" iconShape="circle" label="Inactive Price Lists" value={formatNumber(stats.inactivePriceLists)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={ReceiptLongOutlinedIcon} iconColor="warning" iconShape="circle" label="Total Items in Price Lists" value={formatNumber(STATS.totalItemsInPriceLists)} />
+          <StatCard icon={ReceiptLongOutlinedIcon} iconColor="warning" iconShape="circle" label="Total Items in Price Lists" value={formatNumber(stats.totalItemsInPriceLists)} />
         </Grid>
       </Grid>
 

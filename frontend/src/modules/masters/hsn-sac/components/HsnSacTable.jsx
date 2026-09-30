@@ -36,12 +36,12 @@ export default function HsnSacTable({ rows, onViewRow, onEditRow, onDeleteRow })
         </TableHead>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={row.code} hover>
+            <TableRow key={row.id} hover>
               <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.description}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.type}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.chapter}</TableCell>
-              <TableCell>{row.taxRate.toFixed(2)}</TableCell>
+              <TableCell>{typeof row.taxRate === 'number' ? row.taxRate.toFixed(2) : row.taxRate}</TableCell>
               <TableCell>{row.uqc}</TableCell>
               <TableCell>
                 <Chip

@@ -91,10 +91,7 @@ export default function PromotionTable({
       key: 'name',
       label: nameColumnLabel,
       render: (row) => (
-        <Box
-          sx={{ minWidth: 140, cursor: 'pointer' }}
-          onClick={() => onSelectPromotion(row)}
-        >
+        <Box sx={{ minWidth: 140 }}>
           <Typography
             variant="body2"
             noWrap
@@ -115,7 +112,13 @@ export default function PromotionTable({
       ? [{ key: 'usage', label: usageColumnLabel, render: (row) => formatNumber(row.usage) }]
       : []),
     { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-    { key: 'action', label: 'Action', align: 'right', render: (row) => <RowActions onAction={(label) => onRowAction(label, row)} /> },
+    {
+      key: 'action',
+      label: 'Action',
+      align: 'right',
+      stopRowClick: true,
+      render: (row) => <RowActions onAction={(label) => onRowAction(label, row)} />,
+    },
   ];
 
   return (
@@ -191,6 +194,7 @@ export default function PromotionTable({
           rows={visibleRows}
           getRowKey={(r) => r.code}
           emptyMessage="No promotions match your search"
+          onRowClick={onSelectPromotion}
         />
       </Box>
 

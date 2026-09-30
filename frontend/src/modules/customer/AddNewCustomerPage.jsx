@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,48 +23,104 @@ import {
   CUSTOMER_TYPE_OPTIONS, GROUP_OPTIONS, PRICE_CATEGORY_OPTIONS,
   OPENING_BALANCE_TYPE_OPTIONS, SALES_REP_OPTIONS, TERRITORY_OPTIONS, SAVE_OPTION_VALUES,
 } from './createCustomerSchema';
-import { getCustomerDetails } from './customerMockData';
+import { useGetCustomersQuery, useCreateCustomerMutation, useUpdateCustomerMutation, useNextCustomerCode } from '../../api/customerApi';
 
 /**
  * Add New Customer form, also doubling as the Edit Customer page when
- * reached via `/customer/edit/:code` — the Customer module has no backend
- * yet, so "editing" prefills from getCustomerDetails() the same way
- * CustomerPage's own detail panel does (only name/mobile/email/address are
- * real per-row mock data; the rest of the form falls back to its normal
- * create defaults since there's nothing to prefill them from).
+ * reached via `/customer/edit/:code`. Wired to the real Customer API:
+ * editing prefills from the live record (looked up by code from the list
+ * query, since the API's by-id lookup takes the database id, not the
+ * display code) and Save/Update actually creates or updates the row.
  */
-export default function AddNewCustomerPage() {
+export default function AddNewCustomerPage({ code: propCode, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
+  const { code: paramCode } = useParams();
+  const code = propCode ?? paramCode;
   const isEditMode = Boolean(code);
-  const existingCustomer = isEditMode ? getCustomerDetails(code) : null;
+
+  const { data: customerRows = [], isLoading: customersLoading } = useGetCustomersQuery({});
+  const existingRow = useMemo(() => customerRows.find((c) => c.code === code), [customerRows, code]);
+  const existingCustomer = isEditMode ? existingRow : null;
+  const [createCustomer] = useCreateCustomerMutation();
+  const [updateCustomer] = useUpdateCustomerMutation();
+  const nextCode = useNextCustomerCode(!isEditMode);
 
   const methods = useForm({
     resolver: zodResolver(createCustomerSchema),
-    defaultValues: existingCustomer
+    defaultValues: useMemo(() => (existingCustomer
       ? {
           ...createCustomerDefaultValues,
           customerName: existingCustomer.name,
           mobileNumber: existingCustomer.mobile,
-          email: existingCustomer.email,
-          address: existingCustomer.address,
-          activeCustomer: existingCustomer.status === 'active',
+          email: existingCustomer.email || '',
+          gstin: existingCustomer.gstin || '',
+          customerType: existingCustomer.customerType || '',
+          group: existingCustomer.group || '',
+          priceCategory: existingCustomer.priceCategory || '',
+          creditLimit: String(existingCustomer.creditLimit ?? '0.00'),
+          openingBalance: String(existingCustomer.openingBalance ?? '0.00'),
+          openingBalanceType: existingCustomer.openingBalanceType || 'Cr',
+          address: existingCustomer.address || '',
+          salesRepresentative: existingCustomer.salesRepresentative || '',
+          territory: existingCustomer.territory || '',
+          activeCustomer: existingCustomer.status === 'ACTIVE',
+          allowCreditSale: existingCustomer.allowCreditSale ?? true,
+          priceInclusive: existingCustomer.priceInclusive ?? false,
+          smsNotification: existingCustomer.smsNotification ?? true,
+          notes: existingCustomer.notes || '',
         }
-      : createCustomerDefaultValues,
+      : createCustomerDefaultValues), [existingCustomer]),
     mode: 'onTouched',
   });
   const { watch, setValue, handleSubmit } = methods;
   const saveOption = watch('saveOption');
 
-  const onSubmit = (values) => {
-    dispatch(showToast(isEditMode ? 'Customer updated successfully' : 'Customer saved successfully', 'success'));
-    if (values.saveOption === 'close') {
-      navigate(isEditMode ? `/customer/view/${code}` : '/customer');
+  const onSubmit = async (values) => {
+    const payload = {
+      name: values.customerName.trim(),
+      mobile: values.mobileNumber.trim(),
+      email: values.email?.trim() || undefined,
+      gstin: values.gstin?.trim() || undefined,
+      customerType: values.customerType,
+      group: values.group || undefined,
+      priceCategory: values.priceCategory || undefined,
+      creditLimit: values.creditLimit === '' ? 0 : Number(values.creditLimit),
+      openingBalance: values.openingBalance === '' ? 0 : Number(values.openingBalance),
+      openingBalanceType: values.openingBalanceType,
+      address: values.address?.trim() || undefined,
+      salesRepresentative: values.salesRepresentative || undefined,
+      territory: values.territory || undefined,
+      allowCreditSale: values.allowCreditSale,
+      priceInclusive: values.priceInclusive,
+      smsNotification: values.smsNotification,
+      notes: values.notes?.trim() || undefined,
+      status: values.activeCustomer ? 'ACTIVE' : 'INACTIVE',
+    };
+
+    try {
+      let finalCode = code;
+      if (isEditMode) {
+        await updateCustomer({ id: existingRow.id, ...payload }).unwrap();
+      } else {
+        const created = await createCustomer(payload).unwrap();
+        finalCode = created.code;
+      }
+      dispatch(showToast(isEditMode ? 'Customer updated successfully' : 'Customer saved successfully', 'success'));
+      if (values.saveOption === 'close') {
+        if (onBack) onBack(finalCode);
+        else navigate(isEditMode ? `/customer/view/${finalCode}` : '/customer');
+      }
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save customer', 'error'));
     }
   };
 
-  const handleBackToList = () => navigate('/customer');
+  const handleBackToList = () => (onBack ? onBack() : navigate('/customer'));
+
+  if (isEditMode && customersLoading) {
+    return null;
+  }
 
   if (isEditMode && !existingCustomer) {
     return (
@@ -111,7 +168,7 @@ export default function AddNewCustomerPage() {
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           label="Customer Code *"
-                          value={isEditMode ? existingCustomer.code : 'Auto generated'}
+                          value={isEditMode ? existingCustomer.code : (nextCode || 'Auto generated')}
                           disabled
                           fullWidth
                           slotProps={{ input: { readOnly: true } }}
@@ -121,7 +178,13 @@ export default function AddNewCustomerPage() {
                         <FormTextField name="customerName" label="Customer Name *" placeholder="Enter customer name" />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="mobileNumber" label="Mobile Number *" placeholder="Enter mobile number" />
+                        <FormTextField
+                          name="mobileNumber"
+                          label="Mobile Number *"
+                          placeholder="10-digit mobile number"
+                          numeric
+                          maxLength={10}
+                        />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <FormTextField name="email" label="Email" placeholder="Enter email address" />

@@ -6,6 +6,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 
 import { formatNumber } from '../../../../utils/format';
+import { formatPickerDate } from '../../../../components/form/FormDatePicker';
 
 function Field({ label, value }) {
   return (
@@ -16,9 +17,14 @@ function Field({ label, value }) {
   );
 }
 
-/** Read-only "View Price List" dialog with an Edit button. */
+function formatRowDate(value) {
+  return value ? formatPickerDate(new Date(value)) : '-';
+}
+
+/** Read-only "View Price List" dialog with an Edit button — real API row shape (basePriceList joined in, status enum). */
 export default function PriceListViewDialog({ open, row, onClose, onEdit }) {
   if (!row) return null;
+  const status = String(row.status).toUpperCase() === 'INACTIVE' ? 'Inactive' : 'Active';
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1.5 }}>
@@ -34,19 +40,19 @@ export default function PriceListViewDialog({ open, row, onClose, onEdit }) {
           <Field label="Price List Name" value={row.name} />
           <Field label="Price List Type" value={row.type} />
           <Field label="Applicable To" value={row.applicableTo} />
-          <Field label="Base Price List" value={row.basePriceList} />
+          <Field label="Base Price List" value={row.basePriceList?.name || '-'} />
           <Field label="Currency" value={row.currency} />
-          <Field label="Effective From" value={row.effectiveFrom} />
-          <Field label="Effective To" value={row.effectiveTo} />
+          <Field label="Effective From" value={formatRowDate(row.effectiveFrom)} />
+          <Field label="Effective To" value={formatRowDate(row.effectiveTo)} />
           <Field label="No. of Items" value={formatNumber(row.itemCount)} />
           <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>Status</Typography>
             <Chip
-              label={row.status}
+              label={status}
               size="small"
               sx={{
-                bgcolor: row.status === 'Active' ? 'rgba(34,160,107,0.12)' : 'rgba(229,72,77,0.12)',
-                color: row.status === 'Active' ? 'success.main' : 'error.main',
+                bgcolor: status === 'Active' ? 'rgba(34,160,107,0.12)' : 'rgba(229,72,77,0.12)',
+                color: status === 'Active' ? 'success.main' : 'error.main',
                 fontWeight: 700, height: 22, mt: 0.5,
               }}
             />

@@ -6,23 +6,36 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import StockCountDetailsCard from './components/StockCountDetailsCard';
-import { getCountDetails } from './stockCountMockData';
+import { useGetStockCountQuery } from '../../api/stockCountApi';
+import { toCountDetails } from './stockCountDisplay';
 
 /**
- * Read-only "View Count" destination for StockCountTable's row menu —
- * reuses the exact same StockCountDetailsCard the list page already shows
- * for the selected row, just addressed by :code as its own full page
- * instead of a side panel.
+ * Read-only "View Count" body for StockCountTable's row menu — reuses the
+ * exact same StockCountDetailsCard the list page already shows for the
+ * selected row. Rendered by StockCountPage via props (`id`/`onBack`/
+ * `onEdit`) as part of the single /stock-count page rather than its own
+ * route. Fully wired to the real backend — every field here comes from the
+ * actual StockCount row fetched by GET /api/stock-counts/:id.
  */
-export default function CountViewPage() {
+export default function CountViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
-  const count = getCountDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: row, isLoading, isError } = useGetStockCountQuery(id, { skip: !id });
+  const count = row ? toCountDetails(row) : null;
 
-  const handleBack = () => navigate('/stock-count');
-  const handleEdit = () => navigate(`/stock-count/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/stock-count'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-count/edit/${id}`));
 
-  if (!count) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading count…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !count) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Count not found</Typography>

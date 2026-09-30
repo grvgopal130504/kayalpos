@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper,
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Alert, Skeleton,
 } from '@mui/material';
 import { PieChart } from '@mui/x-charts/PieChart';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -11,15 +11,17 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 
-import { useAppDispatch } from '../../app/hooks';
-import { logout } from '../../features/auth/authSlice';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { logout, selectCurrentUser } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 import StatCard from '../../components/common/StatCard';
-import { DatePickerField } from '../../components/form/FormDatePicker';
+import { DatePickerField, formatPickerDate, parsePickerDate } from '../../components/form/FormDatePicker';
 import { formatCurrency } from '../../utils/format';
+import { useShortageExcessReportQuery } from '../../api/shortageExcessApi';
 
 import ShortageExcessTransactionsTable from './components/ShortageExcessTransactionsTable';
-import { CASHIER, SHORTAGE_EXCESS } from './cashierPanelMockData';
+
+const PAGE_SIZE = 10;
 
 function SummaryTile({ label, value, valueColor }) {
   return (
@@ -32,10 +34,18 @@ function SummaryTile({ label, value, valueColor }) {
   );
 }
 
+function toDateKey(pickerValue) {
+  const date = parsePickerDate(pickerValue) || new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /**
  * Shortage/Excess-by-type donut for the summary panel — built directly on
  * PieChart (rather than the shared DonutChart) so a third, non-slice
- * legend row ("Net Amount", equal to Shortage + Excess) can sit below the
+ * legend row ("Net Amount", equal to Shortage − Excess) can sit below the
  * two real Shortage/Excess arcs without double-counting the total.
  */
 function ByTypeDonut({ data, netAmountLegend, centerLabel, centerValue, size = 160 }) {
@@ -117,28 +127,57 @@ function ByTypeDonut({ data, netAmountLegend, centerLabel, centerValue, size = 1
 
 /**
  * Shortage / Excess — the cashier's cash-variance report reached from the
- * Cashier Panel's "Shortage / Excess" quick action. Same overall shape as
- * the other cashier-panel report pages, but the Summary panel tracks
- * Total Shortage vs Total Excess with a Net Amount, plus Shortage/Excess
- * counts and a "Needs Attention" status, and the breakdown donut adds a
- * non-slice "Net Amount" legend row alongside the Shortage/Excess arcs.
- *
- * There's no sales-reporting backend wired to this screen yet, so every
- * figure comes from SHORTAGE_EXCESS mock data.
+ * Cashier Panel's "Shortage / Excess" quick action. There is no separate
+ * create-flow or table behind this page at all: a "shortage / excess"
+ * entry is simply the non-zero-variance subset of a CLOSED ShiftSession
+ * row's real reconciliation — closingVariance < 0 is a Shortage, > 0 is
+ * an Excess, both computed once and stored by closeShift() (see backend/
+ * src/modules/shift-session/shiftSession.service.js) — this page only
+ * reads and reshapes that same real data via GET /shortage-excess/summary
+ * (see shortageExcess.service.js's getShortageExcessReport), the same
+ * read-only relationship Cash Reconciliation has with those rows (minus
+ * the exact matches, which never appear here).
  */
 export default function ShortageExcessPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const user = useAppSelector(selectCurrentUser);
   const [page, setPage] = useState(1);
+  const [selectedDate, setSelectedDate] = useState(() => formatPickerDate(new Date()));
 
-  const { stats, summary, byType, netAmountLegend, transactions, totalPages } = SHORTAGE_EXCESS;
-  const [selectedDate, setSelectedDate] = useState(SHORTAGE_EXCESS.selectedDate);
+  const dateKey = toDateKey(selectedDate);
+  const {
+    data: report, isLoading, isFetching, isError, refetch,
+  } = useShortageExcessReportQuery({ date: dateKey, page, pageSize: PAGE_SIZE });
+
+  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
 
   const handleViewAll = () => dispatch(showToast('Full shortage / excess list is coming soon', 'info'));
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
+  const handleDateChange = (value) => {
+    setSelectedDate(value || formatPickerDate(new Date()));
+    setPage(1);
+  };
+
+  if (isError) {
+    return (
+      <Stack spacing={2}>
+        <Alert
+          severity="error"
+          action={(
+            <MuiLink component="button" type="button" variant="body2" underline="hover" onClick={refetch}>
+              Retry
+            </MuiLink>
+          )}
+        >
+          Couldn&apos;t load the Shortage / Excess report from the server. Check your connection and try reloading.
+        </Alert>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
@@ -153,7 +192,7 @@ export default function ShortageExcessPage() {
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
+            Cashier : {cashierLabel}
           </Typography>
           <MuiLink
             component="button"
@@ -168,58 +207,73 @@ export default function ShortageExcessPage() {
         </Stack>
       </Stack>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={WarningAmberOutlinedIcon}
-            iconColor="success"
-            iconShape="circle"
-            label="Total Shortage / Excess"
-            value={formatCurrency(stats.totalShortageExcess.value, { decimals: true })}
-            caption={`Transactions : ${stats.totalShortageExcess.transactions}`}
-          />
+      <Alert severity="info" variant="outlined">
+        This is a report of shortages and excesses found while reconciling closed shifts. To close a shift and record its
+        cash count, use the Shift Closing screen.
+      </Alert>
+
+      {isLoading || !report ? (
+        <Grid container spacing={2}>
+          {[1, 2, 3, 4, 5].map((key) => (
+            <Grid key={key} size={{ xs: 12, sm: 6, lg: 2.4 }}>
+              <Skeleton variant="rounded" height={92} />
+            </Grid>
+          ))}
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={DescriptionOutlinedIcon}
-            iconColor="#2563EB"
-            iconShape="circle"
-            label="Total Entries"
-            value={String(stats.totalEntries.value)}
-            caption="Total Quantity : -"
-          />
+      ) : (
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={WarningAmberOutlinedIcon}
+              iconColor="success"
+              iconShape="circle"
+              label="Total Shortage / Excess"
+              value={formatCurrency(report.stats.totalShortageExcess.value, { decimals: true })}
+              caption={`Transactions : ${report.stats.totalShortageExcess.transactions}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={DescriptionOutlinedIcon}
+              iconColor="#2563EB"
+              iconShape="circle"
+              label="Total Entries"
+              value={String(report.stats.totalEntries.value)}
+              caption="Total Quantity : -"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CurrencyRupeeOutlinedIcon}
+              iconColor="warning"
+              iconShape="circle"
+              label="Average Amount"
+              value={formatCurrency(report.stats.avgAmount.value, { decimals: true })}
+              caption="Per Entry"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#8B5CF6"
+              iconShape="circle"
+              label="Today's Shortage / Excess"
+              value={formatCurrency(report.stats.todaysShortageExcess.value, { decimals: true })}
+              caption={`${report.stats.todaysShortageExcess.transactions} Transactions`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#0EA5A4"
+              iconShape="circle"
+              label="Selected Date"
+              value={formatCurrency(report.stats.selectedDateShortageExcess.value, { decimals: true })}
+              caption={report.stats.selectedDateShortageExcess.date}
+            />
+          </Grid>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CurrencyRupeeOutlinedIcon}
-            iconColor="warning"
-            iconShape="circle"
-            label="Average Amount"
-            value={formatCurrency(stats.avgAmount.value, { decimals: true })}
-            caption="Per Entry"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#8B5CF6"
-            iconShape="circle"
-            label="Today's Shortage / Excess"
-            value={formatCurrency(stats.todaysShortageExcess.value, { decimals: true })}
-            caption={`${stats.todaysShortageExcess.transactions} Transactions`}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#0EA5A4"
-            iconShape="circle"
-            label="Selected Date"
-            value={formatCurrency(stats.selectedDateShortageExcess.value, { decimals: true })}
-            caption={stats.selectedDateShortageExcess.date}
-          />
-        </Grid>
-      </Grid>
+      )}
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
@@ -228,58 +282,68 @@ export default function ShortageExcessPage() {
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Shortage / Excess Summary</Typography>
               <DatePickerField
                 value={selectedDate}
-                onChange={setSelectedDate}
+                onChange={handleDateChange}
                 sx={{ width: { xs: '100%', sm: 200 } }}
               />
             </Stack>
 
-            <Grid container spacing={1.5}>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Total Shortage / Excess" value={formatCurrency(summary.totalShortageExcess, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Total Transactions" value={String(summary.totalTransactions)} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Recorded By" value={summary.recordedBy} valueColor="#2563EB" />
-              </Grid>
-            </Grid>
+            {!report ? (
+              <Skeleton variant="rounded" height={220} />
+            ) : (
+              <>
+                <Grid container spacing={1.5}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <SummaryTile label="Total Shortage / Excess" value={formatCurrency(report.summary.totalShortageExcess, { decimals: true })} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <SummaryTile label="Total Transactions" value={String(report.summary.totalTransactions)} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <SummaryTile label="Recorded By" value={report.summary.recordedBy} valueColor="#2563EB" />
+                  </Grid>
+                </Grid>
 
-            <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Total Shortage" value={formatCurrency(summary.totalShortage, { decimals: true })} valueColor="error.main" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Total Excess" value={formatCurrency(summary.totalExcess, { decimals: true })} valueColor="success.main" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Net Amount" value={formatCurrency(summary.netAmount, { decimals: true })} valueColor="error.main" />
-              </Grid>
-            </Grid>
+                <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <SummaryTile label="Total Shortage" value={formatCurrency(report.summary.totalShortage, { decimals: true })} valueColor="error.main" />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <SummaryTile label="Total Excess" value={formatCurrency(report.summary.totalExcess, { decimals: true })} valueColor="success.main" />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <SummaryTile label="Net Amount" value={formatCurrency(report.summary.netAmount, { decimals: true })} valueColor="error.main" />
+                  </Grid>
+                </Grid>
 
-            <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 6, sm: 4 }}>
-                <SummaryTile label="Shortage (Count)" value={String(summary.shortageCount)} valueColor="error.main" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 4 }}>
-                <SummaryTile label="Excess (Count)" value={String(summary.excessCount)} valueColor="success.main" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Status" value={summary.status} valueColor="error.main" />
-              </Grid>
-            </Grid>
+                <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <SummaryTile label="Shortage (Count)" value={String(report.summary.shortageCount)} valueColor="error.main" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <SummaryTile label="Excess (Count)" value={String(report.summary.excessCount)} valueColor="success.main" />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <SummaryTile label="Status" value={report.summary.status} valueColor={report.summary.status === 'All Balanced' ? 'success.main' : 'error.main'} />
+                  </Grid>
+                </Grid>
+              </>
+            )}
           </Paper>
         </Grid>
 
         <Grid size={{ xs: 12, lg: 5 }}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Shortage / Excess Summary (By Type)</Typography>
-            <ByTypeDonut
-              data={byType}
-              netAmountLegend={netAmountLegend}
-              centerValue={formatCurrency(summary.totalShortageExcess, { decimals: true })}
-              centerLabel="Total"
-            />
+            {!report ? (
+              <Skeleton variant="rounded" height={220} />
+            ) : (
+              <ByTypeDonut
+                data={report.byType}
+                netAmountLegend={report.netAmountLegend}
+                centerValue={formatCurrency(report.summary.totalShortageExcess, { decimals: true })}
+                centerLabel="Total"
+              />
+            )}
           </Paper>
         </Grid>
       </Grid>
@@ -298,7 +362,17 @@ export default function ShortageExcessPage() {
             View All <NavigateNextIcon fontSize="small" />
           </MuiLink>
         </Stack>
-        <ShortageExcessTransactionsTable rows={transactions} totalPages={totalPages} page={page} onPageChange={setPage} />
+        {!report ? (
+          <Skeleton variant="rounded" height={240} />
+        ) : (
+          <ShortageExcessTransactionsTable
+            rows={report.transactions}
+            totalPages={report.totalPages}
+            page={report.page}
+            onPageChange={setPage}
+            loading={isFetching}
+          />
+        )}
       </Paper>
     </Stack>
   );

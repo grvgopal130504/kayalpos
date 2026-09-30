@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+// `itemCategory`, `item` and `brand` options now come from the real Product/
+// Brand APIs (see CreateBarcodeLabelPage, which builds them from
+// useGetProductsQuery/useGetBrandsQuery) — the old mock-data version
+// hardcoded all three as fixed lists. The remaining lists below have no
+// backing master table yet (there's no Warehouse/Print-Template model in the
+// schema), so they stay fixed, same scope decision every other module makes
+// for its own non-modeled dropdowns (e.g. Sales Invoice's PAYMENT_TERMS_OPTIONS).
+
 export const LABEL_TYPE_OPTIONS = [
   { value: 'barcode', label: 'Barcode' },
   { value: 'qr-code', label: 'QR Code' },
@@ -21,38 +29,12 @@ export const PRINT_TEMPLATE_OPTIONS = [
   { value: 'compact-4col', label: 'Compact 4-Column' },
 ];
 
-export const ITEM_CATEGORY_OPTIONS = [
-  { value: '', label: 'Select Item Category', disabled: true },
-  { value: 'grocery', label: 'Grocery' },
-  { value: 'beverages', label: 'Beverages' },
-  { value: 'snacks', label: 'Snacks' },
-  { value: 'dairy', label: 'Dairy' },
-  { value: 'household', label: 'Household' },
-  { value: 'personal-care', label: 'Personal Care' },
-];
-
-export const ITEM_OPTIONS = [
-  { value: '', label: 'Select Item', disabled: true },
-  { value: 'ITM-0001', label: 'Rice 10kg' },
-  { value: 'ITM-0002', label: 'Sugar 1kg' },
-  { value: 'ITM-0003', label: 'Toor Dal 1kg' },
-  { value: 'ITM-0004', label: 'Tea Powder 250g' },
-  { value: 'ITM-0005', label: 'Sunflower Oil 1L' },
-];
-
 export const UOM_OPTIONS = [
   { value: '', label: 'Select UoM', disabled: true },
   { value: 'nos', label: 'Nos' },
   { value: 'kg', label: 'Kg' },
   { value: 'ltr', label: 'Ltr' },
   { value: 'box', label: 'Box' },
-];
-
-export const BRAND_OPTIONS = [
-  { value: '', label: 'Select Brand', disabled: true },
-  { value: 'nexora-staples', label: 'Nexora Staples' },
-  { value: 'daily-fresh', label: 'Daily Fresh' },
-  { value: 'homecare-plus', label: 'HomeCare Plus' },
 ];
 
 export const WAREHOUSE_OPTIONS = [
@@ -96,57 +78,76 @@ export function emptyItemRow() {
   };
 }
 
-// The reference design ships the create screen with 5 sample items already
-// resolved from the filter criteria (unlike Quotation/Order/Invoice, which
-// start with blank rows) — mirroring that here.
-export function sampleItemRow({ code, name, hsn, uom, barcode }) {
-  return {
-    selected: false,
-    itemCode: code,
-    itemName: name,
-    hsnCode: hsn,
-    uom,
-    barcode,
-    printQty: '1.00',
-    fromSerialBatch: '',
-    toSerialBatch: '',
-  };
-}
+// A plain (optional) non-negative decimal amount, entered as free text —
+// same convention as the sales-cycle modules' own decimalString() helper.
+const decimalString = (message) => z.string().trim()
+  .refine((v) => v === '' || (/^\d+(\.\d{1,3})?$/.test(v) && Number(v) >= 0), message);
 
 const itemRowSchema = z.object({
   selected: z.boolean(),
-  itemCode: z.string().trim(),
-  itemName: z.string().trim(),
-  hsnCode: z.string().trim(),
-  uom: z.string().trim(),
-  barcode: z.string().trim(),
-  printQty: z.string().trim(),
-  fromSerialBatch: z.string().trim(),
-  toSerialBatch: z.string().trim(),
+  itemCode: z.string().trim().optional(),
+  itemName: z.string().trim().optional(),
+  hsnCode: z.string().trim().optional(),
+  uom: z.string().trim().optional(),
+  barcode: z.string().trim().optional(),
+  printQty: decimalString('Enter a valid print quantity'),
+  fromSerialBatch: z.string().trim().optional(),
+  toSerialBatch: z.string().trim().optional(),
 });
 
-export const createBarcodeLabelSchema = z.object({
-  labelName: z.string().trim().min(1, 'Label name is required'),
-  labelType: z.string().trim().min(1, 'Select a label type'),
-  labelSize: z.string().trim().min(1, 'Select a label size'),
-  printTemplate: z.string().trim().optional(),
-  labelsAcross: z.string().trim().optional(),
-  labelsDown: z.string().trim().optional(),
-  remarks: z.string().trim().optional(),
-  itemCategory: z.string().trim().optional(),
-  item: z.string().trim().optional(),
-  uom: z.string().trim().optional(),
-  brand: z.string().trim().optional(),
-  warehouse: z.string().trim().optional(),
-  batchNo: z.string().trim().optional(),
-  fromItemCode: z.string().trim().optional(),
-  toItemCode: z.string().trim().optional(),
-  barcodeType: z.string().trim(),
-  additionalFilter: z.string().trim().optional(),
-  sortBy: z.string().trim(),
-  notes: z.string().trim().optional(),
-  items: z.array(itemRowSchema),
-});
+// Unlike Quotation/Order/Invoice's items grid (where every filled row is
+// part of the document), a Barcode & Label batch only ever includes the rows
+// the user actually checked — see LabelPrintSummaryCard's own selected-only
+// totals, which this validation mirrors exactly. An unchecked row, filled or
+// not, is never part of what gets submitted or validated beyond its own
+// print-qty format.
+function isSelectedRow(row) {
+  return Boolean(row?.selected);
+}
+
+export const createBarcodeLabelSchema = z
+  .object({
+    labelName: z.string().trim().min(1, 'Label name is required'),
+    labelType: z.string().trim().min(1, 'Select a label type'),
+    labelSize: z.string().trim().min(1, 'Select a label size'),
+    printTemplate: z.string().trim().optional(),
+    labelsAcross: decimalString('Enter a valid whole number')
+      .refine((v) => v === '' || Number.isInteger(Number(v)), 'Must be a whole number'),
+    labelsDown: decimalString('Enter a valid whole number')
+      .refine((v) => v === '' || Number.isInteger(Number(v)), 'Must be a whole number'),
+    remarks: z.string().trim().optional(),
+    itemCategory: z.string().trim().optional(),
+    item: z.string().trim().optional(),
+    uom: z.string().trim().optional(),
+    brand: z.string().trim().optional(),
+    warehouse: z.string().trim().optional(),
+    batchNo: z.string().trim().optional(),
+    fromItemCode: z.string().trim().optional(),
+    toItemCode: z.string().trim().optional(),
+    barcodeType: z.string().trim().min(1, 'Select a barcode type'),
+    additionalFilter: z.string().trim().optional(),
+    sortBy: z.string().trim().min(1, 'Select a sort order'),
+    notes: z.string().trim().optional(),
+    items: z.array(itemRowSchema),
+  })
+  .superRefine((values, ctx) => {
+    const selectedRows = values.items.filter(isSelectedRow);
+    values.items.forEach((row, index) => {
+      if (!isSelectedRow(row)) return;
+      if (!row.itemCode?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'itemCode'], message: 'Item code is required' });
+      }
+      if (!row.itemName?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'itemName'], message: 'Item name is required' });
+      }
+      if (!row.printQty?.trim() || Number(row.printQty) <= 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'printQty'], message: 'Print qty must be greater than 0' });
+      }
+    });
+    if (selectedRows.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items'], message: 'Select at least one item to print' });
+    }
+  });
 
 export const createBarcodeLabelDefaultValues = {
   labelName: '',
@@ -168,11 +169,5 @@ export const createBarcodeLabelDefaultValues = {
   additionalFilter: '',
   sortBy: 'item-name',
   notes: '',
-  items: [
-    sampleItemRow({ code: 'ITM-0001', name: 'Rice 10kg', hsn: '1006', uom: 'Nos', barcode: '8901234567890' }),
-    sampleItemRow({ code: 'ITM-0002', name: 'Sugar 1kg', hsn: '1701', uom: 'Nos', barcode: '8901234567891' }),
-    sampleItemRow({ code: 'ITM-0003', name: 'Toor Dal 1kg', hsn: '0713', uom: 'Nos', barcode: '8901234567892' }),
-    sampleItemRow({ code: 'ITM-0004', name: 'Tea Powder 250g', hsn: '0902', uom: 'Nos', barcode: '8901234567893' }),
-    sampleItemRow({ code: 'ITM-0005', name: 'Sunflower Oil 1L', hsn: '1512', uom: 'Nos', barcode: '8901234567894' }),
-  ],
+  items: [emptyItemRow()],
 };

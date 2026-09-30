@@ -9,58 +9,75 @@ import { formatCurrency } from '../../../utils/format';
 
 /**
  * "Current Return Items" table: each line's return quantity is adjusted
- * with a -/+ stepper (capped between 1 and the item's remaining returnable
- * qty) instead of a free-typed number, since over-returning isn't valid.
- * Amount math (line + grand totals) lives in the parent page and is handed
- * down elsewhere (ReturnTotalsCard) — this component is display + qty
- * stepper plumbing only.
+ * with a -/+ stepper (capped between 1 and that line's remaining
+ * `returnableQty`, from the real invoice lookup) instead of a free-typed
+ * number, since over-returning isn't valid. Rows are keyed by `saleLineId`
+ * — the real original SaleLine each cart entry came from — and each row's
+ * own `taxRate` (a snapshot of that line's real tax rate from the original
+ * sale) drives its displayed tax %, rather than one shared global rate.
  */
-export default function ReturnCartPanel({ lines, onQtyChange, onRemove, taxRate }) {
+export default function ReturnCartPanel({ lines, onQtyChange, onRemove }) {
+  // Explicit widths (summing to 100%) so the table always fits the panel —
+  // see DataTable's `fitContainer` doc comment.
   const columns = [
-    { key: 'index', label: '#', render: (_row, i) => i + 1 },
+    { key: 'index', label: '#', width: '5%', render: (_row, i) => i + 1 },
     {
       key: 'item',
       label: 'Item Details',
+      width: '24%',
+      wrap: true,
       render: (row) => (
-        <Box sx={{ minWidth: 120 }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{row.name}</Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>{row.code}</Typography>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.25 }}>{row.name}</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>{row.code}</Typography>
         </Box>
       ),
     },
-    { key: 'batch', label: 'Batch / Serial', render: (row) => row.batch },
-    { key: 'uom', label: 'UOM', render: (row) => row.uom },
     {
       key: 'qty',
       label: 'Return Qty',
+      width: '21%',
       render: (row) => (
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           <IconButton
             size="small"
-            onClick={() => onQtyChange(row.code, Math.max(1, row.qty - 1))}
-            sx={{ border: '1px solid', borderColor: 'divider', width: 26, height: 26 }}
+            onClick={() => onQtyChange(row.saleLineId, Math.max(1, row.qty - 1))}
+            sx={{ border: '1px solid', borderColor: 'divider', width: 24, height: 24 }}
           >
-            <RemoveIcon sx={{ fontSize: 14 }} />
+            <RemoveIcon sx={{ fontSize: 13 }} />
           </IconButton>
-          <Typography variant="body2" sx={{ fontWeight: 700, width: 22, textAlign: 'center' }}>{row.qty}</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 700, width: 18, textAlign: 'center' }}>{row.qty}</Typography>
           <IconButton
             size="small"
-            onClick={() => onQtyChange(row.code, Math.min(row.maxQty, row.qty + 1))}
+            onClick={() => onQtyChange(row.saleLineId, Math.min(row.maxQty, row.qty + 1))}
             disabled={row.qty >= row.maxQty}
-            sx={{ border: '1px solid', borderColor: 'divider', width: 26, height: 26 }}
+            sx={{ border: '1px solid', borderColor: 'divider', width: 24, height: 24 }}
           >
-            <AddIcon sx={{ fontSize: 14 }} />
+            <AddIcon sx={{ fontSize: 13 }} />
           </IconButton>
         </Stack>
       ),
     },
-    { key: 'rate', label: 'Rate (₹)', render: (row) => formatCurrency(row.rate, { decimals: true }) },
-    { key: 'discount', label: 'Discount (₹)', render: () => formatCurrency(0, { decimals: true }) },
-    { key: 'tax', label: 'Tax', render: () => `${(taxRate * 100).toFixed(0)}%` },
+    {
+      key: 'pricing',
+      label: 'Rate / Tax',
+      width: '22%',
+      wrap: true,
+      render: (row) => (
+        <Box>
+          <Typography variant="body2">{formatCurrency(row.rate, { decimals: true })}</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+            Tax {(row.taxRate * 100).toFixed(0)}%
+          </Typography>
+        </Box>
+      ),
+    },
     {
       key: 'amount',
-      label: 'Amount (₹)',
+      label: 'Amount',
       align: 'right',
+      width: '18%',
+      wrap: true,
       render: (row) => (
         <Typography variant="body2" sx={{ fontWeight: 700 }}>
           {formatCurrency(row.qty * row.rate, { decimals: true })}
@@ -71,8 +88,9 @@ export default function ReturnCartPanel({ lines, onQtyChange, onRemove, taxRate 
       key: 'remove',
       label: '',
       align: 'right',
+      width: '10%',
       render: (row) => (
-        <IconButton size="small" color="error" onClick={() => onRemove(row.code)}>
+        <IconButton size="small" color="error" onClick={() => onRemove(row.saleLineId)}>
           <DeleteOutlineOutlinedIcon fontSize="small" />
         </IconButton>
       ),
@@ -90,8 +108,14 @@ export default function ReturnCartPanel({ lines, onQtyChange, onRemove, taxRate 
         </MuiLink>
       </Stack>
 
-      <Box sx={{ px: 2.5, pb: 2, flex: 1, minWidth: 0, overflow: 'auto' }}>
-        <DataTable columns={columns} rows={lines} getRowKey={(r) => r.code} emptyMessage="No items added for return yet" />
+      <Box sx={{ px: 2.5, pb: 2, flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+        <DataTable
+          columns={columns}
+          rows={lines}
+          getRowKey={(r) => r.saleLineId}
+          emptyMessage="No items added for return yet"
+          fitContainer
+        />
       </Box>
     </Paper>
   );

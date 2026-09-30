@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -16,47 +16,44 @@ import SalesQuotationSummaryCards from './components/SalesQuotationSummaryCards'
 import SalesQuotationTable from './components/SalesQuotationTable';
 import QuotationDetailsCard from './components/QuotationDetailsCard';
 import QuotationTermsAndNotes from './components/QuotationTermsAndNotes';
-import { SUMMARY, QUOTATIONS, QUOTATION_DETAILS } from './salesQuotationMockData';
-
-const QUOTATION_BY_CODE = Object.fromEntries(QUOTATIONS.map((q) => [q.code, q]));
+import { useGetSalesQuotationsQuery, useSalesQuotationSummaryQuery } from '../../api/salesQuotationApi';
+import { toQuotationRow, toQuotationDetails, buildSummary } from './salesQuotationDisplay';
 
 /**
  * Sales Quotation list/detail page — summary tiles, the quotation table
  * with a detail panel for whichever row is selected, and a Terms &
- * Conditions / Notes strip below. The Sales Quotation backend module
- * doesn't exist yet, so everything is driven by salesQuotationMockData.js —
- * selecting a row other than QUO-00086 falls back to reusing
- * QUOTATION_DETAILS' items/totals (only the header fields differ) since we
- * don't have full mock detail records for all 86 rows.
+ * Conditions / Notes strip below. Fully wired to the real backend (see
+ * backend/src/modules/sales-quotation): every tile, row and detail field
+ * comes from the actual SalesQuotation table, so a tenant with no
+ * quotations yet honestly shows zeros/empty states instead of this page's
+ * old static mock data.
  */
-export default function SalesQuotationOverviewPage({ tab, onTabChange, onCreate }) {
+export default function SalesQuotationOverviewPage({ tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(QUOTATION_DETAILS.code);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const selectedRow = QUOTATION_BY_CODE[selectedCode];
-  const quotationDetails = selectedCode === QUOTATION_DETAILS.code
-    ? QUOTATION_DETAILS
-    : {
-        ...QUOTATION_DETAILS,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        status: selectedRow.status,
-        totalAmount: selectedRow.amount,
-        validTill: selectedRow.validTill,
-        customer: { ...QUOTATION_DETAILS.customer, name: selectedRow.customer },
-      };
+  const { data: quotations = [], isLoading, isError } = useGetSalesQuotationsQuery({});
+  const { data: summaryData } = useSalesQuotationSummaryQuery();
 
-  const handleSelectQuotation = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => quotations.map(toQuotationRow), [quotations]);
+  const summary = useMemo(() => buildSummary(summaryData), [summaryData]);
+  const quotationById = useMemo(() => Object.fromEntries(quotations.map((q) => [q.id, q])), [quotations]);
+
+  const effectiveSelectedId = selectedId && quotationById[selectedId] ? selectedId : quotations[0]?.id;
+  const selectedQuotation = effectiveSelectedId ? quotationById[effectiveSelectedId] : null;
+  const quotationDetails = selectedQuotation ? toQuotationDetails(selectedQuotation) : null;
+
+  const handleSelectQuotation = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/sales-quotation/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/sales-quotation/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/sales-quotation/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/sales-quotation/edit/${row.id}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleConvertToOrder = () => dispatch(showToast(`Convert "${quotationDetails.code}" to Sales Order is coming soon`, 'info'));
+  const handleConvertToOrder = () => dispatch(showToast(`Convert "${quotationDetails?.code || ''}" to Sales Order is coming soon`, 'info'));
   const handleCreate = () => {
     if (onCreate) onCreate(); else navigate('/sales-quotation/create');
   };
@@ -81,7 +78,7 @@ export default function SalesQuotationOverviewPage({ tab, onTabChange, onCreate 
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
-          <Button variant="outlined" color="inherit" startIcon={<SwapHorizOutlinedIcon fontSize="small" />} onClick={handleConvertToOrder}>
+          <Button variant="outlined" color="inherit" startIcon={<SwapHorizOutlinedIcon fontSize="small" />} onClick={handleConvertToOrder} disabled={!quotationDetails}>
             Convert to Sales Order
           </Button>
           <Button
@@ -103,14 +100,14 @@ export default function SalesQuotationOverviewPage({ tab, onTabChange, onCreate 
         </Stack>
       </Stack>
 
-      <SalesQuotationSummaryCards summary={SUMMARY} />
+      <SalesQuotationSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 640 } }}>
             <SalesQuotationTable
-              quotations={QUOTATIONS}
-              selectedCode={selectedCode}
+              quotations={rows}
+              selectedId={effectiveSelectedId}
               onSelectQuotation={handleSelectQuotation}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -121,7 +118,17 @@ export default function SalesQuotationOverviewPage({ tab, onTabChange, onCreate 
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: { lg: 640 }, overflow: 'auto' }}>
-            <QuotationDetailsCard quotation={quotationDetails} />
+            {isLoading ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>Loading quotations…</Typography>
+            ) : isError ? (
+              <Typography variant="body2" color="error" sx={{ p: 2 }}>Failed to load quotations.</Typography>
+            ) : quotationDetails ? (
+              <QuotationDetailsCard quotation={quotationDetails} showConvertedFields={quotationDetails.status === 'converted'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No quotations yet — create one to get started.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

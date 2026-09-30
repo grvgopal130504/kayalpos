@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -12,10 +12,8 @@ import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlin
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
-import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
-import AutorenewOutlinedIcon from '@mui/icons-material/AutorenewOutlined';
+import TrendingUpOutlinedIcon from '@mui/icons-material/TrendingUpOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
-import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
 
 import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
@@ -25,9 +23,8 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 import SalesOrderTable from './components/SalesOrderTable';
 import OrderDetailsCard from './components/OrderDetailsCard';
 import OrderTermsAndNotes from './components/OrderTermsAndNotes';
-import { ORDERS, STATUS_DETAILS, STATUS_STATS } from './salesOrderMockData';
-
-const ORDER_BY_CODE = Object.fromEntries(ORDERS.map((o) => [o.code, o]));
+import { useGetSalesOrdersQuery, useSalesOrderStatusSummaryQuery } from '../../api/salesOrderApi';
+import { toOrderRow, toOrderDetails, buildStatusStats } from './salesOrderDisplay';
 
 const STATUS_META = {
   pending: { label: 'Pending Orders', pageTitle: 'Pending', icon: HourglassEmptyOutlinedIcon, iconColor: 'warning' },
@@ -36,63 +33,67 @@ const STATUS_META = {
 };
 
 // The 3 "extra" stat tile icons/colors per status, in the same order as
-// each status's STATUS_STATS.extra array.
+// buildStatusStats()'s extra array (Total Amount / Average Order Value /
+// Total Line Items — all real aggregates, see salesOrderDisplay.js).
 const EXTRA_TILE_STYLE = {
   pending: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
-    { icon: HourglassEmptyOutlinedIcon, iconColor: 'warning' },
+    { icon: TrendingUpOutlinedIcon, iconColor: 'warning' },
     { icon: DescriptionOutlinedIcon, iconColor: '#8B5CF6' },
   ],
   confirmed: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
-    { icon: ShoppingCartOutlinedIcon, iconColor: 'warning' },
-    { icon: AutorenewOutlinedIcon, iconColor: '#8B5CF6' },
+    { icon: TrendingUpOutlinedIcon, iconColor: 'warning' },
+    { icon: DescriptionOutlinedIcon, iconColor: '#8B5CF6' },
   ],
   delivered: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
-    { icon: LocalShippingOutlinedIcon, iconColor: 'warning' },
-    { icon: NotificationsActiveOutlinedIcon, iconColor: '#8B5CF6' },
+    { icon: TrendingUpOutlinedIcon, iconColor: 'warning' },
+    { icon: DescriptionOutlinedIcon, iconColor: '#8B5CF6' },
   ],
 };
 
 /**
  * Shared page for the Pending / Confirmed / Delivered cards on the Sales
  * Order landing grid — same list+details+terms layout as the "All Orders"
- * overview page, scoped by `status`. Mirrors SalesQuotationStatusPage.
+ * overview page, scoped by `status`. Fully wired to the real backend: the
+ * table's rows and the 4 stat tiles both come from actual SalesOrder rows
+ * (see backend/src/modules/sales-order's getSalesOrderStatusSummary), so a
+ * status with zero orders honestly shows zeros/empty states rather than
+ * this page's old placeholder figures. The Delivered tab in particular will
+ * genuinely show zero until the Sales Order → Sales Invoice conversion step
+ * exists (see the SalesOrder model comment in schema.prisma) — nothing sets
+ * status 'delivered' yet, so that's the honest state, not a bug.
  */
-export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreate }) {
+export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const meta = STATUS_META[status];
-  const stats = STATUS_STATS[status];
-  const detailsTemplate = STATUS_DETAILS[status];
   const extraStyle = EXTRA_TILE_STYLE[status];
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const firstOfStatus = ORDERS.find((o) => o.status === status) || ORDERS[0];
-  const [selectedCode, setSelectedCode] = useState(firstOfStatus.code);
-  const selectedRow = ORDER_BY_CODE[selectedCode] || firstOfStatus;
-  const orderDetails = selectedCode === detailsTemplate.code
-    ? detailsTemplate
-    : {
-        ...detailsTemplate,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        totalAmount: selectedRow.amount,
-        deliveryDate: selectedRow.deliveryDate,
-        customer: { ...detailsTemplate.customer, name: selectedRow.customer },
-        ...(selectedRow.status === 'delivered' ? { deliveredOn: selectedRow.deliveryDate } : {}),
-      };
+  const { data: orders = [] } = useGetSalesOrdersQuery({});
+  const { data: statusSummaryData } = useSalesOrderStatusSummaryQuery(status);
 
-  const handleSelectOrder = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => orders.map(toOrderRow), [orders]);
+  const statusRows = useMemo(() => rows.filter((r) => r.status === status), [rows, status]);
+  const stats = useMemo(() => buildStatusStats(status, statusSummaryData), [status, statusSummaryData]);
+  const orderById = useMemo(() => Object.fromEntries(orders.map((o) => [o.id, o])), [orders]);
+
+  const effectiveSelectedId = (selectedId && orderById[selectedId]?.status === status ? selectedId : statusRows[0]?.id);
+  const selectedOrder = effectiveSelectedId ? orderById[effectiveSelectedId] : null;
+  const orderDetails = selectedOrder ? toOrderDetails(selectedOrder) : null;
+
+  const handleSelectOrder = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/sales-order/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/sales-order/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/sales-order/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/sales-order/edit/${row.id}`);
     dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleConvertToInvoice = () => dispatch(showToast(`Convert "${orderDetails.code}" to Sales Invoice is coming soon`, 'info'));
+  const handleConvertToInvoice = () => dispatch(showToast(`Convert "${orderDetails?.code || ''}" to Sales Invoice is coming soon`, 'info'));
   const handleCreate = () => {
     if (onCreate) onCreate(); else navigate('/sales-order/create');
   };
@@ -108,7 +109,7 @@ export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreat
       icon: extraStyle[i].icon,
       iconColor: extraStyle[i].iconColor,
       label: tile.label,
-      value: tile.isText ? tile.value : (tile.currency ? formatCurrency(tile.value, { decimals: true }) : formatNumber(tile.value)),
+      value: tile.currency ? formatCurrency(tile.value, { decimals: true }) : formatNumber(tile.value),
       caption: tile.caption,
     })),
   ];
@@ -128,7 +129,7 @@ export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreat
           <Button variant="outlined" color="inherit" startIcon={<PrintOutlinedIcon fontSize="small" />} onClick={handlePrintPreview}>
             Print / Preview
           </Button>
-          <Button variant="outlined" color="inherit" startIcon={<SwapHorizOutlinedIcon fontSize="small" />} onClick={handleConvertToInvoice}>
+          <Button variant="outlined" color="inherit" startIcon={<SwapHorizOutlinedIcon fontSize="small" />} onClick={handleConvertToInvoice} disabled={!orderDetails}>
             Convert to Sales Invoice
           </Button>
           <Button
@@ -162,8 +163,8 @@ export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreat
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <SalesOrderTable
-              orders={ORDERS}
-              selectedCode={selectedCode}
+              orders={rows}
+              selectedId={effectiveSelectedId}
               onSelectOrder={handleSelectOrder}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -178,7 +179,13 @@ export default function SalesOrderStatusPage({ status, tab, onTabChange, onCreat
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: '100%', overflow: 'auto' }}>
-            <OrderDetailsCard order={orderDetails} title={`Order Details (${meta.pageTitle})`} showDeliveredFields={status === 'delivered'} />
+            {orderDetails ? (
+              <OrderDetailsCard order={orderDetails} title={`Order Details (${meta.pageTitle})`} showDeliveredFields={status === 'delivered'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No {meta.pageTitle.toLowerCase()} orders yet.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

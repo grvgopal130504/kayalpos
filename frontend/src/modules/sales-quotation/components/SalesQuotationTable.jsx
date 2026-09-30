@@ -10,6 +10,9 @@ import DataTable from '../../../components/common/DataTable';
 import StatusBadge from '../../../components/common/StatusBadge';
 import { formatCurrency } from '../../../utils/format';
 
+// No 'pending' tab on purpose, matching the original design: a pending
+// quotation only ever shows up under "All Quotations" — Draft/Converted/
+// Expired are the only per-status landing pages.
 const TABS = [
   { key: 'all', label: 'All Quotations' },
   { key: 'draft', label: 'Draft' },
@@ -45,12 +48,12 @@ function RowActions({ onAction }) {
  * Quotation list: tab filter (All/Draft/Converted/Expired), search, a
  * page-size selector, a Filters button, the paginated table itself, and a
  * row-click to load that quotation into the details panel on the right.
- * Matches the "Sales Quotation" reference screenshots (both the "All
- * Quotations" and per-status views, which swap the Status column for a
- * Created By column via `statusColumn`/`createdByColumn`).
+ * Rows are keyed/selected by real `id` (not `code`) — same convention every
+ * other module's table adopted once it was wired to a real backend (Gift
+ * Voucher, Loyalty, Customer).
  */
 export default function SalesQuotationTable({
-  quotations, selectedCode, onSelectQuotation, onRowAction, onFilters,
+  quotations, selectedId, onSelectQuotation, onRowAction, onFilters,
   defaultTab = 'all', statusColumn = true, createdByColumn = false,
   validTillColumn = true, convertedColumns = false,
   tab: controlledTab, onTabChange,
@@ -99,7 +102,7 @@ export default function SalesQuotationTable({
         <Typography
           variant="body2"
           noWrap
-          sx={{ fontWeight: 600, color: row.code === selectedCode ? 'primary.main' : 'text.primary', cursor: 'pointer' }}
+          sx={{ fontWeight: 600, color: row.id === selectedId ? 'primary.main' : 'text.primary', cursor: 'pointer' }}
           onClick={() => onSelectQuotation(row)}
         >
           {row.code}
@@ -191,7 +194,7 @@ export default function SalesQuotationTable({
         <DataTable
           columns={columns}
           rows={visibleRows}
-          getRowKey={(r) => r.code}
+          getRowKey={(r) => r.id}
           emptyMessage="No quotations match your search"
         />
       </Box>

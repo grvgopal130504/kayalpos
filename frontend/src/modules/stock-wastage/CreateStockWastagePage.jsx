@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +12,6 @@ import AddIcon from '@mui/icons-material/Add';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
-import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
@@ -21,85 +20,109 @@ import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
+import { useGetOutletsQuery } from '../../api/outletApi';
+import { useGetProductsQuery } from '../../api/productApi';
+import {
+  useGetStockWastageQuery, useNextStockWastageCodeQuery,
+  useCreateStockWastageMutation, useUpdateStockWastageMutation,
+} from '../../api/stockWastageApi';
 
 import WastageItemsTable from './components/WastageItemsTable';
 import WastageSummaryTotals from './components/WastageSummaryTotals';
-import { WASTAGES, getWastageDetails } from './stockWastageMockData';
 import {
-  createStockWastageSchema, createStockWastageDefaultValues,
-  WASTAGE_TYPE_OPTIONS, DEPARTMENT_OPTIONS, COST_CENTER_OPTIONS,
-  OUTLET_OPTIONS, WAREHOUSE_OPTIONS,
+  createStockWastageSchema, createStockWastageDefaultValues, emptyItemRow, isBlankItemRow,
+  WASTAGE_TYPE_OPTIONS, DEPARTMENT_OPTIONS, COST_CENTER_OPTIONS, WAREHOUSE_OPTIONS,
 } from './createStockWastageSchema';
+import { wastageToFormValues, formValuesToPayload } from './stockWastageDisplay';
 
 const DEFAULT_TERMS = [
-  'Wastaged items cannot be used or sold.',
-  'Ensure correct items & quantities before submission.',
-  'This is not a sale transaction.',
-  'Maintain proper records for audit purpose.',
+  'Wastage entries must be verified before approval.',
+  'Attach supporting photos/evidence where applicable.',
+  'Wastage value is calculated at cost, not sale price.',
+  'Approved wastage will be deducted from stock on hand.',
 ];
 
-function nextWastageCode() {
-  const maxNum = WASTAGES.reduce((max, w) => Math.max(max, Number(w.code.slice(4))), 0);
-  return `WST-${String(maxNum + 1).padStart(5, '0')}`;
-}
-
 /**
- * "New Stock Wastage" screen — matches the reference design's full create
- * form: three details cards side by side (Wastage Details / Outlet &
- * Location Details / Other Details), a full-width editable items grid
- * (Batch No. / Expiry Date / Available Qty / Wastage Qty / Unit Cost /
- * computed Wastage Value), and a 3-column row below it (Terms &
- * Conditions / Notes / Summary) — same overall pattern as
- * CreateStockReturnPage, adjusted for a write-off document (Wastage Type
- * + Wastage Reason instead of a supplier/reference lineage, and Prepared
- * By / Approved By instead of transport details).
+ * "New Stock Wastage" screen, also doubling as the Edit Wastage form when
+ * StockWastagePage renders it with an `id` prop — everything (list, create,
+ * edit, view) lives on the one /stock-wastage page. Fully wired to the real
+ * backend (see backend/src/modules/stock-wastage): Outlet / Location comes
+ * from the real Outlet table (see useGetOutletsQuery), the Wastage No. is a
+ * live preview of the next real code, and both "Save as Draft" and "Save &
+ * Send" actually create/update a StockWastage row with the same validations
+ * enforced again server-side. "Save & Send" saves with status 'approved' —
+ * a wastage is considered final the moment it's sent for approval, same
+ * terminal-step reasoning Stock Receipt's "Save & Send"/Stock Return's
+ * "Save & Send" use.
  *
- * Department/Section, Cost Center, Outlet/Location, and Warehouse each
- * get an inline "+" add button, matching the Customer field's "+" pattern
- * on the other create forms. Wastage No. is read-only with a
- * settings-gear adornment (numbering configuration). Attachment is a
- * local-only file picker (no upload endpoint yet). Saving is mocked —
- * there's no Stock Wastage backend module yet.
+ * Wastage Type/Department/Cost Center/Warehouse stay fixed dropdowns (no
+ * backing master table exists for any of them yet, same scope decision
+ * Stock Return/Stock Receipt make for their own analogous fields).
+ *
+ * The Item Code cell is a searchable select against the real Product master
+ * (see ItemCodeAutocomplete via WastageItemsTable), which autofills Item
+ * Name/HSN/UoM when a product is picked — Available Qty/Wastage Qty/Unit
+ * Cost are always the real figures the user types, never looked up.
+ *
+ * Prepared By / Approved By stay plain free-text inputs the user fills in
+ * directly — unlike Stock Return's acceptedBy, there's no "the document has,
+ * by definition, just reached its terminal state" auto-stamp here, since the
+ * reference design's own form has independent Prepared By / Approved By
+ * fields.
+ *
+ * Attachment stays a local-only file picker (there's no upload endpoint
+ * yet), same as Stock Receipt/Stock Return.
  */
-export default function CreateStockWastagePage({ onBack }) {
+export default function CreateStockWastagePage({ id: propId, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
-  const isEditMode = Boolean(code);
-  const existingWastage = isEditMode ? getWastageDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [attachmentName, setAttachmentName] = useState('');
-  const wastageCode = useMemo(() => (isEditMode ? code : nextWastageCode()), [isEditMode, code]);
+
+  const { data: existingWastage, isLoading: isLoadingWastage } = useGetStockWastageQuery(id, { skip: !isEditMode });
+  const { data: nextCode } = useNextStockWastageCodeQuery(undefined, { skip: isEditMode });
+  const { data: outlets = [] } = useGetOutletsQuery({});
+  const { data: products = [] } = useGetProductsQuery({});
+  const [createWastage, { isLoading: isCreating }] = useCreateStockWastageMutation();
+  const [updateWastage, { isLoading: isUpdating }] = useUpdateStockWastageMutation();
+  const isSaving = isCreating || isUpdating;
+
+  const wastageCode = isEditMode ? existingWastage?.code : nextCode;
+
+  // Real Outlet options — the old mock version hardcoded this as a fixed
+  // list of specific outlet names.
+  const outletOptions = useMemo(() => [
+    { value: '', label: 'Select Outlet / Location', disabled: true },
+    ...outlets.map((o) => ({ value: o.id, label: o.name })),
+  ], [outlets]);
 
   const methods = useForm({
     resolver: zodResolver(createStockWastageSchema),
-    defaultValues: existingWastage
-      ? {
-          ...createStockWastageDefaultValues,
-          wastageDate: existingWastage.date,
-          wastageType: existingWastage.wastageType,
-          department: '',
-          costCenter: '',
-          wastageReason: existingWastage.wastageReason || '',
-          outletLocation: '',
-          warehouse: '',
-          binRack: existingWastage.binRack || '',
-          preparedBy: existingWastage.preparedBy || '',
-          approvedBy: existingWastage.approvedBy && existingWastage.approvedBy !== '—' ? existingWastage.approvedBy : '',
-        }
-      : createStockWastageDefaultValues,
+    defaultValues: createStockWastageDefaultValues,
     mode: 'onTouched',
   });
-  const { handleSubmit } = methods;
+  const { handleSubmit, reset } = methods;
+
+  // The edit-mode fetch is async, so the form can't be seeded via useForm's
+  // defaultValues (that only runs once, before the data exists) — reset()
+  // re-seeds every field once the real wastage row arrives.
+  useEffect(() => {
+    if (isEditMode && existingWastage) {
+      reset(wastageToFormValues(existingWastage, emptyItemRow));
+    }
+  }, [isEditMode, existingWastage, reset]);
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/stock-wastage/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/stock-wastage');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/stock-wastage/view/${id}`);
+    navigate('/stock-wastage');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleAddDepartment = () => dispatch(showToast('Department / Section picker is coming soon', 'info'));
+  const handleAddDepartment = () => dispatch(showToast('Department picker is coming soon', 'info'));
   const handleAddCostCenter = () => dispatch(showToast('Cost Center picker is coming soon', 'info'));
   const handleAddOutlet = () => dispatch(showToast('Outlet / Location picker is coming soon', 'info'));
   const handleAddWarehouse = () => dispatch(showToast('Warehouse picker is coming soon', 'info'));
@@ -110,16 +133,47 @@ export default function CreateStockWastagePage({ onBack }) {
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Wastage ${wastageCode} updated successfully` : `Wastage ${wastageCode} saved as draft`, 'success'));
-    handleBack();
-  });
-  const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Wastage ${wastageCode} updated successfully` : `Wastage ${wastageCode} saved and sent`, 'success'));
-    handleBack();
+  const onSaveAsDraft = handleSubmit(async (values) => {
+    try {
+      const payload = formValuesToPayload(values, { status: 'draft', isBlankItemRow });
+      if (isEditMode) {
+        await updateWastage({ id, ...payload }).unwrap();
+        dispatch(showToast(`Wastage ${wastageCode} updated successfully`, 'success'));
+      } else {
+        const created = await createWastage(payload).unwrap();
+        dispatch(showToast(`Wastage ${created.code} saved as draft`, 'success'));
+      }
+      handleBack();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the wastage', 'error'));
+    }
   });
 
-  if (isEditMode && !existingWastage) {
+  const onSaveAndSend = handleSubmit(async (values) => {
+    try {
+      const payload = formValuesToPayload(values, { status: 'approved', isBlankItemRow });
+      if (isEditMode) {
+        await updateWastage({ id, ...payload }).unwrap();
+        dispatch(showToast(`Wastage ${wastageCode} updated successfully`, 'success'));
+      } else {
+        const created = await createWastage(payload).unwrap();
+        dispatch(showToast(`Wastage ${created.code} saved and sent`, 'success'));
+      }
+      handleBack();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the wastage', 'error'));
+    }
+  });
+
+  if (isEditMode && isLoadingWastage) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading wastage…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && !isLoadingWastage && !existingWastage) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Wastage not found</Typography>
@@ -134,7 +188,7 @@ export default function CreateStockWastagePage({ onBack }) {
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Wastage (Edit ${wastageCode})` : 'Stock Wastage (New)'}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Wastage (Edit ${wastageCode || ''})` : 'Stock Wastage (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/stock-wastage" underline="hover" color="text.secondary">Stock Wastage</MuiLink>
@@ -159,18 +213,18 @@ export default function CreateStockWastagePage({ onBack }) {
           <Menu anchorEl={moreActionsAnchor} open={Boolean(moreActionsAnchor)} onClose={() => setMoreActionsAnchor(null)}>
             <MenuItem onClick={() => handleMoreAction('Save as Template')}>Save as Template</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
-            <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
+            <MenuItem onClick={() => reset(createStockWastageDefaultValues)}>Reset Form</MenuItem>
           </Menu>
           {isEditMode ? (
-            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
               Update Wastage
             </Button>
           ) : (
             <>
-              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
                 Save as Draft
               </Button>
-              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend} disabled={isSaving}>
                 Save &amp; Send
               </Button>
             </>
@@ -187,7 +241,7 @@ export default function CreateStockWastagePage({ onBack }) {
                 <Stack spacing={2}>
                   <TextField
                     label="Wastage No."
-                    value={wastageCode}
+                    value={wastageCode || ''}
                     disabled
                     fullWidth
                     slotProps={{
@@ -206,7 +260,7 @@ export default function CreateStockWastagePage({ onBack }) {
                     <IconButton
                       onClick={handleAddDepartment}
                       sx={{ mt: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
-                      aria-label="Add department / section"
+                      aria-label="Add department"
                     >
                       <AddIcon fontSize="small" />
                     </IconButton>
@@ -235,7 +289,7 @@ export default function CreateStockWastagePage({ onBack }) {
                 <Stack spacing={2}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <FormSelect name="outletLocation" label="Outlet / Location *" options={OUTLET_OPTIONS} />
+                      <FormSelect name="outletLocation" label="Outlet / Location *" options={outletOptions} />
                     </Box>
                     <IconButton
                       onClick={handleAddOutlet}
@@ -257,7 +311,7 @@ export default function CreateStockWastagePage({ onBack }) {
                       <AddIcon fontSize="small" />
                     </IconButton>
                   </Stack>
-                  <FormTextField name="binRack" label="Bin / Rack" placeholder="Enter Bin / Rack (if any)" />
+                  <FormTextField name="binRack" label="Bin / Rack" placeholder="Enter Bin / Rack" />
                 </Stack>
               </Paper>
             </Grid>
@@ -266,7 +320,7 @@ export default function CreateStockWastagePage({ onBack }) {
               <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Other Details</Typography>
                 <Stack spacing={2}>
-                  <FormTextField name="referenceNo" label="Reference (if any)" placeholder="Enter Reference" />
+                  <FormTextField name="referenceNo" label="Reference No." placeholder="Enter Reference No. (if any)" />
                   <Stack spacing={0.5}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>Attachment</Typography>
                     <Button variant="outlined" color="inherit" component="label" sx={{ justifyContent: 'flex-start', width: { xs: '100%', sm: 'auto' } }}>
@@ -278,7 +332,7 @@ export default function CreateStockWastagePage({ onBack }) {
                     </Typography>
                   </Stack>
                   <FormTextField name="preparedBy" label="Prepared By" placeholder="Enter Prepared By" />
-                  <FormTextField name="approvedBy" label="Approved By" placeholder="Enter Approved By (if any)" />
+                  <FormTextField name="approvedBy" label="Approved By" placeholder="Enter Approved By" />
                 </Stack>
               </Paper>
             </Grid>
@@ -286,7 +340,7 @@ export default function CreateStockWastagePage({ onBack }) {
 
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
-            <WastageItemsTable onAddItem={handleAddItemRow} />
+            <WastageItemsTable onAddItem={handleAddItemRow} products={products} />
           </Paper>
 
           <BottomRow />

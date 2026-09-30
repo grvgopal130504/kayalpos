@@ -23,13 +23,15 @@ export function persistAuth(authState, rememberMe) {
   } catch {
     // storage unavailable (e.g. private browsing) - fail silently, auth still
     // works for the current in-memory session
-  }
+  }//
 }
 
-export function clearPersistedAuth() {
+export function clearPersistedAuth() { 
   try {
     localStorage.removeItem(STORAGE_KEY);
     sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('nexora_last_activity');
+    localStorage.setItem('nexora_logout_signal', Date.now().toString());
   } catch {
     // ignore
   }

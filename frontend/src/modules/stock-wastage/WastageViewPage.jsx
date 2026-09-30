@@ -6,23 +6,36 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import StockWastageDetailsCard from './components/StockWastageDetailsCard';
-import { getWastageDetails } from './stockWastageMockData';
+import { useGetStockWastageQuery } from '../../api/stockWastageApi';
+import { toWastageDetails } from './stockWastageDisplay';
 
 /**
- * Read-only "View Wastage" destination for StockWastageTable's row menu —
- * reuses the exact same StockWastageDetailsCard the list page already
- * shows for the selected row, just addressed by :code as its own full page
- * instead of a side panel.
+ * Read-only "View Wastage" body for StockWastageTable's row menu — reuses
+ * the exact same StockWastageDetailsCard the list page already shows for
+ * the selected row. Rendered by StockWastagePage via props (`id`/`onBack`/
+ * `onEdit`) as part of the single /stock-wastage page rather than its own
+ * route. Fully wired to the real backend — every field here comes from the
+ * actual StockWastage row fetched by GET /api/stock-wastages/:id.
  */
-export default function WastageViewPage() {
+export default function WastageViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
-  const wastage = getWastageDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: row, isLoading, isError } = useGetStockWastageQuery(id, { skip: !id });
+  const wastage = row ? toWastageDetails(row) : null;
 
-  const handleBack = () => navigate('/stock-wastage');
-  const handleEdit = () => navigate(`/stock-wastage/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/stock-wastage'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-wastage/edit/${id}`));
 
-  if (!wastage) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading wastage…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !wastage) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Wastage not found</Typography>

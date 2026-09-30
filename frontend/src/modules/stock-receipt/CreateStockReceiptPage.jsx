@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,14 +20,21 @@ import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
+import { useGetSuppliersQuery } from '../../api/supplierApi';
+import { useGetOutletsQuery } from '../../api/outletApi';
+import { useGetProductsQuery } from '../../api/productApi';
+import {
+  useGetStockReceiptQuery, useNextStockReceiptCodeQuery,
+  useCreateStockReceiptMutation, useUpdateStockReceiptMutation,
+} from '../../api/stockReceiptApi';
 
 import ReceiptItemsTable from './components/ReceiptItemsTable';
 import ReceiptSummaryTotals from './components/ReceiptSummaryTotals';
-import { RECEIPTS, getReceiptDetails } from './stockReceiptMockData';
 import {
-  createStockReceiptSchema, createStockReceiptDefaultValues,
-  PURCHASE_TYPE_OPTIONS, SUPPLIER_OPTIONS, OUTLET_OPTIONS, COST_CENTER_OPTIONS,
+  createStockReceiptSchema, createStockReceiptDefaultValues, emptyItemRow, isBlankItemRow,
+  PURCHASE_TYPE_OPTIONS, COST_CENTER_OPTIONS,
 } from './createStockReceiptSchema';
+import { receiptToFormValues, formValuesToPayload } from './stockReceiptDisplay';
 
 const DEFAULT_TERMS = [
   'Goods once received will not be taken back.',
@@ -36,62 +43,82 @@ const DEFAULT_TERMS = [
   'This is not a sale transaction.',
 ];
 
-function nextReceiptCode() {
-  const maxNum = RECEIPTS.reduce((max, r) => Math.max(max, Number(r.code.slice(5))), 0);
-  return `RCPT-${String(maxNum + 1).padStart(5, '0')}`;
-}
-
 /**
- * "New Stock Receipt" screen — matches the reference design's full create
- * form: three details cards side by side (Receipt Details / Supplier &
- * Source Details / Other Details), a full-width editable items grid
- * (Ordered Qty / Received Qty / Unit Cost / Discount / Tax / computed
- * Total Cost / Warehouse / Batch No. / Expiry Date), and a 3-column row
- * below it (Terms & Conditions / Notes / Summary) — same overall pattern
- * as CreateStockTransferPage/CreateStockIndentPage, extended to the
- * receipt-specific fields.
+ * "New Stock Receipt" screen, also doubling as the Edit Receipt form when
+ * StockReceiptPage renders it with an `id` prop — everything (list, create,
+ * edit, view) lives on the one /stock-receipt page. Fully wired to the real
+ * backend (see backend/src/modules/stock-receipt): Supplier and From Outlet/
+ * HO come from the real Supplier/Outlet tables (see
+ * useGetSuppliersQuery/useGetOutletsQuery), the Receipt No. is a live
+ * preview of the next real code, and both "Save as Draft" and "Save & Send"
+ * actually create/update a StockReceipt row with the same validations
+ * enforced again server-side. "Save & Send" saves with status 'received' —
+ * unlike Stock Transfer's in-transit dispatch step, receiving is the
+ * terminal step of the goods-movement chain, so sending a receipt means the
+ * goods have already been counted in and accepted.
  *
- * Supplier, From Outlet/HO, and Cost Center each get an inline "+" add
- * button, matching the Customer field's "+" pattern on the other create
- * forms. Receipt No. is read-only with a settings-gear adornment
- * (numbering configuration). Attachment is a local-only file picker (no
- * upload endpoint yet). Saving is mocked — there's no Stock Receipt
- * backend module yet.
+ * The Item Code cell is a searchable select against the real Product master
+ * (see ItemCodeAutocomplete), which autofills Item Name/HSN/UoM when a
+ * product is picked. Unlike Stock Indent/Stock Transfer's item grids,
+ * Ordered Qty/Received Qty/Unit Cost/Discount/Tax are NOT looked up from the
+ * Product master, though — they're the real figures the user types straight
+ * off the supplier's invoice/GRN, so there's no `productByCode` prop to wire
+ * up for those.
+ *
+ * Attachment stays a local-only file picker (there's no upload endpoint
+ * yet), same as the reference design.
  */
-export default function CreateStockReceiptPage({ onBack }) {
+export default function CreateStockReceiptPage({ id: propId, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
-  const isEditMode = Boolean(code);
-  const existingReceipt = isEditMode ? getReceiptDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [attachmentName, setAttachmentName] = useState('');
-  const receiptCode = useMemo(() => (isEditMode ? code : nextReceiptCode()), [isEditMode, code]);
+
+  const { data: existingReceipt, isLoading: isLoadingReceipt } = useGetStockReceiptQuery(id, { skip: !isEditMode });
+  const { data: nextCode } = useNextStockReceiptCodeQuery(undefined, { skip: isEditMode });
+  const { data: suppliers = [] } = useGetSuppliersQuery({});
+  const { data: outlets = [] } = useGetOutletsQuery({});
+  const { data: products = [] } = useGetProductsQuery({});
+  const [createReceipt, { isLoading: isCreating }] = useCreateStockReceiptMutation();
+  const [updateReceipt, { isLoading: isUpdating }] = useUpdateStockReceiptMutation();
+  const isSaving = isCreating || isUpdating;
+
+  const receiptCode = isEditMode ? existingReceipt?.code : nextCode;
+
+  // Real Supplier/Outlet options — the old mock version hardcoded both as
+  // fixed lists of specific supplier/outlet names.
+  const supplierOptions = useMemo(() => [
+    { value: '', label: 'Select Supplier', disabled: true },
+    ...suppliers.map((s) => ({ value: s.id, label: s.name })),
+  ], [suppliers]);
+  const outletOptions = useMemo(() => [
+    { value: '', label: 'Select From Outlet / HO', disabled: true },
+    ...outlets.map((o) => ({ value: o.id, label: o.name })),
+  ], [outlets]);
 
   const methods = useForm({
     resolver: zodResolver(createStockReceiptSchema),
-    defaultValues: existingReceipt
-      ? {
-          ...createStockReceiptDefaultValues,
-          receiptDate: existingReceipt.date,
-          purchaseType: existingReceipt.purchaseType,
-          purchaseInvoiceNo: existingReceipt.invoiceNo || '',
-          purchaseInvoiceDate: existingReceipt.invoiceDate || '',
-          grnDcNo: existingReceipt.grnDcNo || '',
-          contactPerson: existingReceipt.contactPerson || '',
-          mobileNo: existingReceipt.mobileNo || '',
-          vehicleNo: existingReceipt.vehicleNo || '',
-          transporter: existingReceipt.transporter || '',
-        }
-      : createStockReceiptDefaultValues,
+    defaultValues: createStockReceiptDefaultValues,
     mode: 'onTouched',
   });
-  const { handleSubmit } = methods;
+  const { handleSubmit, reset } = methods;
+
+  // The edit-mode fetch is async, so the form can't be seeded via useForm's
+  // defaultValues (that only runs once, before the data exists) — reset()
+  // re-seeds every field once the real receipt row arrives.
+  useEffect(() => {
+    if (isEditMode && existingReceipt) {
+      reset(receiptToFormValues(existingReceipt, emptyItemRow));
+    }
+  }, [isEditMode, existingReceipt, reset]);
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/stock-receipt/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/stock-receipt');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/stock-receipt/view/${id}`);
+    navigate('/stock-receipt');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -105,16 +132,47 @@ export default function CreateStockReceiptPage({ onBack }) {
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Receipt ${receiptCode} updated successfully` : `Receipt ${receiptCode} saved as draft`, 'success'));
-    handleBack();
-  });
-  const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Receipt ${receiptCode} updated successfully` : `Receipt ${receiptCode} saved and sent`, 'success'));
-    handleBack();
+  const onSaveAsDraft = handleSubmit(async (values) => {
+    try {
+      const payload = formValuesToPayload(values, { status: 'draft', isBlankItemRow });
+      if (isEditMode) {
+        await updateReceipt({ id, ...payload }).unwrap();
+        dispatch(showToast(`Receipt ${receiptCode} updated successfully`, 'success'));
+      } else {
+        const created = await createReceipt(payload).unwrap();
+        dispatch(showToast(`Receipt ${created.code} saved as draft`, 'success'));
+      }
+      handleBack();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the receipt', 'error'));
+    }
   });
 
-  if (isEditMode && !existingReceipt) {
+  const onSaveAndSend = handleSubmit(async (values) => {
+    try {
+      const payload = formValuesToPayload(values, { status: 'received', isBlankItemRow });
+      if (isEditMode) {
+        await updateReceipt({ id, ...payload }).unwrap();
+        dispatch(showToast(`Receipt ${receiptCode} updated successfully`, 'success'));
+      } else {
+        const created = await createReceipt(payload).unwrap();
+        dispatch(showToast(`Receipt ${created.code} saved and sent`, 'success'));
+      }
+      handleBack();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the receipt', 'error'));
+    }
+  });
+
+  if (isEditMode && isLoadingReceipt) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading receipt…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && !isLoadingReceipt && !existingReceipt) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Receipt not found</Typography>
@@ -129,7 +187,7 @@ export default function CreateStockReceiptPage({ onBack }) {
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Receipt (Edit ${receiptCode})` : 'Stock Receipt (New)'}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Receipt (Edit ${receiptCode || ''})` : 'Stock Receipt (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/stock-receipt" underline="hover" color="text.secondary">Stock Receipt</MuiLink>
@@ -154,18 +212,18 @@ export default function CreateStockReceiptPage({ onBack }) {
           <Menu anchorEl={moreActionsAnchor} open={Boolean(moreActionsAnchor)} onClose={() => setMoreActionsAnchor(null)}>
             <MenuItem onClick={() => handleMoreAction('Save as Template')}>Save as Template</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
-            <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
+            <MenuItem onClick={() => reset(createStockReceiptDefaultValues)}>Reset Form</MenuItem>
           </Menu>
           {isEditMode ? (
-            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
               Update Receipt
             </Button>
           ) : (
             <>
-              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
                 Save as Draft
               </Button>
-              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend} disabled={isSaving}>
                 Save &amp; Send
               </Button>
             </>
@@ -182,7 +240,7 @@ export default function CreateStockReceiptPage({ onBack }) {
                 <Stack spacing={2}>
                   <TextField
                     label="Receipt No."
-                    value={receiptCode}
+                    value={receiptCode || ''}
                     disabled
                     fullWidth
                     slotProps={{
@@ -209,7 +267,7 @@ export default function CreateStockReceiptPage({ onBack }) {
                 <Stack spacing={2}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <FormSelect name="supplier" label="Supplier *" options={SUPPLIER_OPTIONS} />
+                      <FormSelect name="supplier" label="Supplier *" options={supplierOptions} />
                     </Box>
                     <IconButton
                       onClick={handleAddSupplier}
@@ -221,7 +279,7 @@ export default function CreateStockReceiptPage({ onBack }) {
                   </Stack>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <FormSelect name="fromOutlet" label="From Outlet / HO *" options={OUTLET_OPTIONS} />
+                      <FormSelect name="fromOutlet" label="From Outlet / HO *" options={outletOptions} />
                     </Box>
                     <IconButton
                       onClick={handleAddFromOutlet}
@@ -275,7 +333,7 @@ export default function CreateStockReceiptPage({ onBack }) {
 
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
-            <ReceiptItemsTable onAddItem={handleAddItemRow} />
+            <ReceiptItemsTable onAddItem={handleAddItemRow} products={products} />
           </Paper>
 
           <BottomRow />

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,28 +15,19 @@ import CloseIcon from '@mui/icons-material/Close';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 
-import { useAppDispatch } from '../../app/hooks';
-import { logout } from '../../features/auth/authSlice';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { logout, selectCurrentUser } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
+import { useCreateExpenseMutation } from '../../api/expenseApi';
 
 import ExpenseSummarySidebar from './components/ExpenseSummarySidebar';
-import { CASHIER, EXPENSES_BOOK } from './expensesBookMockData';
 import {
-  createExpenseSchema, createExpenseDefaultValues,
+  createExpenseSchema, createExpenseDefaultValues, expenseFormValuesToPayload,
   CATEGORY_OPTIONS, PAYMENT_MODE_OPTIONS, COST_CENTER_OPTIONS, ACCOUNT_HEAD_OPTIONS, PROJECT_OPTIONS,
 } from './createExpenseSchema';
-
-function nextExpenseCode() {
-  const maxNum = EXPENSES_BOOK.transactions.reduce((max, t) => Math.max(max, Number(t.referenceNo.slice(-4))), 0);
-  const today = new Date();
-  const dd = String(today.getDate()).padStart(2, '0');
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const yy = String(today.getFullYear()).slice(-2);
-  return `EXP-${dd}${mm}${yy}-${String(maxNum + 1).padStart(4, '0')}`;
-}
 
 function toNumber(value) {
   const n = parseFloat(value);
@@ -72,15 +63,21 @@ function TotalAmountField() {
  * "Add Expenses" button. Matches the reference's two-panel layout: a left
  * form (Expense Information + optional Accounting Information) and a
  * right sidebar (live Expense Summary + a local-only receipt/attachment
- * drop zone). Saving is mocked — there's no Expenses Book backend module
- * yet.
+ * drop zone — there's no file-storage backend yet, so only the file's
+ * name is sent and saved, same honest limitation the Expense model's own
+ * comment calls out). Saving posts a real Expense row via
+ * POST /expenses (see expense.service.js's createExpense) — the server
+ * generates the real "EXP-YYMMDD-NNNN" reference number and recomputes
+ * Total Amount itself, so nothing here is trusted from the client beyond
+ * the raw entered fields.
  */
-export default function AddExpensePage() {
+export default function AddExpensePage({ onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const user = useAppSelector(selectCurrentUser);
   const [attachmentName, setAttachmentName] = useState('');
   const [dragActive, setDragActive] = useState(false);
-  const expenseCode = useMemo(() => nextExpenseCode(), []);
+  const [createExpense, { isLoading: isSaving }] = useCreateExpenseMutation();
 
   const methods = useForm({
     resolver: zodResolver(createExpenseSchema),
@@ -89,7 +86,9 @@ export default function AddExpensePage() {
   });
   const { handleSubmit, reset } = methods;
 
-  const handleBack = () => navigate('/expenses-book');
+  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
+
+  const handleBack = () => (onBack ? onBack() : navigate('/expenses-book'));
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
@@ -103,15 +102,24 @@ export default function AddExpensePage() {
     handleFile(e.dataTransfer.files?.[0]);
   };
 
-  const onSaveExpense = handleSubmit(() => {
-    dispatch(showToast(`Expense ${expenseCode} saved successfully`, 'success'));
-    handleBack();
-  });
-  const onSaveAndAddNew = handleSubmit(() => {
-    dispatch(showToast(`Expense ${expenseCode} saved successfully`, 'success'));
-    reset(createExpenseDefaultValues);
-    setAttachmentName('');
-  });
+  const submitExpense = async (values, { clearAfter } = {}) => {
+    try {
+      const payload = { ...expenseFormValuesToPayload(values), attachmentName: attachmentName || undefined };
+      const saved = await createExpense(payload).unwrap();
+      dispatch(showToast(`Expense ${saved.referenceNo} saved successfully`, 'success'));
+      if (clearAfter) {
+        reset(createExpenseDefaultValues);
+        setAttachmentName('');
+      } else {
+        handleBack();
+      }
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Could not save this expense. Please try again.', 'error'));
+    }
+  };
+
+  const onSaveExpense = handleSubmit((values) => submitExpense(values));
+  const onSaveAndAddNew = handleSubmit((values) => submitExpense(values, { clearAfter: true }));
   const onCancel = () => handleBack();
 
   return (
@@ -127,7 +135,7 @@ export default function AddExpensePage() {
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
+            Cashier : {cashierLabel}
           </Typography>
           <MuiLink
             component="button"
@@ -256,7 +264,8 @@ export default function AddExpensePage() {
                     </Stack>
                   )}
                   <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1.5 }}>
-                    Allowed formats: JPG, PNG, PDF (Max 5MB)
+                    Allowed formats: JPG, PNG, PDF (Max 5MB) — only the file name is saved; the file itself is not
+                    uploaded anywhere yet.
                   </Typography>
                 </Paper>
               </Stack>
@@ -280,14 +289,14 @@ export default function AddExpensePage() {
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { xs: 'stretch', sm: 'center' } }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-              <Button variant="contained" color="primary" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveExpense}>
+              <Button variant="contained" color="primary" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveExpense} disabled={isSaving}>
                 Save Expense
               </Button>
-              <Button variant="outlined" color="inherit" startIcon={<CurrencyRupeeOutlinedIcon fontSize="small" />} onClick={onSaveAndAddNew}>
+              <Button variant="outlined" color="inherit" startIcon={<CurrencyRupeeOutlinedIcon fontSize="small" />} onClick={onSaveAndAddNew} disabled={isSaving}>
                 Save &amp; Add New
               </Button>
             </Stack>
-            <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={onCancel}>
+            <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={onCancel} disabled={isSaving}>
               Cancel
             </Button>
           </Stack>

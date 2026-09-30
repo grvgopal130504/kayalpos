@@ -6,23 +6,36 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import StockReceiptDetailsCard from './components/StockReceiptDetailsCard';
-import { getReceiptDetails } from './stockReceiptMockData';
+import { useGetStockReceiptQuery } from '../../api/stockReceiptApi';
+import { toReceiptDetails } from './stockReceiptDisplay';
 
 /**
- * Read-only "View Receipt" destination for StockReceiptTable's row menu —
- * reuses the exact same StockReceiptDetailsCard the list page already
- * shows for the selected row, just addressed by :code as its own full page
- * instead of a side panel.
+ * Read-only "View Receipt" body for StockReceiptTable's row menu — reuses
+ * the exact same StockReceiptDetailsCard the list page already shows for
+ * the selected row. Rendered by StockReceiptPage via props (`id`/`onBack`/
+ * `onEdit`) as part of the single /stock-receipt page rather than its own
+ * route. Fully wired to the real backend — every field here comes from the
+ * actual StockReceipt row fetched by GET /api/stock-receipts/:id.
  */
-export default function ReceiptViewPage() {
+export default function ReceiptViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
-  const receipt = getReceiptDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: row, isLoading, isError } = useGetStockReceiptQuery(id, { skip: !id });
+  const receipt = row ? toReceiptDetails(row) : null;
 
-  const handleBack = () => navigate('/stock-receipt');
-  const handleEdit = () => navigate(`/stock-receipt/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/stock-receipt'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-receipt/edit/${id}`));
 
-  if (!receipt) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading receipt…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !receipt) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Receipt not found</Typography>

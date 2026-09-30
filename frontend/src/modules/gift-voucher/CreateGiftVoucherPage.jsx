@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,7 +9,6 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import AddIcon from '@mui/icons-material/Add';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
@@ -23,73 +22,126 @@ import FormCheckbox from '../../components/form/FormCheckbox';
 
 import VoucherFormSection from './components/VoucherFormSection';
 import VoucherPreviewPanel from './components/VoucherPreviewPanel';
-import { getGiftVoucherDetails } from './giftVoucherMockData';
 import {
-  createGiftVoucherSchema, createGiftVoucherDefaultValues,
+  useGetGiftVoucherQuery, useNextGiftVoucherCodeQuery, useCreateGiftVoucherMutation, useUpdateGiftVoucherMutation,
+} from '../../api/giftVoucherApi';
+import {
+  createGiftVoucherSchema, createGiftVoucherDefaultValues, parseGiftVoucherDate, formatGiftVoucherDate,
   VOUCHER_TYPE_OPTIONS, MAXIMUM_USAGE_OPTIONS, YES_NO_OPTIONS,
 } from './createGiftVoucherSchema';
 
-// The voucher's list/detail `type` label ('Amount Off'/'Percentage Off')
-// doesn't match VOUCHER_TYPE_OPTIONS' values — map it back so edit mode can
-// prefill the Voucher Type select correctly.
-const VOUCHER_TYPE_LABEL_TO_VALUE = {
-  'Amount Off': 'Fixed Amount',
-  'Percentage Off': 'Percentage Discount',
-};
+/** Builds react-hook-form default values from a real GiftVoucher row (as
+ * returned by GET /api/gift-vouchers/:id) — dates come back as ISO strings
+ * from Postgres, so they're reformatted into the "DD Mon YYYY" shape
+ * FormDatePicker expects; numeric fields come back as numbers/Decimals and
+ * are stringified for the text fields that hold them. */
+function voucherToFormValues(voucher) {
+  return {
+    ...createGiftVoucherDefaultValues,
+    voucherName: voucher.name,
+    voucherType: voucher.voucherType,
+    voucherValue: String(voucher.voucherValue ?? ''),
+    description: voucher.description || '',
+    validFrom: formatGiftVoucherDate(new Date(voucher.startDate)),
+    validTill: voucher.endDate ? formatGiftVoucherDate(new Date(voucher.endDate)) : '',
+    noExpiry: Boolean(voucher.noExpiry),
+    minimumBillAmount: String(voucher.minimumBillAmount ?? '0'),
+    maximumUsage: voucher.maximumUsage,
+    oneTimePerCustomer: voucher.onePerCustomer ? 'yes' : 'no',
+    partialRedemptionAllowed: voucher.partialRedemptionAllowed ? 'yes' : 'no',
+    allowMultipleInOneBill: voucher.allowMultipleInOneBill ? 'yes' : 'no',
+    applicableTo: voucher.applicableTo,
+    active: Boolean(voucher.isActive),
+    sendSms: Boolean(voucher.sendSms),
+    sendEmail: Boolean(voucher.sendEmail),
+  };
+}
 
-// Splits a display value string ("₹250.00", "10%") into just the numeric
-// amount the form's plain "Voucher Value (₹)" text field expects.
-function parseVoucherValue(value) {
-  if (typeof value !== 'string') return '';
-  return value.replace(/[₹%]/g, '').trim();
+/** Converts the form's string-based values back into the types the backend
+ * expects (real numbers, ISO dates, booleans instead of 'yes'/'no'), so the
+ * payload sent to POST/PUT /api/gift-vouchers matches
+ * giftVoucher.schema.js exactly. */
+function formValuesToPayload(values) {
+  const start = parseGiftVoucherDate(values.validFrom);
+  const end = values.noExpiry ? null : parseGiftVoucherDate(values.validTill);
+  return {
+    voucherName: values.voucherName,
+    voucherType: values.voucherType,
+    voucherValue: Number(values.voucherValue || 0),
+    description: values.description || '',
+    startDate: start ? start.toISOString() : undefined,
+    endDate: end ? end.toISOString() : null,
+    noExpiry: values.noExpiry,
+    minimumBillAmount: Number(values.minimumBillAmount || 0),
+    maximumUsage: values.maximumUsage,
+    onePerCustomer: values.oneTimePerCustomer === 'yes',
+    partialRedemptionAllowed: values.partialRedemptionAllowed === 'yes',
+    allowMultipleInOneBill: values.allowMultipleInOneBill === 'yes',
+    applicableTo: values.applicableTo,
+    isActive: values.active,
+    sendSms: values.sendSms,
+    sendEmail: values.sendEmail,
+  };
 }
 
 /**
  * "Create Gift Voucher" screen, also doubling as the Edit Gift Voucher page
- * when reached via `/gift-voucher/edit/:code` — the Gift Voucher module has
- * no backend yet, so "editing" prefills from getGiftVoucherDetails() the
- * same best-effort way GiftVoucherPage's own detail panel does.
+ * when reached via `/gift-voucher/edit/:id` — fully wired to the backend:
+ * creating or updating a voucher here actually writes to the GiftVoucher
+ * table (see backend/src/modules/gift-voucher), with the same validations
+ * enforced again server-side so a request built outside this form can never
+ * bypass them.
  */
-export default function CreateGiftVoucherPage() {
+export default function CreateGiftVoucherPage({ id: propId, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
-  const isEditMode = Boolean(code);
-  const existingVoucher = isEditMode ? getGiftVoucherDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
+  const { data: existingVoucher, isLoading: isLoadingExisting, isError: loadError } = useGetGiftVoucherQuery(id, { skip: !isEditMode });
+  const nextCode = useNextGiftVoucherCodeQuery(undefined, { skip: isEditMode });
+  const [createGiftVoucher, { isLoading: isCreating }] = useCreateGiftVoucherMutation();
+  const [updateGiftVoucher, { isLoading: isUpdating }] = useUpdateGiftVoucherMutation();
+  const isSaving = isCreating || isUpdating;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
 
   const methods = useForm({
     resolver: zodResolver(createGiftVoucherSchema),
-    defaultValues: useMemo(() => {
-      if (!existingVoucher) return createGiftVoucherDefaultValues;
-      return {
-        ...createGiftVoucherDefaultValues,
-        voucherName: existingVoucher.name,
-        voucherType: VOUCHER_TYPE_LABEL_TO_VALUE[existingVoucher.type] || '',
-        voucherValue: parseVoucherValue(existingVoucher.value),
-        description: existingVoucher.description || '',
-        validFrom: existingVoucher.validFrom,
-        validTill: existingVoucher.validTill,
-        minimumBillAmount: parseVoucherValue(existingVoucher.minimumBillAmount),
-        applicableTo: existingVoucher.applicableTo === 'All Items' ? 'all' : (existingVoucher.applicableTo || 'all'),
-        active: existingVoucher.status === 'active',
-      };
-    }, [existingVoucher]),
+    defaultValues: createGiftVoucherDefaultValues,
     mode: 'onTouched',
   });
-  const { watch, setValue, handleSubmit } = methods;
+  const { watch, setValue, reset, handleSubmit } = methods;
   const noExpiry = watch('noExpiry');
   const applicableTo = watch('applicableTo');
 
+  // The edit-mode fetch is async, so the form can't be seeded via
+  // useForm's defaultValues (that only runs once, before the data exists) —
+  // reset() re-seeds every field once the real voucher row arrives.
+  useEffect(() => {
+    if (existingVoucher) reset(voucherToFormValues(existingVoucher));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingVoucher]);
+
   const handleBack = () => {
-    if (isEditMode) navigate(`/gift-voucher/view/${code}`);
-    else navigate('/gift-voucher');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/gift-voucher/view/${id}`);
+    navigate('/gift-voucher');
   };
 
-  const onSubmit = () => {
-    dispatch(showToast(isEditMode ? `Gift voucher ${code} updated successfully` : 'Gift voucher created as a draft', 'success'));
-    if (isEditMode) navigate(`/gift-voucher/view/${code}`);
-    else navigate('/gift-voucher');
+  const onSubmit = async (values) => {
+    const payload = formValuesToPayload(values);
+    try {
+      const saved = isEditMode
+        ? await updateGiftVoucher({ id, ...payload }).unwrap()
+        : await createGiftVoucher(payload).unwrap();
+
+      dispatch(showToast(isEditMode ? `Gift voucher ${saved.code} updated successfully` : `Gift voucher ${saved.code} created successfully`, 'success'));
+      if (onBack) onBack(saved.id);
+      else if (isEditMode) navigate(`/gift-voucher/view/${saved.id}`);
+      else navigate('/gift-voucher');
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the gift voucher', 'error'));
+    }
   };
 
   const handleHistory = () => dispatch(showToast('Gift Voucher History is coming soon', 'info'));
@@ -99,7 +151,15 @@ export default function CreateGiftVoucherPage() {
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  if (isEditMode && !existingVoucher) {
+  if (isEditMode && isLoadingExisting) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading gift voucher…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && (loadError || !existingVoucher)) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Gift voucher not found</Typography>
@@ -118,7 +178,7 @@ export default function CreateGiftVoucherPage() {
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/gift-voucher" underline="hover" color="text.secondary">Gift Voucher</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? `Edit ${code}` : 'Create Gift Voucher'}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? `Edit ${existingVoucher?.code || ''}` : 'Create Gift Voucher'}</Typography>
           </Breadcrumbs>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -152,14 +212,14 @@ export default function CreateGiftVoucherPage() {
             <Grid size={{ xs: 12, lg: 7 }}>
               <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2.5, sm: 3 } }}>
                 <Stack spacing={3.5}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{isEditMode ? `Edit Gift Voucher (${code})` : 'Create Gift Voucher'}</Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{isEditMode ? `Edit Gift Voucher (${existingVoucher?.code || ''})` : 'Create Gift Voucher'}</Typography>
 
                   <VoucherFormSection number={1} title="Voucher Information">
                     <Grid container spacing={2}>
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           label="Voucher Code"
-                          value={isEditMode ? code : 'Auto generated'}
+                          value={isEditMode ? (existingVoucher?.code || '') : (nextCode.data || 'Generating…')}
                           disabled
                           fullWidth
                           slotProps={{ input: { readOnly: true } }}
@@ -247,8 +307,10 @@ export default function CreateGiftVoucherPage() {
                   </VoucherFormSection>
 
                   <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end', pt: 1 }}>
-                    <Button variant="outlined" color="inherit" onClick={handleCancel}>Cancel</Button>
-                    <Button type="submit" variant="contained">{isEditMode ? 'Update Voucher' : 'Save Voucher'}</Button>
+                    <Button variant="outlined" color="inherit" onClick={handleCancel} disabled={isSaving}>Cancel</Button>
+                    <Button type="submit" variant="contained" disabled={isSaving}>
+                      {isSaving ? 'Saving…' : (isEditMode ? 'Update Voucher' : 'Save Voucher')}
+                    </Button>
                   </Stack>
                 </Stack>
               </Paper>

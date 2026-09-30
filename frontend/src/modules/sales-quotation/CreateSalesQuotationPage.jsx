@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,110 +19,144 @@ import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
-import { CUSTOMERS } from '../customer/customerMockData';
+import { useGetCustomersQuery } from '../../api/customerApi';
+import { useGetProductsQuery } from '../../api/productApi';
+import {
+  useGetSalesQuotationQuery, useNextSalesQuotationCodeQuery,
+  useCreateSalesQuotationMutation, useUpdateSalesQuotationMutation,
+} from '../../api/salesQuotationApi';
 
 import QuotationItemsTable from './components/QuotationItemsTable';
 import QuotationTotalsCard from './components/QuotationTotalsCard';
 import QuotationTermsAndNotes from './components/QuotationTermsAndNotes';
-import { QUOTATIONS, getQuotationDetails } from './salesQuotationMockData';
 import {
-  createSalesQuotationSchema, createSalesQuotationDefaultValues,
-  CUSTOMER_OPTIONS, CONTACT_PERSON_OPTIONS, PAYMENT_TERMS_OPTIONS, SALES_PERSON_OPTIONS,
+  createSalesQuotationSchema, createSalesQuotationDefaultValues, emptyItemRow, isBlankItemRow,
+  CONTACT_PERSON_OPTIONS, PAYMENT_TERMS_OPTIONS, SALES_PERSON_OPTIONS,
   CURRENCY_OPTIONS, PRICE_LIST_OPTIONS,
 } from './createSalesQuotationSchema';
-
-function nextQuotationCode() {
-  const maxNum = QUOTATIONS.reduce((max, q) => Math.max(max, Number(q.code.slice(4))), 0);
-  return `QUO-${String(maxNum + 1).padStart(5, '0')}`;
-}
-
-// The mock detail record only carries the customer's name, not their code —
-// best-effort match it back to a CUSTOMERS row so the Customer select can be
-// prefilled in edit mode; falls back to blank (still selectable manually)
-// when no match is found.
-function findCustomerIdByName(name) {
-  const match = CUSTOMERS.find((c) => c.name === name);
-  return match ? match.code : '';
-}
-
-function itemToRow(item) {
-  const lineTotal = item.qty * item.unitPrice;
-  const discountPercent = lineTotal > 0 ? Math.round((item.discount / lineTotal) * 10000) / 100 : 0;
-  return {
-    itemCode: item.code,
-    itemName: item.name,
-    hsnCode: item.hsn,
-    qty: String(item.qty),
-    unit: '',
-    unitPrice: String(item.unitPrice),
-    discountPercent: discountPercent ? String(discountPercent) : '',
-    taxCode: '',
-  };
-}
+import { quotationToFormValues, formValuesToPayload } from './salesQuotationDisplay';
 
 /**
- * "New Quotation" screen, also doubling as the Edit Quotation page when
- * reached via `/sales-quotation/edit/:code` — the Sales Quotation module has
- * no backend yet, so "editing" prefills from getQuotationDetails() the same
- * way the Overview/Status pages' own detail panel does. Matches the
- * reference design's full create form: Customer Details + Quotation Details
- * cards, an editable line-items grid with a live totals summary, and Terms &
- * Conditions / Notes below. Saving is mocked, so both "Save as Draft" and
- * "Save & Send" just toast and hand control back to the caller.
+ * "New Quotation" screen, also doubling as the Edit Quotation form when
+ * SalesQuotationPage renders it with an `id` prop — everything (list,
+ * create, edit, view) lives on the one /sales-quotation page. Fully wired to
+ * the real backend (see backend/src/modules/sales-quotation): Customer
+ * comes from the real Customer table, the Quotation No. is a live preview of
+ * the next real code, and both "Save as Draft" and "Save & Send" actually
+ * create/update a SalesQuotation row with the same validations enforced
+ * again server-side.
  */
-export default function CreateSalesQuotationPage({ onBack }) {
+export default function CreateSalesQuotationPage({ id: propId, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
-  const isEditMode = Boolean(code);
-  const existingQuotation = isEditMode ? getQuotationDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const quotationCode = useMemo(() => (isEditMode ? code : nextQuotationCode()), [isEditMode, code]);
+
+  const { data: customers = [] } = useGetCustomersQuery({});
+  const { data: products = [] } = useGetProductsQuery({});
+  const { data: existingQuotation, isLoading: isLoadingExisting, isError: loadError } = useGetSalesQuotationQuery(id, { skip: !isEditMode });
+  const nextCode = useNextSalesQuotationCodeQuery(undefined, { skip: isEditMode });
+  const [createSalesQuotation, { isLoading: isCreating }] = useCreateSalesQuotationMutation();
+  const [updateSalesQuotation, { isLoading: isUpdating }] = useUpdateSalesQuotationMutation();
+  const isSaving = isCreating || isUpdating;
+
+  const customerOptions = useMemo(() => [
+    { value: '', label: 'Select Customer', disabled: true },
+    ...customers.map((c) => ({ value: c.id, label: c.name })),
+  ], [customers]);
+  const customerById = useMemo(() => Object.fromEntries(customers.map((c) => [c.id, c])), [customers]);
+
+  const quotationCode = isEditMode ? existingQuotation?.code : nextCode.data;
 
   const methods = useForm({
     resolver: zodResolver(createSalesQuotationSchema),
-    defaultValues: existingQuotation
-      ? {
-          ...createSalesQuotationDefaultValues,
-          customerId: findCustomerIdByName(existingQuotation.customer.name),
-          mobile: existingQuotation.customer.mobile,
-          email: existingQuotation.customer.email,
-          address: existingQuotation.customer.address,
-          quotationDate: existingQuotation.date,
-          validTill: existingQuotation.validTill,
-          paymentTerms: (existingQuotation.paymentTerms || '').toLowerCase(),
-          salesPerson: (existingQuotation.salesPerson || '').toLowerCase(),
-          items: existingQuotation.items?.length ? existingQuotation.items.map(itemToRow) : createSalesQuotationDefaultValues.items,
-        }
-      : createSalesQuotationDefaultValues,
+    defaultValues: createSalesQuotationDefaultValues,
     mode: 'onTouched',
   });
-  const { handleSubmit } = methods;
+  const { watch, reset, handleSubmit, setValue } = methods;
+
+  // The edit-mode fetch is async, so the form can't be seeded via useForm's
+  // defaultValues (that only runs once, before the data exists) — reset()
+  // re-seeds every field once the real quotation row arrives.
+  useEffect(() => {
+    if (existingQuotation) reset(quotationToFormValues(existingQuotation, emptyItemRow));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingQuotation]);
+
+  // Prefilling Mobile/Email/Address from the selected customer's own record
+  // is a convenience, not a requirement — the quotation stores its own
+  // snapshot of these fields (matching Sale's own "frozen at save time"
+  // rule), so the user can still edit them per-quotation afterwards. Skips
+  // the very first render (including the reset() above landing on an
+  // existing customerId) so it only fires on an actual manual selection.
+  const customerId = watch('customerId');
+  const isFirstCustomerRender = useRef(true);
+  useEffect(() => {
+    if (isFirstCustomerRender.current) {
+      isFirstCustomerRender.current = false;
+      return;
+    }
+    const customer = customerById[customerId];
+    if (!customer) return;
+    setValue('mobile', customer.mobile || '');
+    setValue('email', customer.email || '');
+    setValue('address', customer.address || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/sales-quotation/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/sales-quotation/overview');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/sales-quotation/view/${id}`);
+    navigate('/sales-quotation');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleAddCustomer = () => navigate('/customer/add');
+  const handleAddCustomer = () => navigate('/customer');
   const handleAddItem = () => dispatch(showToast('Item picker is coming soon', 'info'));
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Quotation ${quotationCode} updated successfully` : `Quotation ${quotationCode} saved as draft`, 'success'));
-    handleBack();
-  });
-  const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Quotation ${quotationCode} updated successfully` : `Quotation ${quotationCode} saved and sent`, 'success'));
-    handleBack();
-  });
+  const save = async (values, status) => {
+    const payload = formValuesToPayload(values, { status, isBlankItemRow });
+    try {
+      const saved = isEditMode
+        ? await updateSalesQuotation({ id, ...payload }).unwrap()
+        : await createSalesQuotation(payload).unwrap();
+      dispatch(showToast(
+        isEditMode
+          ? `Quotation ${saved.code} updated successfully`
+          : `Quotation ${saved.code} ${status === 'draft' ? 'saved as draft' : 'saved and sent'}`,
+        'success',
+      ));
+      if (onBack) onBack(saved.id);
+      else if (isEditMode) navigate(`/sales-quotation/view/${saved.id}`);
+      else navigate('/sales-quotation');
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the quotation', 'error'));
+    }
+  };
 
-  if (isEditMode && !existingQuotation) {
+  // Editing an already-'pending' (or expired) quotation keeps saving as
+  // 'pending' — only a genuine draft edit stays a draft; there's no reason
+  // to demote a quotation that's already been sent back to draft just
+  // because someone opened it to fix a typo.
+  const editingStatus = existingQuotation?.dbStatus === 'draft' ? 'draft' : 'pending';
+  const onSaveAsDraft = handleSubmit((values) => save(values, isEditMode ? editingStatus : 'draft'));
+  const onSaveAndSend = handleSubmit((values) => save(values, 'pending'));
+
+  if (isEditMode && isLoadingExisting) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading quotation…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && (loadError || !existingQuotation)) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Quotation not found</Typography>
@@ -137,7 +171,7 @@ export default function CreateSalesQuotationPage({ onBack }) {
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Sales Quotation (Edit ${quotationCode})` : 'Sales Quotation (New)'}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Sales Quotation (Edit ${quotationCode || ''})` : 'Sales Quotation (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/sales-quotation" underline="hover" color="text.secondary">Sales Quotation</MuiLink>
@@ -162,19 +196,19 @@ export default function CreateSalesQuotationPage({ onBack }) {
           <Menu anchorEl={moreActionsAnchor} open={Boolean(moreActionsAnchor)} onClose={() => setMoreActionsAnchor(null)}>
             <MenuItem onClick={() => handleMoreAction('Save as Template')}>Save as Template</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
-            <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
+            <MenuItem onClick={() => reset(createSalesQuotationDefaultValues)}>Reset Form</MenuItem>
           </Menu>
           {isEditMode ? (
-            <Button variant="contained" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-              Update Quotation
+            <Button variant="contained" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
+              {isSaving ? 'Saving…' : 'Update Quotation'}
             </Button>
           ) : (
             <>
-              <Button variant="outlined" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-                Save as Draft
+              <Button variant="outlined" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
+                {isSaving ? 'Saving…' : 'Save as Draft'}
               </Button>
-              <Button variant="contained" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
-                Save &amp; Send
+              <Button variant="contained" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend} disabled={isSaving}>
+                {isSaving ? 'Saving…' : 'Save & Send'}
               </Button>
             </>
           )}
@@ -190,7 +224,7 @@ export default function CreateSalesQuotationPage({ onBack }) {
                 <Stack spacing={2}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <FormSelect name="customerId" label="Customer *" options={CUSTOMER_OPTIONS} />
+                      <FormSelect name="customerId" label="Customer *" options={customerOptions} />
                     </Box>
                     <IconButton
                       onClick={handleAddCustomer}
@@ -213,7 +247,7 @@ export default function CreateSalesQuotationPage({ onBack }) {
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Quotation Details</Typography>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField label="Quotation No." value={quotationCode} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
+                    <TextField label="Quotation No." value={quotationCode || 'Generating…'} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormDatePicker name="quotationDate" label="Quotation Date *" />
@@ -251,7 +285,7 @@ export default function CreateSalesQuotationPage({ onBack }) {
             <Grid size={{ xs: 12, lg: 8 }}>
               <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
-                <QuotationItemsTable onAddItem={handleAddItem} />
+                <QuotationItemsTable onAddItem={handleAddItem} products={products} />
               </Paper>
             </Grid>
             <Grid size={{ xs: 12, lg: 4 }}>

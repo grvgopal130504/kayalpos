@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -15,44 +15,41 @@ import StockTransferSummaryCards from './components/StockTransferSummaryCards';
 import StockTransferTable from './components/StockTransferTable';
 import TransferDetailsCard from './components/TransferDetailsCard';
 import TransferTermsAndNotes from './components/TransferTermsAndNotes';
-import { SUMMARY, TRANSFERS, TRANSFER_DETAILS } from './stockTransferMockData';
-
-const TRANSFER_BY_CODE = Object.fromEntries(TRANSFERS.map((t) => [t.code, t]));
+import { useGetStockTransfersQuery, useStockTransferSummaryQuery } from '../../api/stockTransferApi';
+import { toTransferRow, toTransferDetails, buildSummary } from './stockTransferDisplay';
 
 /**
- * Stock Transfer list/detail page — summary tiles, the transfer table
- * with a detail panel for whichever row is selected, and a Terms &
- * Conditions / Notes strip below. Mirrors StockIndentOverviewPage's
- * structure; the Stock Transfer backend module doesn't exist yet so
- * everything is driven by stockTransferMockData.js.
+ * Stock Transfer list/detail page — summary tiles, the transfer table with
+ * a detail panel for whichever row is selected, and a Terms & Conditions /
+ * Notes strip below. Fully wired to the real backend (see
+ * backend/src/modules/stock-transfer): every tile, row and detail field
+ * comes from the actual StockTransfer table, so a tenant with no transfers
+ * yet honestly shows zeros/empty states instead of this page's old static
+ * mock data.
  */
-export default function StockTransferOverviewPage({ tab, onTabChange, onCreate }) {
+export default function StockTransferOverviewPage({ tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(TRANSFER_DETAILS.code);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const selectedRow = TRANSFER_BY_CODE[selectedCode];
-  const transferDetails = selectedCode === TRANSFER_DETAILS.code
-    ? TRANSFER_DETAILS
-    : {
-        ...TRANSFER_DETAILS,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        status: selectedRow.status,
-        fromOutlet: selectedRow.fromOutlet,
-        toOutlet: selectedRow.toOutlet,
-        indentRef: selectedRow.indentRef,
-        requiredBy: selectedRow.requiredBy,
-        estimatedValue: selectedRow.estimatedValue,
-      };
+  const { data: transfers = [], isLoading, isError } = useGetStockTransfersQuery({});
+  const { data: summaryData } = useStockTransferSummaryQuery();
 
-  const handleSelectTransfer = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => transfers.map(toTransferRow), [transfers]);
+  const summary = useMemo(() => buildSummary(summaryData), [summaryData]);
+  const transferById = useMemo(() => Object.fromEntries(transfers.map((t) => [t.id, t])), [transfers]);
+
+  const effectiveSelectedId = selectedId && transferById[selectedId] ? selectedId : transfers[0]?.id;
+  const selectedTransfer = effectiveSelectedId ? transferById[effectiveSelectedId] : null;
+  const transferDetails = selectedTransfer ? toTransferDetails(selectedTransfer) : null;
+
+  const handleSelectTransfer = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/stock-transfer/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/stock-transfer/edit/${row.code}`);
-    dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/stock-transfer/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/stock-transfer/edit/${row.id}`);
+    return dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
   const handleCreate = () => {
@@ -98,14 +95,14 @@ export default function StockTransferOverviewPage({ tab, onTabChange, onCreate }
         </Stack>
       </Stack>
 
-      <StockTransferSummaryCards summary={SUMMARY} />
+      <StockTransferSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 640 } }}>
             <StockTransferTable
-              transfers={TRANSFERS}
-              selectedCode={selectedCode}
+              transfers={rows}
+              selectedId={effectiveSelectedId}
               onSelectTransfer={handleSelectTransfer}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -116,7 +113,17 @@ export default function StockTransferOverviewPage({ tab, onTabChange, onCreate }
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: { lg: 640 }, overflow: 'auto' }}>
-            <TransferDetailsCard transfer={transferDetails} />
+            {isLoading ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>Loading transfers…</Typography>
+            ) : isError ? (
+              <Typography variant="body2" color="error" sx={{ p: 2 }}>Failed to load transfers.</Typography>
+            ) : transferDetails ? (
+              <TransferDetailsCard transfer={transferDetails} showReceivedFields={transferDetails.status === 'received'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No transfers yet — create one to get started.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

@@ -1,33 +1,96 @@
 import {
-  Box, Table, TableHead, TableBody, TableRow, TableCell, Chip, IconButton, Stack, Typography,
+  Box, Table, TableHead, TableBody, TableRow, TableCell, Chip, IconButton, Stack, Typography, Link as MuiLink,
 } from '@mui/material';
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
-
-import { formatNumber } from '../../../../utils/format';
 
 const COLUMNS = [
   { key: 'code', label: 'Brand Code' },
   { key: 'name', label: 'Brand Name' },
+  { key: 'category', label: 'Category' },
   { key: 'description', label: 'Description' },
-  { key: 'category', label: 'Item Group / Category' },
-  { key: 'totalItems', label: 'Total Items' },
   { key: 'status', label: 'Status' },
-  { key: 'createdOn', label: 'Created On' },
   { key: 'action', label: 'Action' },
 ];
 
+function BrandRow({ row, onOpenBrand, onEditRow, onDeleteRow }) {
+  return (
+    <TableRow hover>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Box
+            sx={{
+              width: 26, height: 26, borderRadius: 1, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              bgcolor: 'rgba(229,72,77,0.12)', color: '#E5484D',
+            }}
+          >
+            <CardGiftcardOutlinedIcon sx={{ fontSize: 15 }} />
+          </Box>
+          <MuiLink
+            component="button"
+            type="button"
+            underline="hover"
+            onClick={() => onOpenBrand?.(row)}
+            sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}
+          >
+            {row.code}
+          </MuiLink>
+        </Stack>
+      </TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.category}</TableCell>
+      <TableCell sx={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {row.description || '—'}
+      </TableCell>
+      <TableCell>
+        <Chip
+          label={row.status}
+          size="small"
+          sx={{
+            bgcolor: row.status === 'Active' ? 'rgba(34,160,107,0.12)' : 'rgba(107,114,128,0.12)',
+            color: row.status === 'Active' ? 'success.main' : 'text.secondary',
+            fontWeight: 700, height: 22,
+          }}
+        />
+      </TableCell>
+      <TableCell>
+        <Stack direction="row" spacing={0.5}>
+          <IconButton size="small" color="primary" onClick={() => onEditRow?.(row)} aria-label={`Edit ${row.name}`}>
+            <EditOutlinedIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small" color="error" onClick={() => onDeleteRow?.(row)} aria-label={`Delete ${row.name}`}>
+            <DeleteOutlineOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function EmptyRow() {
+  return (
+    <TableRow>
+      <TableCell colSpan={COLUMNS.length}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 3 }}>
+          No brands found — create one to get started.
+        </Typography>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 /**
- * "Brand List" table — plain rows (no per-row thumbnail, unlike Product)
- * with a green/red Status chip and edit/delete row actions. Neither
- * action is wired to a real form yet, so both surface a toast via the
- * handlers passed in.
+ * "Brand List" table — a small colored square stands in for each brand's
+ * logo (no image field on the Brand master), Brand Code is a link opening
+ * BrandViewDialog, Status is a green/grey chip. Same visual convention as
+ * ProductTable/WarehousePage's list table.
  */
-export default function BrandTable({ rows, onViewRow, onEditRow, onDeleteRow }) {
+export default function BrandTable({ rows, onOpenBrand, onEditRow, onDeleteRow }) {
   return (
     <Box sx={{ overflowX: 'auto' }}>
-      <Table size="small" sx={{ minWidth: 1100 }}>
+      <Table size="small" sx={{ minWidth: 900 }}>
         <TableHead>
           <TableRow>
             {COLUMNS.map((col) => (
@@ -39,48 +102,9 @@ export default function BrandTable({ rows, onViewRow, onEditRow, onDeleteRow }) 
         </TableHead>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={row.code} hover>
-              <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.description}</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.category}</TableCell>
-              <TableCell>{formatNumber(row.totalItems)}</TableCell>
-              <TableCell>
-                <Chip
-                  label={row.status}
-                  size="small"
-                  sx={{
-                    bgcolor: row.status === 'Active' ? 'rgba(34,160,107,0.12)' : 'rgba(229,72,77,0.12)',
-                    color: row.status === 'Active' ? 'success.main' : 'error.main',
-                    fontWeight: 700, height: 22,
-                  }}
-                />
-              </TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.createdOn}</TableCell>
-              <TableCell>
-                <Stack direction="row" spacing={0.5}>
-                  <IconButton size="small" onClick={() => onViewRow?.(row)} aria-label={`View ${row.name}`}>
-                    <VisibilityOutlinedIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton size="small" color="primary" onClick={() => onEditRow?.(row)} aria-label={`Edit ${row.name}`}>
-                    <EditOutlinedIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton size="small" color="error" onClick={() => onDeleteRow?.(row)} aria-label={`Delete ${row.name}`}>
-                    <DeleteOutlineOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              </TableCell>
-            </TableRow>
+            <BrandRow key={row.id} row={row} onOpenBrand={onOpenBrand} onEditRow={onEditRow} onDeleteRow={onDeleteRow} />
           ))}
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={COLUMNS.length}>
-                <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 3 }}>
-                  No brands match your search.
-                </Typography>
-              </TableCell>
-            </TableRow>
-          )}
+          {rows.length === 0 && <EmptyRow />}
         </TableBody>
       </Table>
     </Box>

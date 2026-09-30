@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AddIcon from '@mui/icons-material/Add';
@@ -16,38 +16,101 @@ import CustomerTable from './components/CustomerTable';
 import CustomerDetailsCard from './components/CustomerDetailsCard';
 import CustomerTransactionsCard from './components/CustomerTransactionsCard';
 import CustomerLoyaltySummary from './components/CustomerLoyaltySummary';
+import AddNewCustomerPage from './AddNewCustomerPage';
+import CustomerViewPage from './CustomerViewPage';
+import { toCustomerRow, toCustomerDetails, toRecentTransactions, toLoyaltySummary } from './customerApiHelpers';
+import { useGetCustomersQuery, useDeleteCustomerMutation } from '../../api/customerApi';
 import {
-  SUMMARY, CUSTOMERS, TOTAL_CUSTOMER_COUNT, CUSTOMER_DETAILS, RECENT_TRANSACTIONS, LOYALTY_SUMMARY,
-  getCustomerDetails,
-} from './customerMockData';
+  useSalesOverviewSummaryQuery, useCustomerSalesSummariesQuery, useCustomerSalesQuery,
+} from '../../api/saleApi';
 
 /**
  * Customer List / dashboard page — summary tiles, the customer table with a
  * detail panel for whichever row is selected, recent transactions, and a
- * loyalty summary. The Customer backend module doesn't exist yet, so
- * everything is driven by customerMockData.js — selecting a row other than
- * CUS-0001 falls back to reusing CUSTOMER_DETAILS' shape (only
- * name/code/status/contact fields differ) since we don't have full mock
- * detail records for every generated row.
+ * loyalty summary. Fully wired to the real backend: the list, detail panel,
+ * Add/Edit/Delete come from the Customer API; the summary tiles,
+ * per-row/detail Total Purchase & Outstanding, Recent Transactions, and
+ * Loyalty Summary all come from real Sale rows via the sale API (see
+ * backend/src/modules/sale's getSalesOverviewSummary /
+ * getCustomerPurchaseSummaries / getCustomerPurchaseSummary) and the
+ * Customer's own real `loyaltyPoints` column — nothing on this page is mock
+ * data, so a fresh tenant with no customers or sales honestly shows zeros
+ * and empty states. Add/Edit/View swap in via local state instead of
+ * separate /add, /edit/:code, /view/:code routes.
  */
 export default function CustomerPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
+  const [tab, setTab] = useState('list');
+  const [activeCode, setActiveCode] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(CUSTOMER_DETAILS.code);
+  const [selectedCode, setSelectedCode] = useState(null);
 
-  const customerDetails = getCustomerDetails(selectedCode);
+  const { data: customerRows = [] } = useGetCustomersQuery({});
+  const [deleteCustomer] = useDeleteCustomerMutation();
+  const { data: overviewSummary } = useSalesOverviewSummaryQuery();
+  const { data: purchaseSummaries = {} } = useCustomerSalesSummariesQuery();
+
+  // Computed unconditionally (before the create/edit/view early returns
+  // below) so hook order stays stable across renders.
+  const viewRows = useMemo(
+    () => customerRows.map((row) => toCustomerRow(row, purchaseSummaries[row.id])),
+    [customerRows, purchaseSummaries],
+  );
+  const byCode = useMemo(() => Object.fromEntries(customerRows.map((c) => [c.code, c])), [customerRows]);
+
+  const goToList = () => { setActiveCode(null); setTab('list'); };
+  const openEdit = (code) => { setActiveCode(code); setTab('edit'); };
+  const openView = (code) => { setActiveCode(code); setTab('view'); };
+
+  const effectiveSelectedCode = selectedCode && byCode[selectedCode] ? selectedCode : customerRows[0]?.code;
+  const selectedCustomer = effectiveSelectedCode ? byCode[effectiveSelectedCode] : null;
+  const { data: selectedCustomerSales } = useCustomerSalesQuery(selectedCustomer?.id, { skip: !selectedCustomer });
+
+  if (tab === 'create' || tab === 'edit') {
+    return (
+      <AddNewCustomerPage
+        code={tab === 'edit' ? activeCode : undefined}
+        onBack={(savedCode) => (tab === 'edit' ? openView(savedCode || activeCode) : goToList())}
+      />
+    );
+  }
+
+  if (tab === 'view') {
+    return <CustomerViewPage code={activeCode} onBack={goToList} onEdit={() => openEdit(activeCode)} />;
+  }
+
+  const customerDetails = selectedCustomer
+    ? toCustomerDetails(selectedCustomer, purchaseSummaries[selectedCustomer.id])
+    : null;
+
+  const summary = {
+    totalCustomers: customerRows.length,
+    activeCustomers: customerRows.filter((c) => c.status === 'ACTIVE').length,
+    loyalCustomers: customerRows.filter((c) => (c.loyaltyPoints || 0) > 0).length,
+    totalSalesThisMonth: overviewSummary?.totalSalesThisMonth || 0,
+    outstandingAmount: overviewSummary?.outstandingAmount || 0,
+  };
 
   const handleSelectCustomer = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/customer/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/customer/edit/${row.code}`);
+  const handleRowAction = async (label, row) => {
+    if (label === 'View') return openView(row.code);
+    if (label === 'Edit') return openEdit(row.code);
+    if (label === 'Delete') {
+      if (!window.confirm(`Delete customer "${row.name}"? This cannot be undone.`)) return;
+      try {
+        await deleteCustomer(row.id).unwrap();
+        dispatch(showToast(`${row.name} deleted`, 'success'));
+      } catch (err) {
+        dispatch(showToast(err?.data?.message || 'Failed to delete customer', 'error'));
+      }
+      return;
+    }
     dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Customers is coming soon', 'info'));
-  const handleAddCustomer = () => navigate('/customer/add');
+  const handleAddCustomer = () => setTab('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => navigate(`/customer/edit/${selectedCode}`);
+  const handleEdit = () => effectiveSelectedCode && openEdit(effectiveSelectedCode);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
@@ -86,15 +149,15 @@ export default function CustomerPage() {
         </Stack>
       </Stack>
 
-      <CustomerSummaryCards summary={SUMMARY} />
+      <CustomerSummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <CustomerTable
-              customers={CUSTOMERS}
-              totalCount={TOTAL_CUSTOMER_COUNT}
-              selectedCode={selectedCode}
+              customers={viewRows}
+              totalCount={viewRows.length}
+              selectedCode={effectiveSelectedCode}
               onSelectCustomer={handleSelectCustomer}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -102,15 +165,25 @@ export default function CustomerPage() {
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <CustomerDetailsCard customer={customerDetails} onEdit={handleEdit} />
+          {customerDetails ? (
+            <CustomerDetailsCard customer={customerDetails} onEdit={handleEdit} />
+          ) : (
+            <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 4 }}>
+              No customers yet — add one to see details here.
+            </Typography>
+          )}
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 7 }}>
-          <CustomerLoyaltySummary summary={LOYALTY_SUMMARY} />
-        </Grid>
-        <Grid size={{ xs: 12, lg: 5 }}>
-          <CustomerTransactionsCard transactions={RECENT_TRANSACTIONS} />
-        </Grid>
+        {customerDetails && (
+          <>
+            <Grid size={{ xs: 12, lg: 7 }}>
+              <CustomerLoyaltySummary summary={toLoyaltySummary(selectedCustomer, selectedCustomerSales)} />
+            </Grid>
+            <Grid size={{ xs: 12, lg: 5 }}>
+              <CustomerTransactionsCard transactions={toRecentTransactions(selectedCustomerSales)} />
+            </Grid>
+          </>
+        )}
       </Grid>
     </Stack>
   );

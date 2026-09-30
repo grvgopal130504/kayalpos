@@ -8,24 +8,38 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
 import TransferDetailsCard from './components/TransferDetailsCard';
 import TransferTermsAndNotes from './components/TransferTermsAndNotes';
-import { getTransferDetails } from './stockTransferMockData';
+import { useGetStockTransferQuery } from '../../api/stockTransferApi';
+import { toTransferDetails } from './stockTransferDisplay';
 
 /**
- * Read-only "View Transfer" destination for StockTransferTable's row menu —
- * reuses the exact same TransferDetailsCard/TransferTermsAndNotes cards
- * the Overview/Status pages already show for the selected row, just
- * addressed by :code as its own full page instead of a side panel.
+ * Read-only "View Transfer" body for StockTransferTable's row menu — reuses
+ * the exact same TransferDetailsCard/TransferTermsAndNotes cards the
+ * Overview/Status pages already show for the selected row. Rendered by
+ * StockTransferPage via props (`id`/`onBack`/`onEdit`) as part of the
+ * single /stock-transfer page rather than its own route. Fully wired to the
+ * real backend — every field here comes from the actual StockTransfer row
+ * fetched by GET /api/stock-transfers/:id.
  */
-export default function TransferViewPage() {
+export default function TransferViewPage({ id: propId, onBack, onEdit }) {
   const navigate = useNavigate();
-  const { code } = useParams();
-  const transfer = getTransferDetails(code);
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const { data: row, isLoading, isError } = useGetStockTransferQuery(id, { skip: !id });
+  const transfer = row ? toTransferDetails(row) : null;
   const [notes, setNotes] = useState('');
 
-  const handleBack = () => navigate('/stock-transfer');
-  const handleEdit = () => navigate(`/stock-transfer/edit/${code}`);
+  const handleBack = () => (onBack ? onBack() : navigate('/stock-transfer'));
+  const handleEdit = () => (onEdit ? onEdit() : navigate(`/stock-transfer/edit/${id}`));
 
-  if (!transfer) {
+  if (isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading transfer…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isError || !transfer) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Transfer not found</Typography>

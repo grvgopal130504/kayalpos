@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -23,104 +23,183 @@ import FormCheckbox from '../../components/form/FormCheckbox';
 
 import PromotionFormSection from './components/PromotionFormSection';
 import PromotionPreviewPanel from './components/PromotionPreviewPanel';
-import { getPromotionDetails } from './promotionMockData';
+import PromotionItemPickerDialog from './components/PromotionItemPickerDialog';
 import {
-  createPromotionSchema, createPromotionDefaultValues,
-  PROMOTION_TYPE_OPTIONS, APPLIES_TO_OPTIONS, DISCOUNT_TYPE_OPTIONS, DISCOUNT_UNIT_OPTIONS, MAXIMUM_USAGE_OPTIONS,
+  useGetPromotionQuery, useNextPromotionCodeQuery, useCreatePromotionMutation, useUpdatePromotionMutation,
+} from '../../api/promotionApi';
+import {
+  createPromotionSchema, createPromotionDefaultValues, parsePromotionDate, formatPromotionDate,
+  PROMOTION_TYPE_OPTIONS, APPLIES_TO_OPTIONS, DISCOUNT_TYPE_OPTIONS, DISCOUNT_UNIT_OPTIONS,
+  MAXIMUM_USAGE_OPTIONS, MAXIMUM_USAGE_DESCRIPTIONS,
 } from './createPromotionSchema';
 
-// The PROMOTIONS list row only carries `appliesTo` as a display label
-// ('Item'/'Category'/'Bill'), not the form's radio value — map it back so
-// edit mode can prefill the "Applies To" radio group correctly.
-const APPLIES_TO_LABEL_TO_VALUE = { Item: 'specific', Category: 'category', Bill: 'all' };
+/** Builds react-hook-form default values from a real Promotion row (as
+ * returned by GET /api/promotions/:id) — dates come back as ISO strings
+ * from Postgres, so they're reformatted into the "DD Mon YYYY" shape
+ * FormDatePicker expects; numeric fields come back as numbers/Decimals and
+ * are stringified for the text fields that hold them. */
+function promotionToFormValues(promotion) {
+  return {
+    ...createPromotionDefaultValues,
+    promotionName: promotion.name,
+    promotionType: promotion.promotionType,
+    description: promotion.description || '',
+    appliesTo: promotion.appliesTo,
+    discountType: promotion.discountType,
+    discountValue: String(promotion.discountValue ?? ''),
+    discountUnit: promotion.discountUnit,
+    maximumUsage: promotion.maximumUsage,
+    minimumBillAmount: String(promotion.minimumBillAmount ?? '0'),
+    startDate: formatPromotionDate(new Date(promotion.startDate)),
+    endDate: promotion.endDate ? formatPromotionDate(new Date(promotion.endDate)) : '',
+    noExpiry: Boolean(promotion.noExpiry),
+    usageLimitEnabled: Boolean(promotion.usageLimitEnabled),
+    usageLimitCount: String(promotion.usageLimitCount ?? '0'),
+    onePerCustomer: Boolean(promotion.onePerCustomer),
+    combinable: Boolean(promotion.combinable),
+    showInInvoice: Boolean(promotion.showInInvoice),
+    selectedItems: promotion.selectedItems || [],
+    selectedCategories: promotion.selectedCategories || [],
+  };
+}
 
-// The list row's `type` matches PROMOTION_TYPE_OPTIONS directly, but the
-// form also has a separate Discount Type field the list doesn't carry —
-// derive a plausible one from the promotion type since there's no backend
-// record with the real value.
-const PROMOTION_TYPE_TO_DISCOUNT_TYPE = {
-  'Percentage Off': 'Percentage',
-  'Amount Off': 'Flat Amount',
-  'Buy X Get Y': 'Free Item',
-  'Bundle Offer': 'Special Price',
-};
-
-// Splits a display discount string ("10%", "₹100.00", "Free", "—") into the
-// form's separate value/unit fields.
-function parseDiscount(discount) {
-  if (typeof discount === 'string' && discount.endsWith('%')) {
-    return { discountValue: discount.slice(0, -1), discountUnit: '%' };
-  }
-  if (typeof discount === 'string' && discount.startsWith('₹')) {
-    return { discountValue: discount.slice(1), discountUnit: '₹' };
-  }
-  return { discountValue: '', discountUnit: '%' };
+/** Converts the form's string-based values back into the types the backend
+ * expects (real numbers, ISO dates, null instead of ''), so the payload
+ * sent to POST/PUT /api/promotions matches promotion.schema.js exactly. */
+function formValuesToPayload(values) {
+  const start = parsePromotionDate(values.startDate);
+  const end = values.noExpiry ? null : parsePromotionDate(values.endDate);
+  return {
+    promotionName: values.promotionName,
+    promotionType: values.promotionType,
+    description: values.description || '',
+    appliesTo: values.appliesTo,
+    discountType: values.discountType,
+    discountValue: Number(values.discountValue || 0),
+    discountUnit: values.discountUnit,
+    maximumUsage: values.maximumUsage,
+    minimumBillAmount: Number(values.minimumBillAmount || 0),
+    startDate: start ? start.toISOString() : undefined,
+    endDate: end ? end.toISOString() : null,
+    noExpiry: values.noExpiry,
+    usageLimitEnabled: values.usageLimitEnabled,
+    usageLimitCount: Number(values.usageLimitCount || 0),
+    onePerCustomer: values.onePerCustomer,
+    combinable: values.combinable,
+    showInInvoice: values.showInInvoice,
+    selectedItems: values.appliesTo === 'specific' ? values.selectedItems : [],
+    selectedCategories: values.appliesTo === 'category' ? values.selectedCategories : [],
+  };
 }
 
 /**
  * "Create Promotion" screen, also doubling as the Edit Promotion page when
- * reached via `/promotion/edit/:code` — the Promotion module has no backend
- * yet, so "editing" prefills from getPromotionDetails() the same best-effort
- * way the list/status pages' own detail panel does.
+ * reached via `/promotion/edit/:id` — fully wired to the backend: creating
+ * or updating a promotion here actually writes to the Promotion table (see
+ * backend/src/modules/promotion), with the same validations enforced again
+ * server-side so a request built outside this form can never bypass them.
  */
-export default function CreatePromotionPage({ embedded = false, onCreated, onCancel }) {
+export default function CreatePromotionPage({ id: propId, onBack, embedded = false, onCreated, onCancel }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
-  const isEditMode = Boolean(code);
-  const existingPromotion = isEditMode ? getPromotionDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
+  const { data: existingPromotion, isLoading: isLoadingExisting, isError: loadError } = useGetPromotionQuery(id, { skip: !isEditMode });
+  const nextCode = useNextPromotionCodeQuery(undefined, { skip: isEditMode });
+  const [createPromotion, { isLoading: isCreating }] = useCreatePromotionMutation();
+  const [updatePromotion, { isLoading: isUpdating }] = useUpdatePromotionMutation();
+  const isSaving = isCreating || isUpdating;
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const methods = useForm({
     resolver: zodResolver(createPromotionSchema),
-    defaultValues: useMemo(() => {
-      if (!existingPromotion) return createPromotionDefaultValues;
-      const { discountValue, discountUnit } = parseDiscount(existingPromotion.discount);
-      return {
-        ...createPromotionDefaultValues,
-        promotionName: existingPromotion.name,
-        promotionType: existingPromotion.type,
-        appliesTo: APPLIES_TO_LABEL_TO_VALUE[existingPromotion.appliesTo] || 'all',
-        discountType: PROMOTION_TYPE_TO_DISCOUNT_TYPE[existingPromotion.type] || '',
-        discountValue,
-        discountUnit,
-        startDate: existingPromotion.startDate,
-        endDate: existingPromotion.endDate,
-      };
-    }, [existingPromotion]),
+    defaultValues: createPromotionDefaultValues,
     mode: 'onTouched',
   });
-  const { watch, setValue, handleSubmit } = methods;
+  const { watch, setValue, reset, handleSubmit, formState: { errors } } = methods;
   const noExpiry = watch('noExpiry');
   const usageLimitEnabled = watch('usageLimitEnabled');
   const appliesTo = watch('appliesTo');
+  const selectedItems = watch('selectedItems');
+  const selectedCategories = watch('selectedCategories');
+  const maximumUsage = watch('maximumUsage');
+
+  // The edit-mode fetch is async, so the form can't be seeded via
+  // useForm's defaultValues (that only runs once, before the data exists) —
+  // reset() re-seeds every field once the real promotion row arrives.
+  useEffect(() => {
+    if (existingPromotion) reset(promotionToFormValues(existingPromotion));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingPromotion]);
+
+  // Switching "Applies To" away from Specific Items / Category drops
+  // whichever selection no longer applies, so a stale pick from a previous
+  // choice can't silently ride along (e.g. picking items, then switching to
+  // "All Items", then back to "Specific Items" starts fresh rather than
+  // reusing the old list).
+  useEffect(() => {
+    if (appliesTo !== 'specific' && selectedItems?.length) setValue('selectedItems', []);
+    if (appliesTo !== 'category' && selectedCategories?.length) setValue('selectedCategories', []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliesTo]);
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/promotion/view/${code}`);
-    else if (embedded && onCancel) onCancel();
-    else navigate('/promotion');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/promotion/view/${id}`);
+    if (embedded && onCancel) return onCancel();
+    navigate('/promotion');
   };
 
-  const onSubmit = () => {
-    dispatch(showToast(isEditMode ? `Promotion ${code} updated successfully` : 'Promotion created as a draft', 'success'));
-    if (isEditMode) {
-      navigate(`/promotion/view/${code}`);
-    } else if (embedded && onCreated) {
-      onCreated();
-    } else {
-      navigate('/promotion');
+  const onSubmit = async (values) => {
+    const payload = formValuesToPayload(values);
+    try {
+      const saved = isEditMode
+        ? await updatePromotion({ id, ...payload }).unwrap()
+        : await createPromotion(payload).unwrap();
+
+      dispatch(showToast(isEditMode ? `Promotion ${saved.code} updated successfully` : `Promotion ${saved.code} created successfully`, 'success'));
+      if (onBack) {
+        onBack(saved.id);
+      } else if (isEditMode) {
+        navigate(`/promotion/view/${saved.id}`);
+      } else if (embedded && onCreated) {
+        onCreated(saved.id);
+      } else {
+        navigate('/promotion');
+      }
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the promotion', 'error'));
     }
   };
 
   const handleImport = () => dispatch(showToast('Import Promotion is coming soon', 'info'));
   const handleCancel = handleBack;
-  const handleSelectItems = () => dispatch(showToast('Item/category picker is coming soon', 'info'));
+  const handleOpenPicker = () => setPickerOpen(true);
+  const handleClosePicker = () => setPickerOpen(false);
+  const handleApplyPicker = (values) => {
+    if (appliesTo === 'category') {
+      setValue('selectedCategories', values, { shouldValidate: true });
+    } else {
+      setValue('selectedItems', values, { shouldValidate: true });
+    }
+    setPickerOpen(false);
+  };
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  if (isEditMode && !existingPromotion) {
+  if (isEditMode && isLoadingExisting) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading promotion…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && (loadError || !existingPromotion)) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Promotion not found</Typography>
@@ -140,7 +219,7 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
             <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
               <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
               <MuiLink component={RouterLink} to="/promotion" underline="hover" color="text.secondary">Promotion</MuiLink>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? `Edit ${code}` : 'Create Promotion'}</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{isEditMode ? `Edit ${existingPromotion?.code || ''}` : 'Create Promotion'}</Typography>
             </Breadcrumbs>
           </Box>
           <Stack direction="row" spacing={1}>
@@ -175,7 +254,7 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
             <Grid size={{ xs: 12, lg: 7 }}>
               <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2.5, sm: 3 } }}>
                 <Stack spacing={3.5}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{isEditMode ? `Edit Promotion (${code})` : 'Create Promotion'}</Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{isEditMode ? `Edit Promotion (${existingPromotion?.code || ''})` : 'Create Promotion'}</Typography>
 
                   <PromotionFormSection number={1} title="Promotion Information">
                     <Grid container spacing={2}>
@@ -185,7 +264,7 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           label="Promotion Code"
-                          value="Auto generated"
+                          value={isEditMode ? (existingPromotion?.code || '') : (nextCode.data || 'Generating…')}
                           disabled
                           fullWidth
                           slotProps={{ input: { readOnly: true } }}
@@ -201,20 +280,52 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
                   </PromotionFormSection>
 
                   <PromotionFormSection number={2} title="Applies To">
-                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'center' } }}>
-                      <Box sx={{ width: { xs: '100%', md: 260 }, flexShrink: 0 }}>
-                        <FormSelect name="appliesTo" label="Applies To *" options={APPLIES_TO_OPTIONS} />
-                      </Box>
-                      <RadioGroup
-                        row
-                        value={appliesTo}
-                        onChange={(e) => setValue('appliesTo', e.target.value, { shouldValidate: true })}
-                        sx={{ flexWrap: 'wrap' }}
-                      >
-                        <FormControlLabel value="all" control={<Radio size="small" />} label={<Typography variant="body2">All Items</Typography>} />
-                        <FormControlLabel value="specific" control={<Radio size="small" />} label={<Typography variant="body2">Specific Items</Typography>} />
-                        <FormControlLabel value="category" control={<Radio size="small" />} label={<Typography variant="body2">Category</Typography>} />
-                      </RadioGroup>
+                    <Stack spacing={1.5}>
+                      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'center' } }}>
+                        <Box sx={{ width: { xs: '100%', md: 260 }, flexShrink: 0 }}>
+                          <FormSelect name="appliesTo" label="Applies To *" options={APPLIES_TO_OPTIONS} />
+                        </Box>
+                        <RadioGroup
+                          row
+                          value={appliesTo}
+                          onChange={(e) => setValue('appliesTo', e.target.value, { shouldValidate: true })}
+                          sx={{ flexWrap: 'wrap' }}
+                        >
+                          <FormControlLabel value="all" control={<Radio size="small" />} label={<Typography variant="body2">All Items</Typography>} />
+                          <FormControlLabel value="specific" control={<Radio size="small" />} label={<Typography variant="body2">Specific Items</Typography>} />
+                          <FormControlLabel value="category" control={<Radio size="small" />} label={<Typography variant="body2">Category</Typography>} />
+                        </RadioGroup>
+                      </Stack>
+
+                      {appliesTo === 'all' && (
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          This promotion will apply to every item in the catalog.
+                        </Typography>
+                      )}
+
+                      {(appliesTo === 'specific' || appliesTo === 'category') && (
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+                          <Button variant="outlined" size="small" startIcon={<AddIcon fontSize="small" />} onClick={handleOpenPicker}>
+                            {(appliesTo === 'category' ? selectedCategories : selectedItems)?.length > 0
+                              ? `Change ${appliesTo === 'category' ? 'Categories' : 'Items'}`
+                              : `Select ${appliesTo === 'category' ? 'Categories' : 'Items'}`}
+                          </Button>
+                          {(appliesTo === 'category' ? selectedCategories : selectedItems)?.length > 0 && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              {(appliesTo === 'category' ? selectedCategories : selectedItems).length}{' '}
+                              {appliesTo === 'category' ? 'categor' : 'item'}
+                              {(appliesTo === 'category' ? selectedCategories : selectedItems).length === 1
+                                ? (appliesTo === 'category' ? 'y' : '')
+                                : (appliesTo === 'category' ? 'ies' : 's')} selected
+                            </Typography>
+                          )}
+                          {(errors.selectedItems || errors.selectedCategories) && (
+                            <Typography variant="caption" color="error">
+                              {(appliesTo === 'category' ? errors.selectedCategories : errors.selectedItems)?.message}
+                            </Typography>
+                          )}
+                        </Stack>
+                      )}
                     </Stack>
                   </PromotionFormSection>
 
@@ -235,6 +346,9 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <FormSelect name="maximumUsage" label="Maximum Usage" options={MAXIMUM_USAGE_OPTIONS} />
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                          {MAXIMUM_USAGE_DESCRIPTIONS[maximumUsage]}
+                        </Typography>
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <FormTextField name="minimumBillAmount" label="Minimum Bill Amount (₹)" placeholder="Enter amount" />
@@ -290,19 +404,29 @@ export default function CreatePromotionPage({ embedded = false, onCreated, onCan
                   </PromotionFormSection>
 
                   <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end', pt: 1 }}>
-                    <Button variant="outlined" color="inherit" onClick={handleCancel}>Cancel</Button>
-                    <Button type="submit" variant="contained">{isEditMode ? 'Update Promotion' : 'Save Promotion'}</Button>
+                    <Button variant="outlined" color="inherit" onClick={handleCancel} disabled={isSaving}>Cancel</Button>
+                    <Button type="submit" variant="contained" disabled={isSaving}>
+                      {isSaving ? 'Saving…' : (isEditMode ? 'Update Promotion' : 'Save Promotion')}
+                    </Button>
                   </Stack>
                 </Stack>
               </Paper>
             </Grid>
 
             <Grid size={{ xs: 12, lg: 5 }}>
-              <PromotionPreviewPanel onSelectItems={handleSelectItems} />
+              <PromotionPreviewPanel onSelectItems={handleOpenPicker} />
             </Grid>
           </Grid>
         </Box>
       </FormProvider>
+
+      <PromotionItemPickerDialog
+        open={pickerOpen}
+        mode={appliesTo === 'category' ? 'category' : 'items'}
+        initialSelected={appliesTo === 'category' ? selectedCategories : selectedItems}
+        onApply={handleApplyPicker}
+        onClose={handleClosePicker}
+      />
     </Stack>
   );
 }

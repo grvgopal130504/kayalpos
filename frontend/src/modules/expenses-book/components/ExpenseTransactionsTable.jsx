@@ -1,5 +1,5 @@
 import {
-  Box, Table, TableHead, TableBody, TableRow, TableCell, Chip, Stack, Pagination,
+  Box, Table, TableHead, TableBody, TableRow, TableCell, Chip, Stack, Pagination, Typography,
 } from '@mui/material';
 
 import { formatCurrency } from '../../../utils/format';
@@ -40,18 +40,34 @@ const PAYMENT_MODE_COLORS = {
   Card: { bg: 'rgba(242,107,33,0.14)', color: '#C1560A' },
 };
 
+// `dateTime` arrives as a raw ISO timestamp from the API (Expense.
+// expenseDate) — formatted here, once, same convention as every other
+// cashier-panel transactions table.
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
 /**
  * "Recent Expense Transactions" table — same footer-Total-row + optional
  * page-number Pagination pattern as the other cashier-panel report
  * tables, with a Category chip (colored to match the by-category donut)
  * and a Payment Mode chip in place of the single payment-mode column used
- * elsewhere.
+ * elsewhere. `rows` is one page of real Expense rows from GET /expenses/
+ * summary (see expense.service.js's getExpenseReport); pagination is
+ * server-side (`page`/`totalPages` come straight from that response).
  */
-export default function ExpenseTransactionsTable({ rows, totalPages, page, onPageChange }) {
+export default function ExpenseTransactionsTable({
+  rows, totalPages, page, onPageChange, loading,
+}) {
   const totalAmount = rows.reduce((sum, row) => sum + row.amount, 0);
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
       <Box sx={{ overflowX: 'auto' }}>
         <Table size="small" sx={{ minWidth: 1300 }}>
           <TableHead>
@@ -64,13 +80,22 @@ export default function ExpenseTransactionsTable({ rows, totalPages, page, onPag
             </TableRow>
           </TableHead>
           <TableBody>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={COLUMNS.length} sx={{ textAlign: 'center', py: 3 }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    No expenses were logged on this date yet.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
             {rows.map((row, index) => {
               const categoryChip = CATEGORY_COLORS[row.category] || CATEGORY_COLORS['Office Expenses'];
               const modeChip = PAYMENT_MODE_COLORS[row.paymentMode] || PAYMENT_MODE_COLORS.Cash;
               return (
                 <TableRow key={row.referenceNo} hover>
                   <TableCell sx={{ color: 'text.secondary' }}>{index + 1}</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.dateTime}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(row.dateTime)}</TableCell>
                   <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.referenceNo}</TableCell>
                   <TableCell>
                     <Chip label={row.category} size="small" sx={{ bgcolor: categoryChip.bg, color: categoryChip.color, fontWeight: 700, height: 22 }} />
@@ -82,17 +107,19 @@ export default function ExpenseTransactionsTable({ rows, totalPages, page, onPag
                   <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{formatCurrency(row.amount, { decimals: true })}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.paidTo}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.addedBy}</TableCell>
-                  <TableCell>{row.remarks}</TableCell>
+                  <TableCell>{row.remarks || '—'}</TableCell>
                 </TableRow>
               );
             })}
-            <TableRow sx={{ '& td': { borderBottom: 'none', fontWeight: 800 } }}>
-              <TableCell colSpan={3} />
-              <TableCell>{rows.length}</TableCell>
-              <TableCell colSpan={2} />
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatCurrency(totalAmount, { decimals: true })}</TableCell>
-              <TableCell colSpan={3} />
-            </TableRow>
+            {rows.length > 0 && (
+              <TableRow sx={{ '& td': { borderBottom: 'none', fontWeight: 800 } }}>
+                <TableCell colSpan={3} />
+                <TableCell>{rows.length}</TableCell>
+                <TableCell colSpan={2} />
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatCurrency(totalAmount, { decimals: true })}</TableCell>
+                <TableCell colSpan={3} />
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Box>

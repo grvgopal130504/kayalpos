@@ -41,10 +41,12 @@ function RowActions({ onAction }) {
  * selector, Filters button, the paginated table, and a row-click that loads
  * that return into StockReturnDetailsCard on the right. "accepted" rows are
  * shown with the shared `approved` status color since StatusBadge has no
- * dedicated "accepted" key.
+ * dedicated "accepted" key. Rows are keyed/selected by real `id` (not
+ * `code`) — same convention every other module's table adopted once it was
+ * wired to a real backend (Stock Receipt, Stock Indent, Stock Transfer).
  */
 export default function StockReturnTable({
-  returns, totalCount, selectedCode, onSelectReturn, onRowAction, onFilters,
+  returns, selectedId, onSelectReturn, onRowAction, onFilters,
 }) {
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
@@ -58,13 +60,10 @@ export default function StockReturnTable({
     return r.supplier.toLowerCase().includes(q) || r.code.toLowerCase().includes(q) || r.referenceNo.toLowerCase().includes(q);
   });
 
-  const isFiltering = tab !== 'all' || query.trim().length > 0;
-  const effectiveTotal = isFiltering ? filtered.length : (totalCount ?? filtered.length);
-
-  const pageCount = Math.max(1, Math.ceil(effectiveTotal / pageSize));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount);
-  const rangeStart = effectiveTotal === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const rangeEnd = Math.min(safePage * pageSize, effectiveTotal);
+  const rangeStart = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, filtered.length);
   const visibleRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleTabChange = (v) => { setTab(v); setPage(1); };
@@ -81,7 +80,7 @@ export default function StockReturnTable({
           <Typography
             variant="body2"
             noWrap
-            sx={{ fontWeight: 600, color: row.code === selectedCode ? 'primary.main' : 'text.primary' }}
+            sx={{ fontWeight: 600, color: row.id === selectedId ? 'primary.main' : 'text.primary' }}
           >
             {row.code}
           </Typography>
@@ -176,7 +175,7 @@ export default function StockReturnTable({
         <DataTable
           columns={columns}
           rows={visibleRows}
-          getRowKey={(r) => r.code}
+          getRowKey={(r) => r.id}
           emptyMessage="No returns match your search"
         />
       </Box>
@@ -187,9 +186,9 @@ export default function StockReturnTable({
         sx={{ px: 2, py: 1.5, alignItems: 'center', justifyContent: 'space-between' }}
       >
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {effectiveTotal === 0
+          {filtered.length === 0
             ? 'No entries'
-            : `Showing ${rangeStart} to ${rangeEnd} of ${formatNumber(effectiveTotal)} entries`}
+            : `Showing ${rangeStart} to ${rangeEnd} of ${formatNumber(filtered.length)} entries`}
         </Typography>
         {pageCount > 1 && (
           <Pagination

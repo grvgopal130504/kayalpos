@@ -10,7 +10,6 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 import DataTable from '../../../components/common/DataTable';
 import { formatCurrency } from '../../../utils/format';
-import { RETURNABLE_ITEMS } from '../salesReturnMockData';
 
 const TABS = [
   { key: 'scan', label: 'Scan / Search Item' },
@@ -20,18 +19,26 @@ const TABS = [
 
 const PAGE_SIZE = 6;
 
+// Purely decorative avatar coloring (no business data attached to it) —
+// cycles a fixed palette by row position so items are visually distinct
+// without inventing anything about the item itself.
+const AVATAR_COLORS = ['#F26B21', '#22A06B', '#F5A623', '#2563EB', '#D97706', '#E5484D', '#8B5CF6'];
+
 /**
- * Left-hand panel: items eligible for return from the original invoice.
- * Only items with `returnableQty > 0` can still be added — everything else
- * has already been fully returned. `onAddItem` bumps that item's return
- * cart line (capped at its remaining returnable qty).
+ * Left-hand panel: items eligible for return from the original invoice
+ * that's currently loaded (see SalesReturnPage's `originalInvoice.items`,
+ * fetched from GET /api/sales-returns/lookup/:billNo). Only items with
+ * `returnableQty > 0` can still be added — everything else has already
+ * been fully returned across prior returns against this same invoice.
+ * Rows are keyed by `saleLineId` (the real original SaleLine), not item
+ * code, since that's what the backend actually tracks returns against.
  */
-export default function ReturnItemsPanel({ onAddItem }) {
+export default function ReturnItemsPanel({ items, onAddItem }) {
   const [tab, setTab] = useState('scan');
   const [query, setQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  const filtered = RETURNABLE_ITEMS.filter((item) => {
+  const filtered = items.filter((item) => {
     const q = query.trim().toLowerCase();
     if (!q) return true;
     return item.name.toLowerCase().includes(q) || item.code.toLowerCase().includes(q);
@@ -39,49 +46,60 @@ export default function ReturnItemsPanel({ onAddItem }) {
   const visibleItems = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;
 
+  // Explicit widths (summing to 100%) so the table always fits the panel —
+  // see DataTable's `fitContainer` doc comment.
   const columns = [
-    { key: 'index', label: '#', render: (_row, i) => i + 1 },
+    { key: 'index', label: '#', width: '5%', render: (_row, i) => i + 1 },
     {
       key: 'item',
       label: 'Item Details',
-      render: (row) => (
-        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-          <Avatar variant="rounded" sx={{ bgcolor: row.color, width: 34, height: 34, fontSize: 14, fontWeight: 700 }}>
-            {row.initial}
+      width: '35%',
+      wrap: true,
+      render: (row, i) => (
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
+          <Avatar variant="rounded" sx={{ bgcolor: AVATAR_COLORS[i % AVATAR_COLORS.length], width: 34, height: 34, fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
+            {row.name.charAt(0).toUpperCase()}
           </Avatar>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{row.name}</Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{row.code}</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.25 }}>{row.name}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>{row.code}</Typography>
           </Box>
         </Stack>
       ),
     },
-    { key: 'batch', label: 'Batch / Serial', render: (row) => row.batch },
-    { key: 'uom', label: 'UOM', render: (row) => row.uom },
-    { key: 'saleQty', label: 'Sale Qty', render: (row) => `${row.saleQty} ${row.uom}` },
     {
-      key: 'returnableQty',
-      label: 'Returnable Qty',
+      key: 'qty',
+      label: 'Sold / Returnable',
+      width: '30%',
+      wrap: true,
       render: (row) => (
-        <Typography variant="body2" sx={{ fontWeight: 700, color: row.returnableQty > 0 ? 'success.main' : 'text.disabled' }}>
-          {row.returnableQty} {row.uom}
-        </Typography>
+        <Box>
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+            Sold: {row.saleQty} {row.uom}
+          </Typography>
+          <Typography variant="body2" sx={{ fontWeight: 700, color: row.returnableQty > 0 ? 'success.main' : 'text.disabled' }}>
+            Returnable: {row.returnableQty} {row.uom}
+          </Typography>
+        </Box>
       ),
     },
     {
       key: 'mrp',
       label: 'MRP',
-      render: (row) => formatCurrency(row.mrp, { decimals: true }),
+      width: '18%',
+      wrap: true,
+      render: (row) => <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatCurrency(row.mrp, { decimals: true })}</Typography>,
     },
     {
       key: 'add',
       label: '',
       align: 'right',
+      width: '12%',
       render: (row) => (
         <IconButton
           size="small"
           disabled={row.returnableQty <= 0}
-          onClick={() => onAddItem(row.code)}
+          onClick={() => onAddItem(row.saleLineId)}
           sx={{
             bgcolor: 'rgba(242,107,33,0.1)',
             color: 'primary.main',
@@ -119,7 +137,7 @@ export default function ReturnItemsPanel({ onAddItem }) {
           <TextField
             fullWidth
             size="small"
-            placeholder="Scan barcode or search item…"
+            placeholder="Search item by name or code…"
             value={query}
             onChange={(e) => { setQuery(e.target.value); setVisibleCount(PAGE_SIZE); }}
             slotProps={{
@@ -146,12 +164,13 @@ export default function ReturnItemsPanel({ onAddItem }) {
       </Box>
 
       <Box sx={{ px: 2, pb: 2, flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
           <DataTable
             columns={columns}
             rows={visibleItems}
-            getRowKey={(r) => r.code}
-            emptyMessage="No items match your search"
+            getRowKey={(r) => r.saleLineId}
+            emptyMessage={items.length === 0 ? 'Find an original invoice to see its items' : 'No items match your search'}
+            fitContainer
           />
         </Box>
 

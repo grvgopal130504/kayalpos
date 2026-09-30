@@ -7,10 +7,10 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import StoreIcon from '@mui/icons-material/Store';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import loginImage from '../../../assets/Login Image.png';
+import AppLogo from '../../../components/common/AppLogo';
 
 const FEATURES = [
-  { icon: BoltIcon, label: 'Fast Billing' },
+  { icon: BoltIcon, label: 'Fast\nBilling' },
   { icon: Inventory2Icon, label: 'Smart Inventory' },
   { icon: InsightsIcon, label: 'Real-time Reports' },
   { icon: GroupsIcon, label: 'Happy Customers' },
@@ -24,41 +24,19 @@ const STATS = [
 ];
 
 /**
- * Full-bleed left half of the login screen (desktop only — LoginPage hides it
- * below `md`). The product photo fills the entire panel edge-to-edge as a
- * background layer; the headline, feature icons, stats bar and copyright sit
- * on top of it (each on its own translucent/blurred card) so the text stays
- * readable no matter what part of the image is behind it.
+ * Text/branding overlay for the login screen's full-bleed background photo
+ * (the photo itself, plus the readability scrim behind this, are rendered
+ * once by LoginPage so they can span the *entire* viewport — including the
+ * area behind the floating login card — rather than just this panel).
+ * Desktop only (LoginPage hides this below `md`). The brand mark, headline,
+ * feature icons, stats bar and copyright each sit on their own
+ * translucent/blurred card so the text stays readable no matter what part
+ * of the image is behind it.
  */
 export default function LoginMarketingPanel() {
   return (
-    <Box
-      sx={{
-        position: 'relative',
-        height: '100%',
-        width: '100%',
-        overflow: 'hidden',
-        bgcolor: 'background.paper',
-      }}
-    >
-      {/* Background photo — full panel, cropped (never letterboxed) so it
-          always fills the width and height with no gaps. */}
-      <Box
-        component="img"
-        src={loginImage}
-        alt="Kayal Agro Foods products"
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          objectPosition: 'center',
-          zIndex: 0,
-        }}
-      />
-
-      {/* Content — layered above the photo. */}
+    <Box sx={{ position: 'relative', height: '100%', width: '100%' }}>
+      {/* Content — layered above the photo (painted by the parent). */}
       <Stack
         sx={{
           position: 'relative',
@@ -66,36 +44,28 @@ export default function LoginMarketingPanel() {
           height: '100%',
           width: '100%',
           justifyContent: 'space-between',
-          py: { md: 2, lg: 3 },
+          py: 2,
         }}
       >
         {/* Copy */}
         <Box
           sx={{
             width: '100%',
-            maxWidth: { md: 780, xl: 940 },
+            maxWidth: 780,
             mx: 'auto',
-            px: { md: 4, lg: 6 },
+            px: 12,
           }}
         >
-          <Box
-            sx={{
-              display: 'inline-block',
-              // bgcolor: 'rgba(255, 255, 255, 0)',
-              // backdropFilter: 'blur(6px)',
-              borderRadius: 1,
-              px: 1.75,
-              py: 1.25,
-              borderColor: 'divider',
-              // boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-            }}
-          >
+            <Box sx={{ mb: 0.75 }}>
+              <AppLogo iconSize={40} titleFontSize="1.25rem" subtitleFontSize="0.70rem" />
+            </Box>
             <Typography
               sx={{
                 fontWeight: 800,
-                color: 'text.primary',
+                color: '#2c2b2b',
                 lineHeight: 1.2,
-                fontSize: { md: '1.3rem', lg: '1.5rem' },
+                fontSize: '1.35rem',
+                textShadow: '0 1px 6px rgba(255,255,255,0.85), 0 1px 3px rgba(255,255,255,0.85)',
               }}
             >
               Empowering Your Business
@@ -105,7 +75,8 @@ export default function LoginMarketingPanel() {
                 fontWeight: 800,
                 color: 'primary.main',
                 lineHeight: 1.2,
-                fontSize: { md: '1.3rem', lg: '1.5rem' },
+                fontSize: '1.35rem',
+                textShadow: '0 1px 6px rgba(255,255,255,0.85), 0 1px 3px rgba(255,255,255,0.85)',
               }}
             >
               Every Sale. Every Day.
@@ -115,7 +86,8 @@ export default function LoginMarketingPanel() {
                 mt: 0.75,
                 color: 'text.secondary',
                 maxWidth: 470,
-                fontSize: { md: '0.8rem', lg: '0.875rem' },
+                fontSize: '0.8125rem',
+                textShadow: '0 1px 6px rgba(255,255,255,0.85), 0 1px 3px rgba(255,255,255,0.85)',
               }}
             >
               Smart POS solutions to simplify billing,
@@ -124,25 +96,26 @@ export default function LoginMarketingPanel() {
               sx={{
                 color: 'text.secondary',
                 maxWidth: 470,
-                fontSize: { md: '0.8rem', lg: '0.875rem' },
+                fontSize: '0.8125rem',
+                textShadow: '0 1px 6px rgba(255,255,255,0.85), 0 1px 3px rgba(255,255,255,0.85)',
               }}
             >
               inventory and grow your business.
             </Typography>
-          </Box>
 
-          <Stack
-            direction="row"
-            spacing={{ md: 2, lg: 2.5 }}
-            useFlexGap
-            sx={{ mt: { md: 1.25, lg: 1.5 }, flexWrap: 'wrap' }}
-          >
+            <Stack
+              direction="row"
+              spacing={2.25}
+              useFlexGap
+              sx={{ mt: 1.4, flexWrap: 'wrap' }}
+            >
             {FEATURES.map(({ icon: Icon, label }) => (
-              <Stack key={label} spacing={0.5} sx={{ width: 50, alignItems: 'center', mt: "-5px" }}>
+              <Stack key={label} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Box
                   sx={{
-                    width: 38,
-                    height: 38,
+                    flexShrink: 0,
+                    width: 32,
+                    height: 32,
                     borderRadius: '50%',
                     border: '2px solid',
                     borderColor: 'primary.main',
@@ -158,14 +131,15 @@ export default function LoginMarketingPanel() {
                 </Box>
                 <Typography
                   variant="caption"
-                  align="center"
+                  align="left"
                   sx={{
                     color: '#313030',
                     fontWeight: 600,
                     lineHeight: 1.2,
                     fontSize: 11,
                     borderRadius: 0.75,
-                    px: 0.5,
+                    maxWidth: 64,
+                    whiteSpace: 'pre-line',
                   }}
                 >
                   {label}
@@ -183,24 +157,32 @@ export default function LoginMarketingPanel() {
         <Box
           sx={{
             width: '100%',
-            maxWidth: { md: 780, xl: 940 },
+            maxWidth: 780,
             mx: 'auto',
-            px: { md: 4, lg: 6 },
+            px: 4,
           }}
         >
           <Paper
             elevation={0}
             sx={{
               display: 'flex',
-              justifyContent: 'space-between',
-              px: { md: 2, lg: 3 },
-              py: { md: 1, lg: 1.25 },
-              borderRadius: 3,
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+              gap: 3,
+              mx: 'auto',
+              width: 'fit-content',
+              maxWidth: '100%',
+              px: 3.5,
+              py: 1.4,
+              borderRadius: 4,
+              // Glassmorphism: low-opacity white + heavy blur/saturation so
+              // the photo behind still reads through, a soft outer shadow
+              // for lift, and a bright inset top edge to sell the "glass"
+              // highlight you'd see on a real frosted pane.
               bgcolor: 'rgba(255, 255, 255, 0)',
-              backdropFilter: 'blur(2px)',
-              border: '1px solid',
-              borderColor: 'divider',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+              backdropFilter: 'blur(4px)',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.6)',
             }}
           >
             {STATS.map(({ icon: Icon, value, label }) => (

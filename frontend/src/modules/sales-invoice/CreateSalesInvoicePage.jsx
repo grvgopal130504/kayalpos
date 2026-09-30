@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,104 +20,126 @@ import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
-import { CUSTOMERS } from '../customer/customerMockData';
+import { useGetCustomersQuery } from '../../api/customerApi';
+import { useGetProductsQuery } from '../../api/productApi';
+import { useGetSalesOrdersQuery } from '../../api/salesOrderApi';
+import { useGetSalesQuotationsQuery } from '../../api/salesQuotationApi';
+import {
+  useGetSalesInvoiceQuery, useNextSalesInvoiceCodeQuery,
+  useCreateSalesInvoiceMutation, useUpdateSalesInvoiceMutation,
+} from '../../api/salesInvoiceApi';
 
 import InvoiceItemsTable from './components/InvoiceItemsTable';
 import InvoiceTotalsCard from './components/InvoiceTotalsCard';
 import InvoiceTermsAndNotes, { DEFAULT_TERMS } from './components/InvoiceTermsAndNotes';
-import { INVOICES, getInvoiceDetails } from './salesInvoiceMockData';
 import {
-  createSalesInvoiceSchema, createSalesInvoiceDefaultValues,
-  CUSTOMER_OPTIONS, CONTACT_PERSON_OPTIONS, PAYMENT_TERMS_OPTIONS, SALES_PERSON_OPTIONS,
-  CURRENCY_OPTIONS, PRICE_LIST_OPTIONS, SALES_ORDER_OPTIONS, QUOTATION_REFERENCE_OPTIONS,
+  createSalesInvoiceSchema, createSalesInvoiceDefaultValues, emptyItemRow, isBlankItemRow,
+  CONTACT_PERSON_OPTIONS, PAYMENT_TERMS_OPTIONS, SALES_PERSON_OPTIONS,
+  CURRENCY_OPTIONS, PRICE_LIST_OPTIONS,
 } from './createSalesInvoiceSchema';
-
-function nextInvoiceCode() {
-  const maxNum = INVOICES.reduce((max, inv) => Math.max(max, Number(inv.code.slice(4))), 0);
-  return `INV-${String(maxNum + 1).padStart(5, '0')}`;
-}
-
-// The mock detail record only carries the customer's name, not their code —
-// best-effort match it back to a CUSTOMERS row so the Customer select can be
-// prefilled in edit mode; falls back to blank (still selectable manually)
-// when no match is found.
-function findCustomerIdByName(name) {
-  const match = CUSTOMERS.find((c) => c.name === name);
-  return match ? match.code : '';
-}
-
-function itemToRow(item) {
-  const lineTotal = item.qty * item.unitPrice;
-  const discountPercent = lineTotal > 0 ? Math.round((item.discount / lineTotal) * 10000) / 100 : 0;
-  return {
-    itemCode: item.code,
-    itemName: item.name,
-    hsnCode: item.hsn,
-    qty: String(item.qty),
-    unit: '',
-    unitPrice: String(item.unitPrice),
-    discountPercent: discountPercent ? String(discountPercent) : '',
-    taxCode: '',
-  };
-}
+import { invoiceToFormValues, formValuesToPayload } from './salesInvoiceDisplay';
 
 /**
- * "New Sales Invoice" screen, also doubling as the Edit Invoice page when
- * reached via `/sales-invoice/edit/:code` — the Sales Invoice module has no
- * backend yet, so "editing" prefills from getInvoiceDetails() the same way
- * the Overview/Status pages' own detail panel does. Matches the reference
- * design's full create form: Customer Details (narrower left card) +
- * Invoice Details (wider right card, laid out 3-fields-per-row instead of
- * the 2-per-row used on the Quotation/Order forms), a full-width editable
- * line-items grid, and a 3-column row below it (Terms & Conditions / Notes /
- * Summary totals) — unlike Quotation/Order, the totals card sits beside
- * Terms & Notes here rather than beside the items grid, matching the
- * reference layout.
+ * "New Sales Invoice" screen, also doubling as the Edit Invoice form when
+ * SalesInvoicePage renders it with an `id` prop — everything (list, create,
+ * edit, view) lives on the one /sales-invoice page. Fully wired to the real
+ * backend (see backend/src/modules/sales-invoice): Customer comes from the
+ * real Customer table, the Invoice No. is a live preview of the next real
+ * code, "Sales Order" lists real confirmed/delivered Sales Orders,
+ * "Quotation Reference" lists real converted Sales Quotations, and both
+ * "Save as Draft" and "Save & Send" actually create/update a SalesInvoice
+ * row with the same validations enforced again server-side.
  *
- * Two fields in the reference get an inline "+" add button (Sales Order,
- * Quotation Reference), same pattern as the Customer field. Invoice No.
- * is read-only with a settings-gear adornment (numbering configuration)
- * instead of a plain disabled field. Saving is mocked (no Sales Invoice
- * backend module yet).
+ * Matches the reference design's layout exactly: Customer Details (narrower
+ * left card) + Invoice Details (wider right card, 3-fields-per-row), a
+ * full-width editable line-items grid, and a 3-column row below it (Terms &
+ * Conditions / Notes / Summary totals).
  */
-export default function CreateSalesInvoicePage({ onBack }) {
+export default function CreateSalesInvoicePage({ id: propId, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
-  const isEditMode = Boolean(code);
-  const existingInvoice = isEditMode ? getInvoiceDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const invoiceCode = useMemo(() => (isEditMode ? code : nextInvoiceCode()), [isEditMode, code]);
+
+  const { data: customers = [] } = useGetCustomersQuery({});
+  const { data: products = [] } = useGetProductsQuery({});
+  const { data: orders = [] } = useGetSalesOrdersQuery({});
+  const { data: quotations = [] } = useGetSalesQuotationsQuery({});
+  const { data: existingInvoice, isLoading: isLoadingExisting, isError: loadError } = useGetSalesInvoiceQuery(id, { skip: !isEditMode });
+  const nextCode = useNextSalesInvoiceCodeQuery(undefined, { skip: isEditMode });
+  const [createSalesInvoice, { isLoading: isCreating }] = useCreateSalesInvoiceMutation();
+  const [updateSalesInvoice, { isLoading: isUpdating }] = useUpdateSalesInvoiceMutation();
+  const isSaving = isCreating || isUpdating;
+
+  const customerOptions = useMemo(() => [
+    { value: '', label: 'Select Customer', disabled: true },
+    ...customers.map((c) => ({ value: c.id, label: c.name })),
+  ], [customers]);
+  const customerById = useMemo(() => Object.fromEntries(customers.map((c) => [c.id, c])), [customers]);
+
+  // Only orders already marked confirmed/delivered can be invoiced against —
+  // same restriction the old mock data applied.
+  const salesOrderOptions = useMemo(() => [
+    { value: '', label: 'Select Sales Order' },
+    ...orders.filter((o) => o.status === 'confirmed' || o.status === 'delivered').map((o) => ({ value: o.code, label: o.code })),
+  ], [orders]);
+
+  // Only quotations already marked 'converted' by Sales Quotation's own
+  // live-computed status can be referenced here directly.
+  const quotationRefOptions = useMemo(() => [
+    { value: '', label: 'Select Quotation' },
+    ...quotations.filter((q) => q.status === 'converted').map((q) => ({ value: q.code, label: q.code })),
+  ], [quotations]);
+
+  const invoiceCode = isEditMode ? existingInvoice?.code : nextCode.data;
 
   const methods = useForm({
     resolver: zodResolver(createSalesInvoiceSchema),
-    defaultValues: existingInvoice
-      ? {
-          ...createSalesInvoiceDefaultValues,
-          customerId: findCustomerIdByName(existingInvoice.customer.name),
-          mobile: existingInvoice.customer.mobile,
-          email: existingInvoice.customer.email,
-          address: existingInvoice.customer.address,
-          invoiceDate: existingInvoice.date,
-          dueDate: existingInvoice.dueDate,
-          salesOrderRef: existingInvoice.ref && existingInvoice.ref.startsWith('SO-') ? existingInvoice.ref : '',
-          paymentTerms: (existingInvoice.paymentTerms || '').toLowerCase(),
-          salesPerson: (existingInvoice.salesPerson || '').toLowerCase(),
-          items: existingInvoice.items?.length ? existingInvoice.items.map(itemToRow) : createSalesInvoiceDefaultValues.items,
-        }
-      : createSalesInvoiceDefaultValues,
+    defaultValues: createSalesInvoiceDefaultValues,
     mode: 'onTouched',
   });
-  const { handleSubmit } = methods;
+  const { watch, reset, handleSubmit, setValue } = methods;
+
+  // The edit-mode fetch is async, so the form can't be seeded via useForm's
+  // defaultValues (that only runs once, before the data exists) — reset()
+  // re-seeds every field once the real invoice row arrives.
+  useEffect(() => {
+    if (existingInvoice) reset(invoiceToFormValues(existingInvoice, emptyItemRow));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingInvoice]);
+
+  // Prefilling Mobile/Email/Address from the selected customer's own record
+  // is a convenience, not a requirement — the invoice stores its own
+  // snapshot of these fields (matching Sale/Sales Quotation/Sales Order's
+  // own "frozen at save time" rule), so the user can still edit them
+  // per-invoice afterwards. Skips the very first render (including the
+  // reset() above landing on an existing customerId) so it only fires on an
+  // actual manual selection.
+  const customerId = watch('customerId');
+  const isFirstCustomerRender = useRef(true);
+  useEffect(() => {
+    if (isFirstCustomerRender.current) {
+      isFirstCustomerRender.current = false;
+      return;
+    }
+    const customer = customerById[customerId];
+    if (!customer) return;
+    setValue('mobile', customer.mobile || '');
+    setValue('email', customer.email || '');
+    setValue('address', customer.address || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
 
   const handleBack = () => {
-    if (isEditMode) navigate(`/sales-invoice/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/sales-invoice/overview');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/sales-invoice/view/${id}`);
+    navigate('/sales-invoice');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
-  const handleAddCustomer = () => navigate('/customer/add');
+  const handleAddCustomer = () => navigate('/customer');
   const handleAddSalesOrder = () => dispatch(showToast('Sales Order picker is coming soon', 'info'));
   const handleAddQuotation = () => dispatch(showToast('Quotation picker is coming soon', 'info'));
   const handleAddItem = () => dispatch(showToast('Item picker is coming soon', 'info'));
@@ -126,16 +148,42 @@ export default function CreateSalesInvoicePage({ onBack }) {
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Invoice ${invoiceCode} updated successfully` : `Invoice ${invoiceCode} saved as draft`, 'success'));
-    handleBack();
-  });
-  const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Invoice ${invoiceCode} updated successfully` : `Invoice ${invoiceCode} saved and sent`, 'success'));
-    handleBack();
-  });
+  const save = async (values, status) => {
+    const payload = formValuesToPayload(values, { status, isBlankItemRow });
+    try {
+      const saved = isEditMode
+        ? await updateSalesInvoice({ id, ...payload }).unwrap()
+        : await createSalesInvoice(payload).unwrap();
+      dispatch(showToast(
+        isEditMode
+          ? `Invoice ${saved.code} updated successfully`
+          : `Invoice ${saved.code} ${status === 'draft' ? 'saved as draft' : 'saved and sent'}`,
+        'success',
+      ));
+      if (onBack) onBack(saved.id);
+      else if (isEditMode) navigate(`/sales-invoice/view/${saved.id}`);
+      else navigate('/sales-invoice');
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the invoice', 'error'));
+    }
+  };
 
-  if (isEditMode && !existingInvoice) {
+  // Editing an already-'sent' (or overdue) invoice keeps saving as 'sent' —
+  // only a genuine draft edit stays a draft, same rule Sales Quotation's own
+  // edit-status logic follows.
+  const editingStatus = existingInvoice?.dbStatus === 'draft' ? 'draft' : 'sent';
+  const onSaveAsDraft = handleSubmit((values) => save(values, isEditMode ? editingStatus : 'draft'));
+  const onSaveAndSend = handleSubmit((values) => save(values, 'sent'));
+
+  if (isEditMode && isLoadingExisting) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading invoice…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && (loadError || !existingInvoice)) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Invoice not found</Typography>
@@ -150,7 +198,7 @@ export default function CreateSalesInvoicePage({ onBack }) {
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Sales Invoice (Edit ${invoiceCode})` : 'Sales Invoice (New)'}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Sales Invoice (Edit ${invoiceCode || ''})` : 'Sales Invoice (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/sales-invoice" underline="hover" color="text.secondary">Sales Invoice</MuiLink>
@@ -175,19 +223,19 @@ export default function CreateSalesInvoicePage({ onBack }) {
           <Menu anchorEl={moreActionsAnchor} open={Boolean(moreActionsAnchor)} onClose={() => setMoreActionsAnchor(null)}>
             <MenuItem onClick={() => handleMoreAction('Save as Template')}>Save as Template</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
-            <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
+            <MenuItem onClick={() => reset(createSalesInvoiceDefaultValues)}>Reset Form</MenuItem>
           </Menu>
           {isEditMode ? (
-            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-              Update Invoice
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
+              {isSaving ? 'Saving…' : 'Update Invoice'}
             </Button>
           ) : (
             <>
-              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
-                Save as Draft
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
+                {isSaving ? 'Saving…' : 'Save as Draft'}
               </Button>
-              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
-                Save &amp; Send
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend} disabled={isSaving}>
+                {isSaving ? 'Saving…' : 'Save & Send'}
               </Button>
             </>
           )}
@@ -203,7 +251,7 @@ export default function CreateSalesInvoicePage({ onBack }) {
                 <Stack spacing={2}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <FormSelect name="customerId" label="Customer *" options={CUSTOMER_OPTIONS} />
+                      <FormSelect name="customerId" label="Customer *" options={customerOptions} />
                     </Box>
                     <IconButton
                       onClick={handleAddCustomer}
@@ -228,7 +276,7 @@ export default function CreateSalesInvoicePage({ onBack }) {
                   <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                     <TextField
                       label="Invoice No."
-                      value={invoiceCode}
+                      value={invoiceCode || 'Generating…'}
                       disabled
                       fullWidth
                       slotProps={{
@@ -249,7 +297,7 @@ export default function CreateSalesInvoicePage({ onBack }) {
                   <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <FormSelect name="salesOrderRef" label="Sales Order" options={SALES_ORDER_OPTIONS} />
+                        <FormSelect name="salesOrderRef" label="Sales Order" options={salesOrderOptions} />
                       </Box>
                       <IconButton
                         onClick={handleAddSalesOrder}
@@ -263,7 +311,7 @@ export default function CreateSalesInvoicePage({ onBack }) {
                   <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <FormSelect name="quotationRef" label="Quotation Reference" options={QUOTATION_REFERENCE_OPTIONS} />
+                        <FormSelect name="quotationRef" label="Quotation Reference" options={quotationRefOptions} />
                       </Box>
                       <IconButton
                         onClick={handleAddQuotation}
@@ -304,7 +352,7 @@ export default function CreateSalesInvoicePage({ onBack }) {
 
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
-            <InvoiceItemsTable onAddItem={handleAddItem} />
+            <InvoiceItemsTable onAddItem={handleAddItem} products={products} />
           </Paper>
 
           <BottomRow />

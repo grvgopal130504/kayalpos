@@ -34,7 +34,7 @@ export default function UomGroupTable({ rows, onViewRow, onEditRow, onDeleteRow 
         </TableHead>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={row.code} hover>
+            <TableRow key={row.id} hover>
               <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.description}</TableCell>

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AddIcon from '@mui/icons-material/Add';
@@ -14,47 +14,119 @@ import { showToast } from '../../features/ui/uiSlice';
 import LoyaltySummaryCards from './components/LoyaltySummaryCards';
 import LoyaltyTable from './components/LoyaltyTable';
 import LoyaltyDetailsCard from './components/LoyaltyDetailsCard';
-import { SUMMARY, PROGRAMS, TOTAL_PROGRAM_COUNT, PROGRAM_DETAILS } from './loyaltyMockData';
-
-const PROGRAM_BY_CODE = Object.fromEntries(PROGRAMS.map((p) => [p.code, p]));
+import CreateLoyaltyProgramPage from './CreateLoyaltyProgramPage';
+import LoyaltyViewPage from './LoyaltyViewPage';
+import {
+  useGetLoyaltyProgramsQuery, useDeleteLoyaltyProgramMutation, useUpdateLoyaltyProgramMutation,
+} from '../../api/loyaltyApi';
+import { toLoyaltyRow, toLoyaltyDetails, buildLoyaltySummary } from './loyaltyDisplay';
 
 /**
  * Landing page for the sidebar's Loyalty item — summary tiles, the program
- * list with a detail panel for whichever row is selected. "Create Loyalty
- * Program" navigates to its own dedicated page. The Loyalty backend module
- * doesn't exist yet, so everything is driven by loyaltyMockData.js —
- * selecting a row other than LP-0001 falls back to reusing PROGRAM_DETAILS'
- * shape (only name/code/rules/status differ) since we don't have full mock
- * detail records for every row.
+ * list with a detail panel for whichever row is selected, and
+ * Create/Edit/View swapped in via local state. Fully wired to the backend
+ * (see backend/src/modules/loyalty): every tile, row and detail field comes
+ * from the real LoyaltyProgram table, so an empty table honestly shows
+ * zeros instead of this page's old static mock numbers.
+ *
+ * "Members Enrolled"/"Points Issued"/"Points Redeemed" are computed from the
+ * real `membersEnrolled`/`pointsIssuedTillDate`/`pointsRedeemedTillDate`
+ * columns, which all read 0 today — nothing in the app enrolls a customer or
+ * posts loyalty points at checkout yet (Line Sale has no "earn/redeem
+ * points" step). Once that wiring exists, these tiles update on their own.
  */
 export default function LoyaltyPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
+  const [mode, setMode] = useState('list');
+  const [activeId, setActiveId] = useState(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
-  const [selectedCode, setSelectedCode] = useState(PROGRAM_DETAILS.code);
+  const [selectedId, setSelectedId] = useState(null);
 
-  const selectedRow = PROGRAM_BY_CODE[selectedCode];
-  const programDetails = selectedCode === PROGRAM_DETAILS.code
-    ? PROGRAM_DETAILS
-    : {
-        ...PROGRAM_DETAILS,
-        code: selectedRow.code,
-        name: selectedRow.name,
-        status: selectedRow.status,
-        membershipValidity: selectedRow.membershipValidity,
-        members: selectedRow.members,
-      };
+  const { data: programs = [], isLoading, isError } = useGetLoyaltyProgramsQuery({});
+  const [deleteLoyaltyProgram] = useDeleteLoyaltyProgramMutation();
+  const [updateLoyaltyProgram] = useUpdateLoyaltyProgramMutation();
 
-  const handleSelectProgram = (row) => setSelectedCode(row.code);
-  const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/loyalty/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/loyalty/edit/${row.code}`);
+  const programById = useMemo(() => Object.fromEntries(programs.map((p) => [p.id, p])), [programs]);
+  const rows = useMemo(() => programs.map(toLoyaltyRow), [programs]);
+  const summary = useMemo(() => buildLoyaltySummary(programs), [programs]);
+
+  const goToList = () => { setActiveId(null); setMode('list'); };
+  const openEdit = (id) => { setActiveId(id); setMode('edit'); };
+  const openView = (id) => { setActiveId(id); setMode('view'); };
+
+  if (mode === 'create' || mode === 'edit') {
+    return (
+      <CreateLoyaltyProgramPage
+        id={mode === 'edit' ? activeId : undefined}
+        onBack={(savedId) => {
+          if (savedId) setSelectedId(savedId);
+          if (mode === 'edit') return openView(savedId || activeId);
+          return goToList();
+        }}
+      />
+    );
+  }
+
+  if (mode === 'view') {
+    return <LoyaltyViewPage id={activeId} onBack={goToList} onEdit={() => openEdit(activeId)} />;
+  }
+
+  const selectedProgram = (selectedId && programById[selectedId]) || programs[0] || null;
+  const programDetails = selectedProgram ? toLoyaltyDetails(selectedProgram) : null;
+
+  const handleSelectProgram = (row) => setSelectedId(row.id);
+  const handleRowAction = async (label, row) => {
+    if (label === 'View') return openView(row.id);
+    if (label === 'Edit') return openEdit(row.id);
+    if (label === 'Delete') {
+      try {
+        await deleteLoyaltyProgram(row.id).unwrap();
+        dispatch(showToast(`Loyalty program "${row.name}" deleted`, 'success'));
+        if (selectedId === row.id) setSelectedId(null);
+      } catch (err) {
+        dispatch(showToast(err?.data?.message || 'Failed to delete the loyalty program', 'error'));
+      }
+      return undefined;
+    }
+    if (label === 'Deactivate') {
+      const existing = programById[row.id];
+      if (!existing) return undefined;
+      try {
+        await updateLoyaltyProgram({
+          id: row.id,
+          programName: existing.name,
+          description: existing.description || '',
+          status: 'Inactive',
+          earnPointsOn: existing.earnPointsOn,
+          pointsType: existing.pointsType,
+          pointsValue: Number(existing.pointsValue),
+          redemptionType: existing.redemptionType,
+          redemptionValue: Number(existing.redemptionValue),
+          minimumPointsRequired: existing.minimumPointsRequired,
+          maximumDiscountPerTransaction: Number(existing.maximumDiscountPerTransaction),
+          applyOn: existing.applyOn,
+          membershipValidity: existing.membershipValidity,
+          validityPeriodMonths: existing.validityPeriodMonths,
+          pointsExpiry: existing.pointsExpiry,
+          welcomePointsEnabled: existing.welcomePointsEnabled,
+          welcomePointsValue: existing.welcomePointsValue,
+          allowPointsRedemption: existing.allowPointsRedemption,
+          showLoyaltyDetailsInInvoice: existing.showLoyaltyDetailsInInvoice,
+          allowNegativePoints: existing.allowNegativePoints,
+          pointsExpiryNotification: existing.pointsExpiryNotification,
+        }).unwrap();
+        dispatch(showToast(`Loyalty program "${row.name}" deactivated`, 'success'));
+      } catch (err) {
+        dispatch(showToast(err?.data?.message || 'Failed to deactivate the loyalty program', 'error'));
+      }
+      return undefined;
+    }
     return dispatch(showToast(`${label} "${row.name}" is coming soon`, 'info'));
   };
   const handleImport = () => dispatch(showToast('Import Programs is coming soon', 'info'));
-  const handleCreate = () => navigate('/loyalty/create');
+  const handleCreate = () => setMode('create');
   const handleFilters = () => dispatch(showToast('Filters are coming soon', 'info'));
-  const handleEdit = () => dispatch(showToast('Edit Loyalty Program is coming soon', 'info'));
+  const handleEdit = () => selectedProgram && openEdit(selectedProgram.id);
   const handleMoreAction = (label) => {
     setMoreActionsAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
@@ -93,15 +165,15 @@ export default function LoyaltyPage() {
         </Stack>
       </Stack>
 
-      <LoyaltySummaryCards summary={SUMMARY} />
+      <LoyaltySummaryCards summary={summary} />
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <LoyaltyTable
-              programs={PROGRAMS}
-              totalCount={TOTAL_PROGRAM_COUNT}
-              selectedCode={selectedCode}
+              programs={rows}
+              totalCount={rows.length}
+              selectedId={programDetails?.id}
               onSelectProgram={handleSelectProgram}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -110,7 +182,17 @@ export default function LoyaltyPage() {
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: { lg: 560 } }}>
-            <LoyaltyDetailsCard program={programDetails} onEdit={handleEdit} />
+            {isLoading ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>Loading loyalty programs…</Typography>
+            ) : isError ? (
+              <Typography variant="body2" color="error" sx={{ p: 2 }}>Failed to load loyalty programs.</Typography>
+            ) : programDetails ? (
+              <LoyaltyDetailsCard program={programDetails} onEdit={handleEdit} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No loyalty programs yet — create one to get started.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

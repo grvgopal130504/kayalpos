@@ -1,84 +1,117 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton,
-  Stack, Typography, Button, Grid, TextField, MenuItem,
+  Stack, Typography, Button, Grid, TextField, CircularProgress,
 } from '@mui/material';
+import { FormProvider, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import CloseIcon from '@mui/icons-material/Close';
-import ReceiptOutlinedIcon from '@mui/icons-material/ReceiptOutlined';
+import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
 
 import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
-import { CATEGORY_OPTIONS } from '../brandMockData';
-
-const EMPTY_VALUES = { code: '', name: '', description: '', category: CATEGORY_OPTIONS[0], status: 'Active' };
+import FormTextField from '../../../../components/form/FormTextField';
+import FormSelect from '../../../../components/form/FormSelect';
+import { useCreateBrandMutation, useUpdateBrandMutation, useNextBrandCode } from '../../../../api/brandApi';
+import {
+  createBrandSchema, createBrandDefaultValues, brandToFormValues, brandFormValuesToPayload, STATUS_OPTIONS,
+} from '../createBrandSchema';
 
 /**
- * Add/Edit dialog for the Brand master. No Brand backend module exists
- * yet, so Save/Update just toasts and closes.
+ * Add/Edit dialog for the Brand master, backed by the real Brand API (see
+ * api/brandApi.js) — same react-hook-form + zod shape as the Product/
+ * Outlet/Warehouse forms (FormTextField/FormSelect + inline per-field
+ * errors), validated against the same rules as the backend's
+ * createBrandSchema (brand.schema.js) before the request ever leaves the
+ * browser. Brand Code is server-generated (BR0001, ...) and shown
+ * read-only, same convention as Product/Warehouse/Outlet's own codes.
  */
 export default function BrandFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
-  const [values, setValues] = useState(EMPTY_VALUES);
   const isEdit = mode === 'edit';
 
+  const [createBrand] = useCreateBrandMutation();
+  const [updateBrand] = useUpdateBrandMutation();
+  // Only fetched while the dialog is open in Add mode — skipped for Edit
+  // (real code already known) and while closed.
+  const nextCode = useNextBrandCode(open && !isEdit);
+
+  const methods = useForm({
+    resolver: zodResolver(createBrandSchema),
+    defaultValues: createBrandDefaultValues,
+    mode: 'onTouched',
+  });
+  const { handleSubmit, reset, formState: { isSubmitting } } = methods;
+
   useEffect(() => {
-    if (open) setValues(isEdit && initialValues ? { ...EMPTY_VALUES, ...initialValues } : EMPTY_VALUES);
-  }, [open, isEdit, initialValues]);
+    if (open) reset(isEdit && initialValues ? brandToFormValues(initialValues) : createBrandDefaultValues);
+  }, [open, isEdit, initialValues, reset]);
 
-  const setField = (field) => (e) => setValues((prev) => ({ ...prev, [field]: e.target.value }));
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    dispatch(showToast(isEdit ? 'Brand updated successfully' : 'Brand saved successfully', 'success'));
-    onClose?.();
-  };
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      const payload = brandFormValuesToPayload(values);
+      if (isEdit) {
+        await updateBrand({ id: initialValues.id, ...payload }).unwrap();
+        dispatch(showToast('Brand updated successfully', 'success'));
+      } else {
+        await createBrand(payload).unwrap();
+        dispatch(showToast('Brand saved successfully', 'success'));
+      }
+      onClose?.();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save brand', 'error'));
+    }
+  });
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1.5 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <ReceiptOutlinedIcon fontSize="small" sx={{ color: 'primary.main' }} />
+          <CardGiftcardOutlinedIcon fontSize="small" sx={{ color: 'primary.main' }} />
           <Typography sx={{ fontWeight: 800, fontSize: 17 }}>{isEdit ? 'Edit Brand' : 'Add Brand'}</Typography>
         </Stack>
         <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
       </DialogTitle>
-      <form onSubmit={handleSubmit} noValidate>
-        <DialogContent dividers>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label="Brand Code *"
-                value={isEdit ? values.code : 'Auto generated'}
-                onChange={setField('code')}
-                disabled={!isEdit}
-                fullWidth
-                slotProps={{ input: { readOnly: !isEdit } }}
-              />
+      <FormProvider {...methods}>
+        <form onSubmit={onSubmit} noValidate>
+          <DialogContent dividers>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="Brand Code *"
+                  value={isEdit ? (initialValues?.code || '') : (nextCode || 'Auto generated')}
+                  disabled
+                  fullWidth
+                  slotProps={{ input: { readOnly: true } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="name" label="Brand Name *" placeholder="Enter brand name" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="category" label="Category *" placeholder="e.g. Grocery, Beverages" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="status" label="Status *" options={STATUS_OPTIONS} />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <FormTextField name="description" label="Description" placeholder="Optional notes about this brand" multiline minRows={3} />
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Brand Name *" value={values.name} onChange={setField('name')} placeholder="Enter brand name" fullWidth required />
-            </Grid>
-            <Grid size={12}>
-              <TextField label="Description" value={values.description} onChange={setField('description')} placeholder="Enter description" fullWidth multiline minRows={2} />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Item Group / Category" value={values.category} onChange={setField('category')} fullWidth>
-                {CATEGORY_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Status" value={values.status} onChange={setField('status')} fullWidth>
-                <MenuItem value="Active">Active</MenuItem>
-                <MenuItem value="Inactive">Inactive</MenuItem>
-              </TextField>
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained">{isEdit ? 'Update' : 'Save'}</Button>
-        </DialogActions>
-      </form>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={14} /> : null}
+            >
+              {isEdit ? 'Update' : 'Save'}
+            </Button>
+          </DialogActions>
+        </form>
+      </FormProvider>
     </Dialog>
   );
 }

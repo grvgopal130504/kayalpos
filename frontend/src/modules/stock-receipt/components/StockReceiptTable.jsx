@@ -18,6 +18,8 @@ const TABS = [
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
+const STATUS_LABEL = { draft: 'Draft', received: 'Received' };
+
 function RowActions({ onAction }) {
   const [anchor, setAnchor] = useState(null);
   return (
@@ -39,10 +41,13 @@ function RowActions({ onAction }) {
 /**
  * Stock Receipt list: tab filter (All/Draft/Received), search, page-size
  * selector, Filters button, the paginated table, and a row-click that loads
- * that receipt into StockReceiptDetailsCard on the right.
+ * that receipt into StockReceiptDetailsCard on the right. Rows are keyed/
+ * selected by real `id` (not `code`) — same convention every other module's
+ * table adopted once it was wired to a real backend (Stock Indent, Stock
+ * Transfer, Sales Order, Sales Invoice, Barcode & Label).
  */
 export default function StockReceiptTable({
-  receipts, totalCount, selectedCode, onSelectReceipt, onRowAction, onFilters,
+  receipts, selectedId, onSelectReceipt, onRowAction, onFilters,
 }) {
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
@@ -56,13 +61,10 @@ export default function StockReceiptTable({
     return r.supplier.toLowerCase().includes(q) || r.code.toLowerCase().includes(q) || r.invoiceNo.toLowerCase().includes(q);
   });
 
-  const isFiltering = tab !== 'all' || query.trim().length > 0;
-  const effectiveTotal = isFiltering ? filtered.length : (totalCount ?? filtered.length);
-
-  const pageCount = Math.max(1, Math.ceil(effectiveTotal / pageSize));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount);
-  const rangeStart = effectiveTotal === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const rangeEnd = Math.min(safePage * pageSize, effectiveTotal);
+  const rangeStart = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, filtered.length);
   const visibleRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleTabChange = (v) => { setTab(v); setPage(1); };
@@ -79,7 +81,7 @@ export default function StockReceiptTable({
           <Typography
             variant="body2"
             noWrap
-            sx={{ fontWeight: 600, color: row.code === selectedCode ? 'primary.main' : 'text.primary' }}
+            sx={{ fontWeight: 600, color: row.id === selectedId ? 'primary.main' : 'text.primary' }}
           >
             {row.code}
           </Typography>
@@ -92,7 +94,7 @@ export default function StockReceiptTable({
     { key: 'invoiceNo', label: 'Invoice No.' },
     { key: 'items', label: 'Items', render: (row) => formatNumber(row.items) },
     { key: 'totalValue', label: 'Total Value (₹)', align: 'right', render: (row) => formatCurrency(row.totalValue, { decimals: true }) },
-    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} label={row.status === 'draft' ? 'Draft' : 'Received'} /> },
+    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} label={STATUS_LABEL[row.status]} /> },
     { key: 'action', label: 'Action', align: 'right', render: (row) => <RowActions onAction={(label) => onRowAction(label, row)} /> },
   ];
 
@@ -165,7 +167,7 @@ export default function StockReceiptTable({
         <DataTable
           columns={columns}
           rows={visibleRows}
-          getRowKey={(r) => r.code}
+          getRowKey={(r) => r.id}
           emptyMessage="No receipts match your search"
         />
       </Box>
@@ -176,9 +178,9 @@ export default function StockReceiptTable({
         sx={{ px: 2, py: 1.5, alignItems: 'center', justifyContent: 'space-between' }}
       >
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {effectiveTotal === 0
+          {filtered.length === 0
             ? 'No entries'
-            : `Showing ${rangeStart} to ${rangeEnd} of ${formatNumber(effectiveTotal)} entries`}
+            : `Showing ${rangeStart} to ${rangeEnd} of ${formatNumber(filtered.length)} entries`}
         </Typography>
         {pageCount > 1 && (
           <Pagination

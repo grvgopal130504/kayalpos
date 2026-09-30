@@ -48,8 +48,17 @@ export const SAVE_OPTION_VALUES = [
 
 export const createCustomerSchema = z.object({
   customerName: z.string().trim().min(1, 'Customer name is required'),
-  mobileNumber: z.string().trim().min(1, 'Mobile number is required'),
-  email: z.string().trim().optional(),
+  // Exactly 10 digits, numeric only — the input itself also blocks
+  // non-digit keystrokes and stops accepting more once it reaches 10 (see
+  // FormTextField's `numeric`/`maxLength` props on this field), but the
+  // schema still enforces the final shape in case a value is set another way
+  // (paste, autofill, prefilled edit data).
+  mobileNumber: z.string().trim().regex(/^\d{10}$/, 'Enter a valid 10-digit mobile number'),
+  // Blank is fine (email is optional), but anything entered must be a
+  // properly formed address — matches the backend's own email() check, so
+  // a bad address is caught instantly in the form instead of only after a
+  // round trip to the server.
+  email: z.string().trim().email('Enter a valid email address').optional().or(z.literal('')),
   gstin: z.string().trim().optional(),
   customerType: z.string().trim().min(1, 'Select a customer type'),
   group: z.string().trim().optional(),

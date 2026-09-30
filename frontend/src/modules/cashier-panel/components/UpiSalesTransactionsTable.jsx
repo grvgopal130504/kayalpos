@@ -26,14 +26,28 @@ const UPI_APPS = {
   BHIM: { color: '#0B3D91' },
 };
 
+// `dateTime` arrives as a raw ISO timestamp from the API (Sale.createdAt).
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
 /**
  * Small text-in-a-circle badge standing in for each UPI app's logo
  * (PhonePe, GPay, Paytm, BHIM) — no external logo assets, just a
- * brand-colored initial badge plus the app name, matching the reference's
- * scannable per-row app identity.
+ * brand-colored initial badge plus the app name. Falls back to a plain "—"
+ * when the sale has no UPI app on record (see UpiSalesPage's doc comment
+ * on why that's common today).
  */
 function UpiAppBadge({ app }) {
-  const { color } = UPI_APPS[app] || UPI_APPS.PhonePe;
+  if (!app) {
+    return <Typography variant="body2" sx={{ color: 'text.secondary' }}>—</Typography>;
+  }
+  const { color } = UPI_APPS[app] || { color: '#64748B' };
   return (
     <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
       <Box
@@ -53,10 +67,13 @@ function UpiAppBadge({ app }) {
 /**
  * "Recent UPI Sales Transactions" table — same footer-Total-row +
  * page-number Pagination pattern as CashSalesTransactionsTable /
- * CardSalesTransactionsTable, with UPI App / UPI Transaction ID columns
- * in place of Payment Mode / Card details.
+ * CardSalesTransactionsTable, with UPI App / UPI Transaction ID columns in
+ * place of Payment Mode / Card details. `rows` is one page of real Sale
+ * rows from GET /sales/upi-summary; pagination is server-side.
  */
-export default function UpiSalesTransactionsTable({ rows, totalPages, page, onPageChange }) {
+export default function UpiSalesTransactionsTable({
+  rows, totalPages, page, onPageChange, loading,
+}) {
   const totals = rows.reduce(
     (acc, row) => ({
       items: acc.items + row.items,
@@ -70,7 +87,7 @@ export default function UpiSalesTransactionsTable({ rows, totalPages, page, onPa
   );
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
       <Box sx={{ overflowX: 'auto' }}>
         <Table size="small" sx={{ minWidth: 1050 }}>
           <TableHead>
@@ -83,11 +100,20 @@ export default function UpiSalesTransactionsTable({ rows, totalPages, page, onPa
             </TableRow>
           </TableHead>
           <TableBody>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={COLUMNS.length} sx={{ textAlign: 'center', py: 3 }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    No UPI sales on this date yet.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
             {rows.map((row, index) => (
               <TableRow key={row.invoiceNo} hover>
                 <TableCell sx={{ color: 'text.secondary' }}>{index + 1}</TableCell>
                 <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.invoiceNo}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.dateTime}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(row.dateTime)}</TableCell>
                 <TableCell>{row.items}</TableCell>
                 <TableCell>{formatNumber(row.qty)}</TableCell>
                 <TableCell>{row.discount.toFixed(2)}</TableCell>
@@ -95,20 +121,22 @@ export default function UpiSalesTransactionsTable({ rows, totalPages, page, onPa
                 <TableCell sx={{ fontWeight: 600 }}>{formatCurrency(row.totalAmount, { decimals: true })}</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>{formatCurrency(row.received, { decimals: true })}</TableCell>
                 <TableCell><UpiAppBadge app={row.upiApp} /></TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12.5 }}>{row.upiTxnId}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12.5 }}>{row.upiTxnId || '—'}</TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.cashier}</TableCell>
               </TableRow>
             ))}
-            <TableRow sx={{ '& td': { borderBottom: 'none', fontWeight: 800 } }}>
-              <TableCell colSpan={3} />
-              <TableCell>{totals.items}</TableCell>
-              <TableCell>{formatNumber(totals.qty)}</TableCell>
-              <TableCell>{totals.discount.toFixed(2)}</TableCell>
-              <TableCell>{totals.tax.toFixed(2)}</TableCell>
-              <TableCell>{formatCurrency(totals.totalAmount, { decimals: true })}</TableCell>
-              <TableCell>{formatCurrency(totals.received, { decimals: true })}</TableCell>
-              <TableCell colSpan={3} />
-            </TableRow>
+            {rows.length > 0 && (
+              <TableRow sx={{ '& td': { borderBottom: 'none', fontWeight: 800 } }}>
+                <TableCell colSpan={3} />
+                <TableCell>{totals.items}</TableCell>
+                <TableCell>{formatNumber(totals.qty)}</TableCell>
+                <TableCell>{totals.discount.toFixed(2)}</TableCell>
+                <TableCell>{totals.tax.toFixed(2)}</TableCell>
+                <TableCell>{formatCurrency(totals.totalAmount, { decimals: true })}</TableCell>
+                <TableCell>{formatCurrency(totals.received, { decimals: true })}</TableCell>
+                <TableCell colSpan={3} />
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Box>

@@ -45,14 +45,13 @@ function RowActions({ onAction }) {
 /**
  * Invoice list: tab filter (All/Draft/Sent/Paid/Overdue), search, a
  * page-size selector, a Filters button, the paginated table itself, and a
- * row-click to load that invoice into the details panel on the right.
- * Mirrors SalesOrderTable/SalesQuotationTable's structure and its
- * controlled-tab support — when the caller passes both `tab` and
- * `onTabChange`, this single visible tab row drives which whole page body
- * (Overview vs a status page) is showing, not just a local row filter.
+ * row-click to load that invoice into the details panel on the right. Rows
+ * are keyed/selected by real `id` (not `code`) — same convention every other
+ * module's table adopted once it was wired to a real backend (Gift Voucher,
+ * Loyalty, Customer, Sales Quotation, Sales Order).
  */
 export default function SalesInvoiceTable({
-  invoices, selectedCode, onSelectInvoice, onRowAction, onFilters,
+  invoices, selectedId, onSelectInvoice, onRowAction, onFilters,
   defaultTab = 'all', statusColumn = true, createdByColumn = false,
   dueDateColumn = true,
   tab: controlledTab, onTabChange,
@@ -64,13 +63,13 @@ export default function SalesInvoiceTable({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
-  const filtered = invoices.filter((inv) => {
-    if (tab !== 'all' && inv.status !== tab) return false;
+  const filtered = invoices.filter((i) => {
+    if (tab !== 'all' && i.status !== tab) return false;
     const query_ = query.trim().toLowerCase();
     if (!query_) return true;
     return (
-      inv.customer.toLowerCase().includes(query_)
-      || inv.code.toLowerCase().includes(query_)
+      i.customer.toLowerCase().includes(query_)
+      || i.code.toLowerCase().includes(query_)
     );
   });
 
@@ -96,7 +95,7 @@ export default function SalesInvoiceTable({
         <Typography
           variant="body2"
           noWrap
-          sx={{ fontWeight: 600, color: row.code === selectedCode ? 'primary.main' : 'text.primary', cursor: 'pointer' }}
+          sx={{ fontWeight: 600, color: row.id === selectedId ? 'primary.main' : 'text.primary', cursor: 'pointer' }}
           onClick={() => onSelectInvoice(row)}
         >
           {row.code}
@@ -181,7 +180,7 @@ export default function SalesInvoiceTable({
         <DataTable
           columns={columns}
           rows={visibleRows}
-          getRowKey={(r) => r.code}
+          getRowKey={(r) => r.id}
           emptyMessage="No invoices match your search"
         />
       </Box>

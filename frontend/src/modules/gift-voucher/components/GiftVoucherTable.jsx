@@ -43,7 +43,7 @@ function RowActions({ onAction }) {
  * that loads that voucher into GiftVoucherDetailsCard on the right.
  */
 export default function GiftVoucherTable({
-  vouchers, totalCount, selectedCode, onSelectVoucher, onRowAction, onFilters,
+  vouchers, totalCount, selectedId, onSelectVoucher, onRowAction, onFilters,
 }) {
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
@@ -80,7 +80,7 @@ export default function GiftVoucherTable({
           <Typography
             variant="body2"
             noWrap
-            sx={{ fontWeight: 600, color: row.code === selectedCode ? 'primary.main' : 'text.primary' }}
+            sx={{ fontWeight: 600, color: row.id === selectedId ? 'primary.main' : 'text.primary' }}
           >
             {row.name}
           </Typography>
@@ -166,7 +166,7 @@ export default function GiftVoucherTable({
         <DataTable
           columns={columns}
           rows={visibleRows}
-          getRowKey={(r) => r.code}
+          getRowKey={(r) => r.id}
           emptyMessage="No vouchers match your search"
         />
       </Box>

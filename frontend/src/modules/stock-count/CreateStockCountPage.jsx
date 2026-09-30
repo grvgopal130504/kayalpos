@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,24 +21,19 @@ import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
 import FormSelect from '../../components/form/FormSelect';
+import { useGetProductsQuery } from '../../api/productApi';
+import {
+  useGetStockCountQuery, useNextStockCountCodeQuery,
+  useCreateStockCountMutation, useUpdateStockCountMutation,
+} from '../../api/stockCountApi';
 
 import CountItemsTable from './components/CountItemsTable';
 import CountSummaryTotals from './components/CountSummaryTotals';
-import { COUNTS, getCountDetails } from './stockCountMockData';
 import {
-  createStockCountSchema, createStockCountDefaultValues,
+  createStockCountSchema, createStockCountDefaultValues, emptyItemRow, isBlankItemRow,
   WAREHOUSE_OPTIONS, DEPARTMENT_OPTIONS, COST_CENTER_OPTIONS, COUNT_REASON_OPTIONS,
 } from './createStockCountSchema';
-
-// The mock detail record's countType/countBy are display labels ("Complete
-// Count", "Item Wise Count"), not the create form's radio option values —
-// map them back so the radios prefill correctly in edit mode.
-function countTypeToValue(label) {
-  return (label || '').toLowerCase().startsWith('partial') ? 'partial' : 'complete';
-}
-function countByToValue(label) {
-  return (label || '').toLowerCase().startsWith('location') ? 'location-wise' : 'item-wise';
-}
+import { countToFormValues, formValuesToPayload } from './stockCountDisplay';
 
 const DEFAULT_TERMS = [
   'Ensure accurate counting of all items.',
@@ -47,72 +42,74 @@ const DEFAULT_TERMS = [
   'This is not a sale transaction.',
 ];
 
-function nextCountCode() {
-  const maxNum = COUNTS.reduce((max, c) => Math.max(max, Number(c.code.slice(4))), 0);
-  return `CNT-${String(maxNum + 1).padStart(5, '0')}`;
-}
-
 /**
- * "New Stock Count" screen — matches the reference design's full create
- * form: three details cards side by side (Count Details / Count Method /
- * Other Details), a full-width editable items grid (System Qty / Counted
- * Qty / computed Variance Qty / Unit Cost / computed Variance Value), and
- * a 3-column row below it (Terms & Conditions / Notes / Summary) — same
- * overall pattern as CreateStockWastagePage, extended with the Count
- * Method card's two radio-button choices (Count Type, Count By) and a
- * Start/End Count Time pair, matching the reference's stopwatch icons.
+ * "New Stock Count" screen, also doubling as the Edit Count form when
+ * StockCountPage renders it with an `id` prop — everything (list, create,
+ * edit, view) lives on the one /stock-count page. Fully wired to the real
+ * backend (see backend/src/modules/stock-count): the Count No. is a live
+ * preview of the next real code, and both "Save as Draft" and "Save & Send"
+ * actually create/update a StockCount row with the same validations
+ * enforced again server-side. "Save & Send" saves with status 'completed' —
+ * a count is considered final the moment it's posted, same terminal-step
+ * reasoning Stock Wastage's/Stock Return's own "Save & Send" use.
  *
- * The reference's Other Details card carries its own "Notes" field
- * (bound to `otherNotes`) in addition to the full-width Notes panel in
- * the bottom row (bound to `notes`) — kept as two distinct fields here
- * exactly as laid out in the design, rather than merged into one.
+ * Warehouse/Department/Cost Center/Count Reason stay fixed dropdowns (no
+ * backing master table exists for any of them yet, same scope decision
+ * Stock Wastage/Stock Return/Stock Receipt make for their own analogous
+ * fields). Count Type/Count By are plain radio choices, not master data.
  *
- * Warehouse, Department/Section, and Cost Center each get an inline "+"
- * add button, matching the Customer field's "+" pattern on the other
- * create forms. Count No. is read-only with a settings-gear adornment
- * (numbering configuration). Attachment is a local-only file picker (no
- * upload endpoint yet). Saving is mocked — there's no Stock Count backend
- * module yet.
+ * The Item Code cell is a searchable select against the real Product master
+ * (see ItemCodeAutocomplete via CountItemsTable), which autofills Item
+ * Name/HSN/UoM when a product is picked — System Qty/Counted Qty/Unit Cost
+ * are always the real figures the user types, never looked up.
+ *
+ * Prepared By / Approved By stay plain free-text inputs the user fills in
+ * directly — same "no auto-stamp" rule Stock Wastage's own preparedBy/
+ * approvedBy follow.
+ *
+ * Attachment stays a local-only file picker (there's no upload endpoint
+ * yet), same as Stock Receipt/Stock Return/Stock Wastage.
  */
-export default function CreateStockCountPage({ onBack }) {
+export default function CreateStockCountPage({ id: propId, onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { code } = useParams();
-  const isEditMode = Boolean(code);
-  const existingCount = isEditMode ? getCountDetails(code) : null;
+  const { id: paramId } = useParams();
+  const id = propId ?? paramId;
+  const isEditMode = Boolean(id);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [attachmentName, setAttachmentName] = useState('');
-  const countCode = useMemo(() => (isEditMode ? code : nextCountCode()), [isEditMode, code]);
+
+  const { data: existingCount, isLoading: isLoadingCount } = useGetStockCountQuery(id, { skip: !isEditMode });
+  const { data: nextCode } = useNextStockCountCodeQuery(undefined, { skip: isEditMode });
+  const { data: products = [] } = useGetProductsQuery({});
+  const [createCount, { isLoading: isCreating }] = useCreateStockCountMutation();
+  const [updateCount, { isLoading: isUpdating }] = useUpdateStockCountMutation();
+  const isSaving = isCreating || isUpdating;
+
+  const countCode = isEditMode ? existingCount?.code : nextCode;
 
   const methods = useForm({
     resolver: zodResolver(createStockCountSchema),
-    defaultValues: existingCount
-      ? {
-          ...createStockCountDefaultValues,
-          countDate: existingCount.date,
-          warehouse: '',
-          department: '',
-          costCenter: '',
-          countReason: '',
-          countType: countTypeToValue(existingCount.countType),
-          countBy: countByToValue(existingCount.countBy),
-          binRack: existingCount.binRack && existingCount.binRack !== '—' ? existingCount.binRack : '',
-          startCountTime: existingCount.startCountTime || '',
-          endCountTime: existingCount.endCountTime || '',
-          preparedBy: existingCount.preparedBy || '',
-          approvedBy: existingCount.approvedBy && existingCount.approvedBy !== '—' ? existingCount.approvedBy : '',
-        }
-      : createStockCountDefaultValues,
+    defaultValues: createStockCountDefaultValues,
     mode: 'onTouched',
   });
-  const { handleSubmit, watch, setValue } = methods;
+  const { handleSubmit, watch, setValue, reset } = methods;
   const countType = watch('countType');
   const countBy = watch('countBy');
 
+  // The edit-mode fetch is async, so the form can't be seeded via useForm's
+  // defaultValues (that only runs once, before the data exists) — reset()
+  // re-seeds every field once the real count row arrives.
+  useEffect(() => {
+    if (isEditMode && existingCount) {
+      reset(countToFormValues(existingCount, emptyItemRow));
+    }
+  }, [isEditMode, existingCount, reset]);
+
   const handleBack = () => {
-    if (isEditMode) navigate(`/stock-count/view/${code}`);
-    else if (onBack) onBack();
-    else navigate('/stock-count');
+    if (onBack) return onBack();
+    if (isEditMode) return navigate(`/stock-count/view/${id}`);
+    navigate('/stock-count');
   };
 
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -126,16 +123,47 @@ export default function CreateStockCountPage({ onBack }) {
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
 
-  const onSaveAsDraft = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Count ${countCode} updated successfully` : `Count ${countCode} saved as draft`, 'success'));
-    handleBack();
-  });
-  const onSaveAndSend = handleSubmit(() => {
-    dispatch(showToast(isEditMode ? `Count ${countCode} updated successfully` : `Count ${countCode} saved and sent`, 'success'));
-    handleBack();
+  const onSaveAsDraft = handleSubmit(async (values) => {
+    try {
+      const payload = formValuesToPayload(values, { status: 'draft', isBlankItemRow });
+      if (isEditMode) {
+        await updateCount({ id, ...payload }).unwrap();
+        dispatch(showToast(`Count ${countCode} updated successfully`, 'success'));
+      } else {
+        const created = await createCount(payload).unwrap();
+        dispatch(showToast(`Count ${created.code} saved as draft`, 'success'));
+      }
+      handleBack();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the count', 'error'));
+    }
   });
 
-  if (isEditMode && !existingCount) {
+  const onSaveAndSend = handleSubmit(async (values) => {
+    try {
+      const payload = formValuesToPayload(values, { status: 'completed', isBlankItemRow });
+      if (isEditMode) {
+        await updateCount({ id, ...payload }).unwrap();
+        dispatch(showToast(`Count ${countCode} updated successfully`, 'success'));
+      } else {
+        const created = await createCount(payload).unwrap();
+        dispatch(showToast(`Count ${created.code} saved and sent`, 'success'));
+      }
+      handleBack();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save the count', 'error'));
+    }
+  });
+
+  if (isEditMode && isLoadingCount) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading count…</Typography>
+      </Stack>
+    );
+  }
+
+  if (isEditMode && !isLoadingCount && !existingCount) {
     return (
       <Stack spacing={2}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Count not found</Typography>
@@ -150,7 +178,7 @@ export default function CreateStockCountPage({ onBack }) {
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', lg: 'center' }, justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Count (Edit ${countCode})` : 'Stock Count (New)'}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{isEditMode ? `Stock Count (Edit ${countCode || ''})` : 'Stock Count (New)'}</Typography>
           <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
             <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
             <MuiLink component={RouterLink} to="/stock-count" underline="hover" color="text.secondary">Stock Count</MuiLink>
@@ -175,18 +203,18 @@ export default function CreateStockCountPage({ onBack }) {
           <Menu anchorEl={moreActionsAnchor} open={Boolean(moreActionsAnchor)} onClose={() => setMoreActionsAnchor(null)}>
             <MenuItem onClick={() => handleMoreAction('Save as Template')}>Save as Template</MenuItem>
             <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
-            <MenuItem onClick={() => handleMoreAction('Reset Form')}>Reset Form</MenuItem>
+            <MenuItem onClick={() => reset(createStockCountDefaultValues)}>Reset Form</MenuItem>
           </Menu>
           {isEditMode ? (
-            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+            <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
               Update Count
             </Button>
           ) : (
             <>
-              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft}>
+              <Button variant="outlined" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
                 Save as Draft
               </Button>
-              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend}>
+              <Button variant="contained" color="warning" startIcon={<SendOutlinedIcon fontSize="small" />} onClick={onSaveAndSend} disabled={isSaving}>
                 Save &amp; Send
               </Button>
             </>
@@ -203,7 +231,7 @@ export default function CreateStockCountPage({ onBack }) {
                 <Stack spacing={2}>
                   <TextField
                     label="Count No."
-                    value={countCode}
+                    value={countCode || ''}
                     disabled
                     fullWidth
                     slotProps={{
@@ -324,7 +352,7 @@ export default function CreateStockCountPage({ onBack }) {
 
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
-            <CountItemsTable onAddItem={handleAddItemRow} />
+            <CountItemsTable onAddItem={handleAddItemRow} products={products} />
           </Paper>
 
           <BottomRow />

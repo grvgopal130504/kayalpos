@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Stack, Box, Typography, Button, Menu, MenuItem, Grid, Breadcrumbs, Link as MuiLink,
 } from '@mui/material';
@@ -23,9 +23,8 @@ import { formatNumber } from '../../utils/format';
 import BarcodeLabelTable from './components/BarcodeLabelTable';
 import LabelDetailsCard from './components/LabelDetailsCard';
 import LabelTermsAndNotes from './components/LabelTermsAndNotes';
-import { BATCHES, STATUS_DETAILS, STATUS_STATS } from './barcodeLabelMockData';
-
-const BATCH_BY_CODE = Object.fromEntries(BATCHES.map((b) => [b.code, b]));
+import { useGetBarcodeLabelBatchesQuery, useBarcodeLabelStatusSummaryQuery } from '../../api/barcodeLabelApi';
+import { toBatchRow, toBatchDetails, buildStatusStats } from './barcodeLabelDisplay';
 
 const STATUS_META = {
   draft: { label: 'Draft Batches', pageTitle: 'Draft', icon: EditNoteOutlinedIcon, iconColor: 'warning' },
@@ -34,7 +33,8 @@ const STATUS_META = {
 };
 
 // The 3 "extra" stat tile icons/colors per status, in the same order as
-// each status's STATUS_STATS.extra array.
+// buildStatusStats()'s extra array (Total Labels / Average Labels per Batch /
+// Total Line Items — all real aggregates, see barcodeLabelDisplay.js).
 const EXTRA_TILE_STYLE = {
   draft: [
     { icon: CardGiftcardOutlinedIcon, iconColor: 'success' },
@@ -54,40 +54,42 @@ const EXTRA_TILE_STYLE = {
 };
 
 /**
- * Shared page for the Draft / Pending Print / Printed cards on the
- * Barcode & Label landing grid — same list+details+terms layout as the
- * "All Batches" overview page, scoped by `status`. Mirrors
- * SalesInvoiceStatusPage/SalesOrderStatusPage.
+ * Shared page for the Draft / Pending Print / Printed cards on the Barcode &
+ * Label landing grid — same list+details+terms layout as the "All Batches"
+ * overview page, scoped by `status`. Fully wired to the real backend: the
+ * table's rows and the 4 stat tiles both come from actual BarcodeLabelBatch
+ * rows (see backend/src/modules/barcode-label's getBarcodeLabelStatusSummary),
+ * so a status with zero batches honestly shows zeros/empty states rather
+ * than fabricated figures. The Printed tab in particular will genuinely show
+ * zero until a real "mark as printed" backend action exists (see the
+ * BarcodeLabelBatch model comment in schema.prisma) — nothing sets that
+ * status yet, so that's the honest state, not a bug.
  */
-export default function BarcodeLabelStatusPage({ status, tab, onTabChange, onCreate }) {
+export default function BarcodeLabelStatusPage({ status, tab, onTabChange, onCreate, onView, onEdit }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const meta = STATUS_META[status];
-  const stats = STATUS_STATS[status];
-  const detailsTemplate = STATUS_DETAILS[status];
   const extraStyle = EXTRA_TILE_STYLE[status];
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [notes, setNotes] = useState('');
 
-  const firstOfStatus = BATCHES.find((b) => b.status === status) || BATCHES[0];
-  const [selectedCode, setSelectedCode] = useState(firstOfStatus.code);
-  const selectedRow = BATCH_BY_CODE[selectedCode] || firstOfStatus;
-  const batchDetails = selectedCode === detailsTemplate.code
-    ? detailsTemplate
-    : {
-        ...detailsTemplate,
-        code: selectedRow.code,
-        date: selectedRow.date,
-        labelName: selectedRow.labelName,
-        itemCategory: selectedRow.itemCategory,
-        totalLabels: selectedRow.totalLabels,
-        ...(selectedRow.status === 'printed' ? { printedOn: selectedRow.date } : {}),
-      };
+  const { data: batches = [] } = useGetBarcodeLabelBatchesQuery({});
+  const { data: statusSummaryData } = useBarcodeLabelStatusSummaryQuery(status);
 
-  const handleSelectBatch = (row) => setSelectedCode(row.code);
+  const rows = useMemo(() => batches.map(toBatchRow), [batches]);
+  const statusRows = useMemo(() => rows.filter((r) => r.status === status), [rows, status]);
+  const stats = useMemo(() => buildStatusStats(status, statusSummaryData), [status, statusSummaryData]);
+  const batchById = useMemo(() => Object.fromEntries(batches.map((b) => [b.id, b])), [batches]);
+
+  const effectiveSelectedId = (selectedId && batchById[selectedId] && rows.find((r) => r.id === selectedId)?.status === status ? selectedId : statusRows[0]?.id);
+  const selectedBatch = effectiveSelectedId ? batchById[effectiveSelectedId] : null;
+  const batchDetails = selectedBatch ? toBatchDetails(selectedBatch) : null;
+
+  const handleSelectBatch = (row) => setSelectedId(row.id);
   const handleRowAction = (label, row) => {
-    if (label === 'View') return navigate(`/barcode-label/view/${row.code}`);
-    if (label === 'Edit') return navigate(`/barcode-label/edit/${row.code}`);
+    if (label === 'View') return onView ? onView(row.id) : navigate(`/barcode-label/view/${row.id}`);
+    if (label === 'Edit') return onEdit ? onEdit(row.id) : navigate(`/barcode-label/edit/${row.id}`);
     return dispatch(showToast(`${label} "${row.code}" is coming soon`, 'info'));
   };
   const handlePrintPreview = () => dispatch(showToast('Print / Preview is coming soon', 'info'));
@@ -157,8 +159,8 @@ export default function BarcodeLabelStatusPage({ status, tab, onTabChange, onCre
         <Grid size={{ xs: 12, lg: 7 }}>
           <Box sx={{ height: { lg: 560 } }}>
             <BarcodeLabelTable
-              batches={BATCHES}
-              selectedCode={selectedCode}
+              batches={rows}
+              selectedId={effectiveSelectedId}
               onSelectBatch={handleSelectBatch}
               onRowAction={handleRowAction}
               onFilters={handleFilters}
@@ -172,7 +174,13 @@ export default function BarcodeLabelStatusPage({ status, tab, onTabChange, onCre
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
           <Box sx={{ height: { lg: 560 }, overflow: 'auto' }}>
-            <LabelDetailsCard batch={batchDetails} title={`Batch Details (${meta.pageTitle})`} showPrintedFields={status === 'printed'} />
+            {batchDetails ? (
+              <LabelDetailsCard batch={batchDetails} title={`Batch Details (${meta.pageTitle})`} showPrintedFields={status === 'printed'} />
+            ) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', p: 2 }}>
+                No {meta.pageTitle.toLowerCase()} batches yet.
+              </Typography>
+            )}
           </Box>
         </Grid>
       </Grid>

@@ -6,6 +6,7 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 
 import { formatNumber } from '../../../../utils/format';
+import { formatPickerDate } from '../../../../components/form/FormDatePicker';
 
 const COLUMNS = [
   { key: 'code', label: 'Price List Code' },
@@ -21,9 +22,21 @@ const COLUMNS = [
   { key: 'action', label: 'Action' },
 ];
 
+function statusLabel(status) {
+  return String(status).toUpperCase() === 'INACTIVE' ? 'Inactive' : 'Active';
+}
+
+function formatRowDate(value) {
+  return value ? formatPickerDate(new Date(value)) : '-';
+}
+
 /**
- * "Price List" table — plain rows with a green/red Status chip and
- * edit/delete row actions, neither wired to a real form yet.
+ * "Price List" table — real API row shape: `basePriceList` is the joined
+ * relation object ({id,name}) not a plain string, `status` is the backend's
+ * 'ACTIVE'/'INACTIVE' enum, and `itemCount` is server-computed (see
+ * priceList.service.js's withItemCounts). Same green/red Status chip and
+ * edit/delete row actions as before, now wired to the real dialog/mutations
+ * via PriceListPage.
  */
 export default function PriceListTable({ rows, onViewRow, onEditRow, onDeleteRow }) {
   return (
@@ -39,43 +52,46 @@ export default function PriceListTable({ rows, onViewRow, onEditRow, onDeleteRow
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.code} hover>
-              <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.type}</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.applicableTo}</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.basePriceList}</TableCell>
-              <TableCell>{row.currency}</TableCell>
-              <TableCell>
-                <Chip
-                  label={row.status}
-                  size="small"
-                  sx={{
-                    bgcolor: row.status === 'Active' ? 'rgba(34,160,107,0.12)' : 'rgba(229,72,77,0.12)',
-                    color: row.status === 'Active' ? 'success.main' : 'error.main',
-                    fontWeight: 700, height: 22,
-                  }}
-                />
-              </TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.effectiveFrom}</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.effectiveTo}</TableCell>
-              <TableCell>{formatNumber(row.itemCount)}</TableCell>
-              <TableCell>
-                <Stack direction="row" spacing={0.5}>
-                  <IconButton size="small" onClick={() => onViewRow?.(row)} aria-label={`View ${row.name}`}>
-                    <VisibilityOutlinedIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton size="small" color="primary" onClick={() => onEditRow?.(row)} aria-label={`Edit ${row.name}`}>
-                    <EditOutlinedIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton size="small" color="error" onClick={() => onDeleteRow?.(row)} aria-label={`Delete ${row.name}`}>
-                    <DeleteOutlineOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              </TableCell>
-            </TableRow>
-          ))}
+          {rows.map((row) => {
+            const status = statusLabel(row.status);
+            return (
+              <TableRow key={row.id} hover>
+                <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.type}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.applicableTo}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.basePriceList?.name || '-'}</TableCell>
+                <TableCell>{row.currency}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={status}
+                    size="small"
+                    sx={{
+                      bgcolor: status === 'Active' ? 'rgba(34,160,107,0.12)' : 'rgba(229,72,77,0.12)',
+                      color: status === 'Active' ? 'success.main' : 'error.main',
+                      fontWeight: 700, height: 22,
+                    }}
+                  />
+                </TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatRowDate(row.effectiveFrom)}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatRowDate(row.effectiveTo)}</TableCell>
+                <TableCell>{formatNumber(row.itemCount)}</TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={0.5}>
+                    <IconButton size="small" onClick={() => onViewRow?.(row)} aria-label={`View ${row.name}`}>
+                      <VisibilityOutlinedIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" color="primary" onClick={() => onEditRow?.(row)} aria-label={`Edit ${row.name}`}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" color="error" onClick={() => onDeleteRow?.(row)} aria-label={`Delete ${row.name}`}>
+                      <DeleteOutlineOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            );
+          })}
           {rows.length === 0 && (
             <TableRow>
               <TableCell colSpan={COLUMNS.length}>

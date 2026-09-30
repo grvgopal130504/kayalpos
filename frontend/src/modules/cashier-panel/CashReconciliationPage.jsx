@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper,
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Alert, Skeleton,
 } from '@mui/material';
 import { PieChart } from '@mui/x-charts/PieChart';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -11,15 +11,17 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 
-import { useAppDispatch } from '../../app/hooks';
-import { logout } from '../../features/auth/authSlice';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { logout, selectCurrentUser } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 import StatCard from '../../components/common/StatCard';
-import { DatePickerField } from '../../components/form/FormDatePicker';
+import { DatePickerField, formatPickerDate, parsePickerDate } from '../../components/form/FormDatePicker';
 import { formatCurrency } from '../../utils/format';
+import { useCashReconciliationReportQuery } from '../../api/cashReconciliationApi';
 
 import CashReconciliationTransactionsTable from './components/CashReconciliationTransactionsTable';
-import { CASHIER, CASH_RECONCILIATION } from './cashierPanelMockData';
+
+const PAGE_SIZE = 10;
 
 function SummaryTile({ label, value, valueColor }) {
   return (
@@ -30,6 +32,14 @@ function SummaryTile({ label, value, valueColor }) {
       </Typography>
     </Paper>
   );
+}
+
+function toDateKey(pickerValue) {
+  const date = parsePickerDate(pickerValue) || new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function signedCurrency(value) {
@@ -45,10 +55,20 @@ function varianceColor(value) {
   return 'text.primary';
 }
 
+// "₹45.00 Short" / "₹30.00 Over" / "Balanced" — derived client-side from
+// the real summary.totalVariance the report already computed, same as
+// varianceColor/signedCurrency above; the backend only ever sends the raw
+// number, never a pre-worded string.
+function cashShortOverLabel(totalVariance) {
+  if (totalVariance < 0) return `${formatCurrency(Math.abs(totalVariance), { decimals: true })} Short`;
+  if (totalVariance > 0) return `${formatCurrency(totalVariance, { decimals: true })} Over`;
+  return 'Balanced';
+}
+
 /**
  * Variance-by-type donut for the reconciliation summary — built directly
- * on PieChart (rather than the shared DonutChart) because each legend
- * row here needs its own two-line "count Reconciliations (pct%)" / signed
+ * on PieChart (rather than the shared DonutChart) because each legend row
+ * here needs its own two-line "count Reconciliations (pct%)" / signed
  * value layout, which the shared component's single-line legend doesn't
  * support. The pie itself uses each type's reconciliation count (always
  * positive) so an "Exact Match" slice with ₹0 variance still renders.
@@ -127,28 +147,63 @@ function VarianceDonut({ data, centerLabel, centerValue, size = 160 }) {
 /**
  * Cash Reconciliation — the cashier's system-vs-counted cash report
  * reached from the Cashier Panel's "Cash Reconciliation" quick action.
- * Same overall shape as the other cashier-panel report pages, but the
- * Reconciliation Summary panel tracks System Cash vs Counted Cash with
- * signed Variance / Variance (%) tiles plus a Cash Short/Over and
- * Balanced-status readout, and the breakdown is "Variance Summary (By
- * Type)" (Cash Short / Cash Over / Exact Match).
+ * There is no separate create-flow or table behind this page at all: a
+ * "cash reconciliation" IS the reconciliation view of a CLOSED
+ * ShiftSession row — System Cash is that shift's real
+ * expectedClosingCash, Counted Cash is its real closingCash, and Variance
+ * is its real closingVariance, all computed once and stored by
+ * closeShift() (see backend/src/modules/shift-session/shiftSession.
+ * service.js) — this page only reads and reshapes that same real data via
+ * GET /cash-reconciliations/summary (see cashReconciliation.service.js's
+ * getCashReconciliationReport), the same read-only relationship Cash
+ * Drawer Opening has with ShiftSession rows.
  *
- * There's no sales-reporting backend wired to this screen yet, so every
- * figure comes from CASH_RECONCILIATION mock data.
+ * The Variance Summary (By Type) donut buckets the selected date's
+ * reconciled shifts into Cash Short / Cash Over / Exact Match by the sign
+ * of their real variance; Cash Short/Over and Status are derived
+ * client-side from the real totalVariance rather than sent as pre-worded
+ * strings from the server.
  */
 export default function CashReconciliationPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const user = useAppSelector(selectCurrentUser);
   const [page, setPage] = useState(1);
+  const [selectedDate, setSelectedDate] = useState(() => formatPickerDate(new Date()));
 
-  const { stats, summary, byType, transactions, totalPages } = CASH_RECONCILIATION;
-  const [selectedDate, setSelectedDate] = useState(CASH_RECONCILIATION.selectedDate);
+  const dateKey = toDateKey(selectedDate);
+  const {
+    data: report, isLoading, isFetching, isError, refetch,
+  } = useCashReconciliationReportQuery({ date: dateKey, page, pageSize: PAGE_SIZE });
+
+  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
 
   const handleViewAll = () => dispatch(showToast('Full cash reconciliation list is coming soon', 'info'));
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
+  const handleDateChange = (value) => {
+    setSelectedDate(value || formatPickerDate(new Date()));
+    setPage(1);
+  };
+
+  if (isError) {
+    return (
+      <Stack spacing={2}>
+        <Alert
+          severity="error"
+          action={(
+            <MuiLink component="button" type="button" variant="body2" underline="hover" onClick={refetch}>
+              Retry
+            </MuiLink>
+          )}
+        >
+          Couldn&apos;t load the Cash Reconciliation report from the server. Check your connection and try reloading.
+        </Alert>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
@@ -163,7 +218,7 @@ export default function CashReconciliationPage() {
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
+            Cashier : {cashierLabel}
           </Typography>
           <MuiLink
             component="button"
@@ -178,58 +233,72 @@ export default function CashReconciliationPage() {
         </Stack>
       </Stack>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={PointOfSaleOutlinedIcon}
-            iconColor="success"
-            iconShape="circle"
-            label="Total Reconciliations"
-            value={formatCurrency(stats.totalReconciliations.value, { decimals: true })}
-            caption={`Transactions : ${stats.totalReconciliations.transactions}`}
-          />
+      <Alert severity="info" variant="outlined">
+        This is a report of past shift reconciliations. To close a shift and record its cash count, use the Shift Closing screen.
+      </Alert>
+
+      {isLoading || !report ? (
+        <Grid container spacing={2}>
+          {[1, 2, 3, 4, 5].map((key) => (
+            <Grid key={key} size={{ xs: 12, sm: 6, lg: 2.4 }}>
+              <Skeleton variant="rounded" height={92} />
+            </Grid>
+          ))}
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={DescriptionOutlinedIcon}
-            iconColor="#2563EB"
-            iconShape="circle"
-            label="Total Reconciled"
-            value={String(stats.totalReconciled.value)}
-            caption="Total Quantity : -"
-          />
+      ) : (
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={PointOfSaleOutlinedIcon}
+              iconColor="success"
+              iconShape="circle"
+              label="Total Reconciliations"
+              value={formatCurrency(report.stats.totalReconciliations.value, { decimals: true })}
+              caption={`Transactions : ${report.stats.totalReconciliations.transactions}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={DescriptionOutlinedIcon}
+              iconColor="#2563EB"
+              iconShape="circle"
+              label="Total Reconciled"
+              value={String(report.stats.totalReconciled.value)}
+              caption="Total Quantity : -"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CurrencyRupeeOutlinedIcon}
+              iconColor="warning"
+              iconShape="circle"
+              label="Average Variance"
+              value={signedCurrency(report.stats.avgVariance.value)}
+              caption="Per Reconciliation"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#8B5CF6"
+              iconShape="circle"
+              label="Today's Reconciliation"
+              value={formatCurrency(report.stats.todaysReconciliation.value, { decimals: true })}
+              caption={`${report.stats.todaysReconciliation.transactions} Transaction${report.stats.todaysReconciliation.transactions === 1 ? '' : 's'}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#0EA5A4"
+              iconShape="circle"
+              label="Selected Date Reconciliation"
+              value={formatCurrency(report.stats.selectedDateReconciliation.value, { decimals: true })}
+              caption={report.stats.selectedDateReconciliation.date}
+            />
+          </Grid>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CurrencyRupeeOutlinedIcon}
-            iconColor="warning"
-            iconShape="circle"
-            label="Average Variance"
-            value={formatCurrency(stats.avgVariance.value, { decimals: true })}
-            caption="Per Reconciliation"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#8B5CF6"
-            iconShape="circle"
-            label="Today's Reconciliation"
-            value={formatCurrency(stats.todaysReconciliation.value, { decimals: true })}
-            caption={`${stats.todaysReconciliation.transactions} Transaction${stats.todaysReconciliation.transactions === 1 ? '' : 's'}`}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#0EA5A4"
-            iconShape="circle"
-            label="Selected Date Reconciliation"
-            value={formatCurrency(stats.selectedDateReconciliation.value, { decimals: true })}
-            caption={stats.selectedDateReconciliation.date}
-          />
-        </Grid>
-      </Grid>
+      )}
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
@@ -238,57 +307,67 @@ export default function CashReconciliationPage() {
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Reconciliation Summary</Typography>
               <DatePickerField
                 value={selectedDate}
-                onChange={setSelectedDate}
+                onChange={handleDateChange}
                 sx={{ width: { xs: '100%', sm: 200 } }}
               />
             </Stack>
 
-            <Grid container spacing={1.5}>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Total Reconciliation" value={formatCurrency(summary.totalReconciliation, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Total Transactions" value={String(summary.totalTransactions)} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Reconciled By" value={summary.reconciledBy} valueColor="#2563EB" />
-              </Grid>
-            </Grid>
+            {!report ? (
+              <Skeleton variant="rounded" height={220} />
+            ) : (
+              <>
+                <Grid container spacing={1.5}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <SummaryTile label="Total Reconciliation" value={formatCurrency(report.summary.totalReconciliation, { decimals: true })} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <SummaryTile label="Total Transactions" value={String(report.summary.totalTransactions)} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <SummaryTile label="Reconciled By" value={report.summary.reconciledBy} valueColor="#2563EB" />
+                  </Grid>
+                </Grid>
 
-            <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total System Cash" value={formatCurrency(summary.totalSystemCash, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Counted Cash" value={formatCurrency(summary.totalCountedCash, { decimals: true })} valueColor="success.main" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Variance" value={signedCurrency(summary.totalVariance)} valueColor={varianceColor(summary.totalVariance)} />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Variance ( % )" value={`${summary.variancePercent > 0 ? '+' : ''}${summary.variancePercent.toFixed(2)}%`} valueColor={varianceColor(summary.variancePercent)} />
-              </Grid>
-            </Grid>
+                <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total System Cash" value={formatCurrency(report.summary.totalSystemCash, { decimals: true })} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Counted Cash" value={formatCurrency(report.summary.totalCountedCash, { decimals: true })} valueColor="success.main" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Variance" value={signedCurrency(report.summary.totalVariance)} valueColor={varianceColor(report.summary.totalVariance)} />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Variance ( % )" value={`${report.summary.variancePercent > 0 ? '+' : ''}${report.summary.variancePercent.toFixed(2)}%`} valueColor={varianceColor(report.summary.variancePercent)} />
+                  </Grid>
+                </Grid>
 
-            <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 6 }}>
-                <SummaryTile label="Cash Short / Over" value={summary.cashShortOver} valueColor="error.main" />
-              </Grid>
-              <Grid size={{ xs: 6 }}>
-                <SummaryTile label="Status" value={summary.status} valueColor="success.main" />
-              </Grid>
-            </Grid>
+                <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 6 }}>
+                    <SummaryTile label="Cash Short / Over" value={cashShortOverLabel(report.summary.totalVariance)} valueColor={varianceColor(report.summary.totalVariance)} />
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <SummaryTile label="Status" value={report.summary.totalTransactions > 0 ? 'Reconciled' : 'No Shifts Closed'} valueColor="success.main" />
+                  </Grid>
+                </Grid>
+              </>
+            )}
           </Paper>
         </Grid>
 
         <Grid size={{ xs: 12, lg: 5 }}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Variance Summary (By Type)</Typography>
-            <VarianceDonut
-              data={byType}
-              centerValue={{ text: signedCurrency(summary.totalVariance), raw: summary.totalVariance }}
-              centerLabel="Total Variance"
-            />
+            {!report ? (
+              <Skeleton variant="rounded" height={220} />
+            ) : (
+              <VarianceDonut
+                data={report.byType}
+                centerValue={{ text: signedCurrency(report.summary.totalVariance), raw: report.summary.totalVariance }}
+                centerLabel="Total Variance"
+              />
+            )}
           </Paper>
         </Grid>
       </Grid>
@@ -307,7 +386,17 @@ export default function CashReconciliationPage() {
             View All <NavigateNextIcon fontSize="small" />
           </MuiLink>
         </Stack>
-        <CashReconciliationTransactionsTable rows={transactions} totalPages={totalPages} page={page} onPageChange={setPage} />
+        {!report ? (
+          <Skeleton variant="rounded" height={240} />
+        ) : (
+          <CashReconciliationTransactionsTable
+            rows={report.transactions}
+            totalPages={report.totalPages}
+            page={report.page}
+            onPageChange={setPage}
+            loading={isFetching}
+          />
+        )}
       </Paper>
     </Stack>
   );

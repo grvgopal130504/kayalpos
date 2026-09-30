@@ -4,6 +4,8 @@ import {
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 
+import { formatPickerDate } from '../../../../components/form/FormDatePicker';
+
 const COLUMNS = [
   { key: 'itemCode', label: 'Item Code' },
   { key: 'itemName', label: 'Item Name' },
@@ -18,15 +20,22 @@ const COLUMNS = [
 ];
 
 const TYPE_STYLES = {
-  Batch: { bgcolor: 'rgba(34,160,107,0.12)', color: '#1B8354' },
-  Serial: { bgcolor: 'rgba(37,99,235,0.12)', color: '#2563EB' },
+  BATCH: { bgcolor: 'rgba(34,160,107,0.12)', color: '#1B8354', label: 'Batch' },
+  SERIAL: { bgcolor: 'rgba(37,99,235,0.12)', color: '#2563EB', label: 'Serial' },
 };
 
+function formatRowDate(value) {
+  return value ? formatPickerDate(new Date(value)) : '—';
+}
+
 /**
- * "Batch / Serial Number List" table — mirrors SupplierTable/ProductTable's
- * shape: a color-coded Batch/Serial Type chip (green Batch / blue Serial),
- * an "—" placeholder for serial-tracked rows with no expiry, a green Status
- * chip, and edit/delete row actions, neither wired to a real form yet.
+ * "Batch / Serial Number List" table — real API row shape: `product` and
+ * `warehouse` are joined relation objects (not plain strings), `type` is the
+ * backend's 'BATCH'/'SERIAL' enum, `qty` a Decimal serialized to string, and
+ * `status` the 'ACTIVE'/'INACTIVE' enum. Same color-coded Batch/Serial Type
+ * chip (green Batch / blue Serial), "—" placeholder for serial-tracked rows
+ * with no expiry, green/red Status chip, and edit/delete row actions as
+ * before, now wired to the real dialog/mutations via BatchSerialPage.
  */
 export default function BatchSerialTable({ rows, onOpenRow, onEditRow, onDeleteRow }) {
   return (
@@ -42,10 +51,11 @@ export default function BatchSerialTable({ rows, onOpenRow, onEditRow, onDeleteR
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((row, index) => {
-            const typeStyle = TYPE_STYLES[row.type] || { bgcolor: '#F1F2F4', color: '#5B6472' };
+          {rows.map((row) => {
+            const typeStyle = TYPE_STYLES[row.type] || { bgcolor: '#F1F2F4', color: '#5B6472', label: row.type };
+            const status = String(row.status).toUpperCase() === 'INACTIVE' ? 'Inactive' : 'Active';
             return (
-              <TableRow key={`${row.number}-${index}`} hover>
+              <TableRow key={row.id} hover>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   <Typography
                     component="button"
@@ -56,25 +66,25 @@ export default function BatchSerialTable({ rows, onOpenRow, onEditRow, onDeleteR
                       border: 0, p: 0, cursor: 'pointer', '&:hover': { textDecoration: 'underline' },
                     }}
                   >
-                    {row.itemCode}
+                    {row.product?.code}
                   </Typography>
                 </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.itemName}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.product?.name}</TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{row.number}</TableCell>
                 <TableCell>
-                  <Chip label={row.type} size="small" sx={{ ...typeStyle, fontWeight: 700, height: 22 }} />
+                  <Chip label={typeStyle.label} size="small" sx={{ bgcolor: typeStyle.bgcolor, color: typeStyle.color, fontWeight: 700, height: 22 }} />
                 </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.mfgDate}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.expiryDate || '—'}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.warehouse}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{`${row.qty.toFixed(2)} ${row.uom}`}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatRowDate(row.mfgDate)}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatRowDate(row.expiryDate)}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.warehouse?.name || '-'}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{`${Number(row.qty).toFixed(2)} ${row.uom}`}</TableCell>
                 <TableCell>
                   <Chip
-                    label={row.status}
+                    label={status}
                     size="small"
                     sx={{
-                      bgcolor: row.status === 'Active' ? 'rgba(34,160,107,0.12)' : 'rgba(229,72,77,0.12)',
-                      color: row.status === 'Active' ? 'success.main' : 'error.main',
+                      bgcolor: status === 'Active' ? 'rgba(34,160,107,0.12)' : 'rgba(229,72,77,0.12)',
+                      color: status === 'Active' ? 'success.main' : 'error.main',
                       fontWeight: 700, height: 22,
                     }}
                   />

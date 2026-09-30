@@ -42,16 +42,15 @@ function RowActions({ onAction }) {
 }
 
 /**
- * Label batch list: tab filter (All/Draft/Pending Print/Printed), search,
- * a page-size selector, a Filters button, the paginated table itself, and
- * a row-click to load that batch into the details panel on the right.
- * Mirrors SalesInvoiceTable/SalesOrderTable's structure and its
- * controlled-tab support — when the caller passes both `tab` and
- * `onTabChange`, this single visible tab row drives which whole page body
- * (Overview vs a status page) is showing, not just a local row filter.
+ * Label batch list: tab filter (All/Draft/Pending Print/Printed), search, a
+ * page-size selector, a Filters button, the paginated table itself, and a
+ * row-click to load that batch into the details panel on the right. Rows
+ * are keyed/selected by real `id` (not `code`) — same convention every other
+ * module's table adopted once it was wired to a real backend (Gift Voucher,
+ * Loyalty, Customer, Sales Quotation, Sales Order, Sales Invoice).
  */
 export default function BarcodeLabelTable({
-  batches, selectedCode, onSelectBatch, onRowAction, onFilters,
+  batches, selectedId, onSelectBatch, onRowAction, onFilters,
   defaultTab = 'all', statusColumn = true, createdByColumn = false,
   tab: controlledTab, onTabChange,
 }) {
@@ -94,7 +93,7 @@ export default function BarcodeLabelTable({
         <Typography
           variant="body2"
           noWrap
-          sx={{ fontWeight: 600, color: row.code === selectedCode ? 'primary.main' : 'text.primary', cursor: 'pointer' }}
+          sx={{ fontWeight: 600, color: row.id === selectedId ? 'primary.main' : 'text.primary', cursor: 'pointer' }}
           onClick={() => onSelectBatch(row)}
         >
           {row.code}
@@ -179,7 +178,7 @@ export default function BarcodeLabelTable({
         <DataTable
           columns={columns}
           rows={visibleRows}
-          getRowKey={(r) => r.code}
+          getRowKey={(r) => r.id}
           emptyMessage="No label batches match your search"
         />
       </Box>

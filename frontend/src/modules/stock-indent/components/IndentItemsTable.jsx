@@ -1,13 +1,22 @@
+import { useMemo } from 'react';
 import {
   Box, Table, TableHead, TableBody, TableRow, TableCell, TextField, MenuItem,
-  IconButton, InputAdornment, Stack, Button,
+  IconButton, Stack, Button,
 } from '@mui/material';
-import { Controller, useFormContext, useFieldArray } from 'react-hook-form';
-import SearchIcon from '@mui/icons-material/Search';
+import { Controller, useFormContext, useFieldArray, useWatch } from 'react-hook-form';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import AddIcon from '@mui/icons-material/Add';
 
+import ItemCodeAutocomplete from '../../../components/form/ItemCodeAutocomplete';
 import { UOM_OPTIONS, WAREHOUSE_OPTIONS, emptyItemRow } from '../createStockIndentSchema';
+
+// Only autofill the UoM select when the picked product's own uom matches one
+// of this grid's fixed dropdown values — a Product master uom outside that
+// list is a real mismatch, not something to fabricate a nonexistent option
+// for, so the field is just left for the user to pick themselves.
+function matchUom(value) {
+  return UOM_OPTIONS.some((opt) => opt.value === value) ? value : '';
+}
 
 const COLUMNS = [
   { key: 'itemCode', label: 'Item Code *', minWidth: 150 },
@@ -23,14 +32,17 @@ const COLUMNS = [
 /**
  * Inline, editable line-items grid for the Create Stock Indent form — same
  * spreadsheet-style row entry as the other create forms, but with an
- * Available Qty column (a read-only stock-lookup display, shaded like the
- * computed columns on Quotation/Order/Invoice) instead of pricing columns,
- * since a stock indent is a material request rather than a priced
- * document.
+ * Available Qty column instead of pricing columns, since a stock indent is
+ * a material request rather than a priced document. Available Qty is now a
+ * real per-row lookup against the actual Product master (matched by the row's
+ * Item Code, via the `productByCode` map built in CreateStockIndentPage from
+ * useGetProductsQuery) — an item code with no matching product honestly
+ * shows 0.00 rather than the old mock's permanently-static "0.00" text.
  */
-export default function IndentItemsTable({ onAddItem }) {
+export default function IndentItemsTable({ onAddItem, productByCode = {} }) {
   const { control } = useFormContext();
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  const products = useMemo(() => Object.values(productByCode), [productByCode]);
 
   return (
     <Stack spacing={1.5}>
@@ -47,7 +59,15 @@ export default function IndentItemsTable({ onAddItem }) {
           </TableHead>
           <TableBody>
             {fields.map((field, index) => (
-              <ItemRow key={field.id} index={index} control={control} onRemove={() => remove(index)} removable={fields.length > 1} />
+              <ItemRow
+                key={field.id}
+                index={index}
+                control={control}
+                onRemove={() => remove(index)}
+                removable={fields.length > 1}
+                productByCode={productByCode}
+                products={products}
+              />
             ))}
           </TableBody>
         </Table>
@@ -77,23 +97,27 @@ export default function IndentItemsTable({ onAddItem }) {
   );
 }
 
-function ItemRow({ index, control, onRemove, removable }) {
+function ItemRow({
+  index, control, onRemove, removable, productByCode, products,
+}) {
+  const { setValue } = useFormContext();
+  const itemCode = useWatch({ control, name: `items.${index}.itemCode` });
+  const matchedProduct = productByCode[itemCode?.trim()];
+  const availableQty = matchedProduct ? Number(matchedProduct.availableQty) : 0;
+
   return (
     <TableRow sx={{ '& td': { py: 0.75 } }}>
       <TableCell sx={{ color: 'text.secondary' }}>{index + 1}</TableCell>
       <TableCell>
-        <Controller
-          name={`items.${index}.itemCode`}
+        <ItemCodeAutocomplete
           control={control}
-          render={({ field }) => (
-            <TextField
-              {...field}
-              size="small"
-              fullWidth
-              placeholder="Search Item Code"
-              slotProps={{ input: { endAdornment: <InputAdornment position="end"><SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> } }}
-            />
-          )}
+          name={`items.${index}.itemCode`}
+          products={products}
+          onSelectProduct={(product) => {
+            setValue(`items.${index}.itemName`, product.name, { shouldDirty: true });
+            setValue(`items.${index}.hsnCode`, product.hsnSac || '', { shouldDirty: true });
+            setValue(`items.${index}.uom`, matchUom(product.uom), { shouldDirty: true });
+          }}
         />
       </TableCell>
       <TableCell>
@@ -131,7 +155,7 @@ function ItemRow({ index, control, onRemove, removable }) {
         />
       </TableCell>
       <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap', bgcolor: 'rgba(0,0,0,0.03)' }}>
-        0.00
+        {availableQty.toFixed(2)}
       </TableCell>
       <TableCell>
         <Controller

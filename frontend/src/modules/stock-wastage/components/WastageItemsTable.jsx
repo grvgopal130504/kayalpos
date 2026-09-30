@@ -1,14 +1,20 @@
 import {
   Box, Table, TableHead, TableBody, TableRow, TableCell, TextField, MenuItem,
-  IconButton, InputAdornment, Stack, Button,
+  IconButton, Stack, Button,
 } from '@mui/material';
 import { Controller, useFormContext, useFieldArray, useWatch } from 'react-hook-form';
-import SearchIcon from '@mui/icons-material/Search';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import AddIcon from '@mui/icons-material/Add';
 
 import FormDatePicker from '../../../components/form/FormDatePicker';
+import ItemCodeAutocomplete from '../../../components/form/ItemCodeAutocomplete';
 import { UOM_OPTIONS, emptyItemRow } from '../createStockWastageSchema';
+
+// Only autofill the UoM select when the picked product's own uom matches one
+// of this grid's fixed dropdown values — see IndentItemsTable's own comment.
+function matchUom(value) {
+  return UOM_OPTIONS.some((opt) => opt.value === value) ? value : '';
+}
 
 const COLUMNS = [
   { key: 'itemCode', label: 'Item Code *', minWidth: 150 },
@@ -42,9 +48,11 @@ export function computeLineValue(row) {
  * with Available Qty as a free-typed reference figure (no linked
  * PO/GRN/transfer to look it up from) alongside the editable Wastage Qty,
  * and a computed Wastage Value in place of a priced Total Cost (no
- * discount/tax on a write-off).
+ * discount/tax on a write-off). Item Code is a searchable select
+ * (ItemCodeAutocomplete) backed by the real Product master; picking a
+ * product autofills Item Name/HSN/UoM only.
  */
-export default function WastageItemsTable({ onAddItem }) {
+export default function WastageItemsTable({ onAddItem, products = [] }) {
   const { control } = useFormContext();
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
@@ -63,7 +71,7 @@ export default function WastageItemsTable({ onAddItem }) {
           </TableHead>
           <TableBody>
             {fields.map((field, index) => (
-              <ItemRow key={field.id} index={index} control={control} onRemove={() => remove(index)} removable={fields.length > 1} />
+              <ItemRow key={field.id} index={index} control={control} onRemove={() => remove(index)} removable={fields.length > 1} products={products} />
             ))}
           </TableBody>
         </Table>
@@ -93,7 +101,10 @@ export default function WastageItemsTable({ onAddItem }) {
   );
 }
 
-function ItemRow({ index, control, onRemove, removable }) {
+function ItemRow({
+  index, control, onRemove, removable, products,
+}) {
+  const { setValue } = useFormContext();
   const row = useWatch({ control, name: `items.${index}` });
   const wastageValue = computeLineValue(row);
 
@@ -101,18 +112,15 @@ function ItemRow({ index, control, onRemove, removable }) {
     <TableRow sx={{ '& td': { py: 0.75 } }}>
       <TableCell sx={{ color: 'text.secondary' }}>{index + 1}</TableCell>
       <TableCell>
-        <Controller
-          name={`items.${index}.itemCode`}
+        <ItemCodeAutocomplete
           control={control}
-          render={({ field }) => (
-            <TextField
-              {...field}
-              size="small"
-              fullWidth
-              placeholder="Search Item Code"
-              slotProps={{ input: { endAdornment: <InputAdornment position="end"><SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> } }}
-            />
-          )}
+          name={`items.${index}.itemCode`}
+          products={products}
+          onSelectProduct={(product) => {
+            setValue(`items.${index}.itemName`, product.name, { shouldDirty: true });
+            setValue(`items.${index}.hsnCode`, product.hsnSac || '', { shouldDirty: true });
+            setValue(`items.${index}.uom`, matchUom(product.uom), { shouldDirty: true });
+          }}
         />
       </TableCell>
       <TableCell>
