@@ -1,37 +1,65 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton,
-  Stack, Typography, Button, Grid, TextField, MenuItem,
+  Stack, Typography, Button, Grid, CircularProgress,
 } from '@mui/material';
+import { FormProvider, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import CloseIcon from '@mui/icons-material/Close';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 
 import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
-import { TYPE_OPTIONS, CHAPTER_OPTIONS } from '../hsnSacMockData';
+import FormTextField from '../../../../components/form/FormTextField';
+import FormSelect from '../../../../components/form/FormSelect';
+import FormDatePicker from '../../../../components/form/FormDatePicker';
+import { useCreateHsnSacMutation, useUpdateHsnSacMutation } from '../../../../api/hsnSacApi';
+import {
+  createHsnSacSchema, createHsnSacDefaultValues, hsnSacToFormValues, hsnSacFormValuesToPayload,
+  STATUS_OPTIONS, TYPE_SELECT_OPTIONS, CHAPTER_SELECT_OPTIONS,
+} from '../createHsnSacSchema';
 
-const EMPTY_VALUES = {
-  code: '', description: '', type: TYPE_OPTIONS[0], chapter: CHAPTER_OPTIONS[0],
-  taxRate: '', uqc: '', effectiveFrom: '', status: 'Active',
-};
-
-/** Add/Edit dialog for the HSN/SAC master. No backend yet, so Save/Update just toasts and closes. */
+/**
+ * Add/Edit dialog for the HSN/SAC master, backed by the real HSN/SAC API
+ * (see api/hsnSacApi.js) — react-hook-form + zod, same shape as
+ * Brand/UOM/Tax Code's form dialogs. Unlike Tax Code, HSN/SAC Code is a
+ * real editable field on Add (disabled on Edit) since it's a real
+ * externally-defined classification code the user looks up and enters, not
+ * server-generated — same convention as UOM's code.
+ */
 export default function HsnSacFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
-  const [values, setValues] = useState(EMPTY_VALUES);
   const isEdit = mode === 'edit';
 
+  const [createHsnSac] = useCreateHsnSacMutation();
+  const [updateHsnSac] = useUpdateHsnSacMutation();
+
+  const methods = useForm({
+    resolver: zodResolver(createHsnSacSchema),
+    defaultValues: createHsnSacDefaultValues,
+    mode: 'onTouched',
+  });
+  const { handleSubmit, reset, formState: { isSubmitting } } = methods;
+
   useEffect(() => {
-    if (open) setValues(isEdit && initialValues ? { ...EMPTY_VALUES, ...initialValues } : EMPTY_VALUES);
-  }, [open, isEdit, initialValues]);
+    if (open) reset(isEdit && initialValues ? hsnSacToFormValues(initialValues) : createHsnSacDefaultValues);
+  }, [open, isEdit, initialValues, reset]);
 
-  const setField = (field) => (e) => setValues((prev) => ({ ...prev, [field]: e.target.value }));
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    dispatch(showToast(isEdit ? 'HSN / SAC updated successfully' : 'HSN / SAC saved successfully', 'success'));
-    onClose?.();
-  };
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      const payload = hsnSacFormValuesToPayload(values);
+      if (isEdit) {
+        await updateHsnSac({ id: initialValues.id, ...payload }).unwrap();
+        dispatch(showToast('HSN / SAC updated successfully', 'success'));
+      } else {
+        await createHsnSac(payload).unwrap();
+        dispatch(showToast('HSN / SAC saved successfully', 'success'));
+      }
+      onClose?.();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save HSN / SAC', 'error'));
+    }
+  });
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -42,47 +70,49 @@ export default function HsnSacFormDialog({ open, mode = 'add', initialValues, on
         </Stack>
         <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
       </DialogTitle>
-      <form onSubmit={handleSubmit} noValidate>
-        <DialogContent dividers>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="HSN / SAC Code *" value={values.code} onChange={setField('code')} placeholder="Enter code" fullWidth required disabled={isEdit} />
+      <FormProvider {...methods}>
+        <form onSubmit={onSubmit} noValidate>
+          <DialogContent dividers>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="code" label="HSN / SAC Code *" placeholder="Enter code" disabled={isEdit} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="type" label="Type" options={TYPE_SELECT_OPTIONS} />
+              </Grid>
+              <Grid size={12}>
+                <FormTextField name="description" label="Description *" placeholder="Enter description" multiline minRows={2} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="chapter" label="Chapter" options={CHAPTER_SELECT_OPTIONS} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="taxRate" label="Tax Rate (%) *" placeholder="0.00" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="uqc" label="UQC" placeholder="e.g. KGS, NOS" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormDatePicker name="effectiveFrom" label="Effective From *" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="status" label="Status *" options={STATUS_OPTIONS} />
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Type" value={values.type} onChange={setField('type')} fullWidth>
-                {TYPE_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={12}>
-              <TextField label="Description *" value={values.description} onChange={setField('description')} placeholder="Enter description" fullWidth required multiline minRows={2} />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Chapter" value={values.chapter} onChange={setField('chapter')} fullWidth>
-                {CHAPTER_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Tax Rate (%)" value={values.taxRate} onChange={setField('taxRate')} placeholder="0.00" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="UQC" value={values.uqc} onChange={setField('uqc')} placeholder="e.g. KGS, NOS" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Effective From" value={values.effectiveFrom} onChange={setField('effectiveFrom')} placeholder="dd-mm-yyyy" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Status" value={values.status} onChange={setField('status')} fullWidth>
-                <MenuItem value="Active">Active</MenuItem>
-                <MenuItem value="Inactive">Inactive</MenuItem>
-              </TextField>
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained">{isEdit ? 'Update' : 'Save'}</Button>
-        </DialogActions>
-      </form>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={14} /> : null}
+            >
+              {isEdit ? 'Update' : 'Save'}
+            </Button>
+          </DialogActions>
+        </form>
+      </FormProvider>
     </Dialog>
   );
 }

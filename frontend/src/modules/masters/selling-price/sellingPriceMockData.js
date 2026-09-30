@@ -1,50 +1,19 @@
 /**
- * TEMPORARY mock data for the Selling Price master. There's no Selling
- * Price backend module yet, so this static snapshot stands in for
- * `useGetSellingPricesQuery()`. Replace with real API data once that
- * module exists — do not add more mock data here in the meantime.
+ * Static, frontend-owned option lists for the Selling Price master — same
+ * "list lives in the frontend" convention as Product's own
+ * group/type/UOM lists (see productMockData.js). Item, Outlet and Tax Code
+ * options are now real (useGetProductsQuery/useGetOutletsQuery/
+ * useGetTaxCodesQuery — see the backend-wired SellingPricePage.jsx), so
+ * this file only keeps what genuinely has no backend master yet: Price
+ * List (no Price List module exists in this app) and Rounding (a display
+ * preference, not a stored calculation rule).
  */
-
-// A single mock item stands in for the item picker's search result — the
-// Item field is a select over this one option, and choosing it fills
-// every read-mostly field below it (Item Code, Group, Brand, UOM, HSN/SAC,
-// MRP, Purchase Cost), matching the reference's auto-fill behavior.
-export const ITEM_OPTIONS = [
-  {
-    value: 'aashirvaad-atta-5kg',
-    label: 'Aashirvaad Atta 5 KG',
-    itemCode: '8901725123456',
-    itemGroup: 'Grocery',
-    brand: 'Aashirvaad',
-    uom: 'KG',
-    uomGroup: 'Weight',
-    hsnSac: '11010010',
-    taxCode: 'GST 5%',
-    mrp: '300.00',
-    purchaseCost: '220.00',
-  },
-];
 
 export const PRICE_LIST_OPTIONS = [
   { value: '', label: 'Select Price List', disabled: true },
   { value: 'Main Outlet Price List', label: 'Main Outlet Price List' },
   { value: 'Wholesale Price List', label: 'Wholesale Price List' },
   { value: 'Online Price List', label: 'Online Price List' },
-];
-
-export const TAX_CODE_OPTIONS = [
-  { value: 'GST 0%', label: 'GST 0%', rate: 0 },
-  { value: 'GST 5%', label: 'GST 5%', rate: 5 },
-  { value: 'GST 12%', label: 'GST 12%', rate: 12 },
-  { value: 'GST 18%', label: 'GST 18%', rate: 18 },
-  { value: 'GST 28%', label: 'GST 28%', rate: 28 },
-];
-
-export const OUTLET_OPTIONS = [
-  { value: '', label: 'Select Outlet / Branch', disabled: true },
-  { value: 'Main Outlet', label: 'Main Outlet' },
-  { value: 'Anna Nagar Outlet', label: 'Anna Nagar Outlet' },
-  { value: 'Market Street Outlet', label: 'Market Street Outlet' },
 ];
 
 export const ROUNDING_OPTIONS = [
@@ -54,19 +23,19 @@ export const ROUNDING_OPTIONS = [
   { value: 'No Rounding', label: 'No Rounding' },
 ];
 
+// Preset margin percentages the "Margin From MRP Quick Calculator" table
+// offers — clicking a row applies that margin to the calculator.
 export const MARGIN_QUICK_STEPS = [5, 10, 15, 20, 25];
 
-export const SELLING_PRICES = [
-  {
-    itemCode: '8901725123456',
-    itemName: 'Aashirvaad Atta 5 KG',
-    priceList: 'Main Outlet Price List',
-    mrp: 300.00,
-    pricingMethod: 'Margin % From MRP',
-    marginPercent: 10.00,
-    sellingPriceExclTax: 270.00,
-    sellingPriceInclTax: 283.50,
-    effectiveFrom: '01-Sep-2026',
-    status: 'Active',
-  },
+// Mirrors the Prisma PricingMethod enum (see
+// backend/src/modules/selling-price/sellingPrice.schema.js's PRICING_METHODS).
+export const PRICING_METHOD_OPTIONS = [
+  { value: 'FIXED', label: 'Fixed Selling Price' },
+  { value: 'MARGIN_FROM_MRP', label: 'Margin % From MRP' },
+  { value: 'MARGIN_FROM_COST', label: 'Margin % From Cost' },
+];
+
+export const STATUS_OPTIONS = [
+  { value: 'Active', label: 'Active' },
+  { value: 'Inactive', label: 'Inactive' },
 ];

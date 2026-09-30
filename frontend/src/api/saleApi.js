@@ -32,7 +32,20 @@ const saleApi = baseApi.injectEndpoints({
         { type: 'Sale', id: 'DISCOUNT_SUMMARY' },
         { type: 'Sale', id: 'OVERVIEW_SUMMARY' },
         { type: 'Sale', id: 'CUSTOMER_SUMMARIES' },
+        // A cash/card sale changes that tender's own report tiles/summary/
+        // transactions list; a sale of the other tender doesn't touch it.
+        ...(arg?.paymentMethod === 'cash' ? [{ type: 'Sale', id: 'CASH_SUMMARY' }] : []),
+        ...(arg?.paymentMethod === 'card' ? [{ type: 'Sale', id: 'CARD_SUMMARY' }] : []),
+        ...(arg?.paymentMethod === 'upi' ? [{ type: 'Sale', id: 'UPI_SUMMARY' }] : []),
+        // Every sale can move the Other Payments report: directly when its
+        // own tender is one of the "other" ones, or indirectly when it's
+        // cash/card/upi, since that report also shows same-day cash/card/upi
+        // totals as reconciliation context (see getOtherPaymentsReport).
+        { type: 'Sale', id: 'OTHER_SUMMARY' },
         ...(arg?.customerId ? [{ type: 'Sale', id: `CUSTOMER_${arg.customerId}` }] : []),
+        // Every sale moves the Cashier Panel landing page's Payment
+        // Summary (Today)/stat strip/Recent Transactions feed.
+        { type: 'CashierPanel', id: 'SUMMARY' },
       ],
     }),
     // Real discount totals (trend + by-outlet) computed from actual Sale
@@ -65,6 +78,40 @@ const saleApi = baseApi.injectEndpoints({
       transformResponse: (response) => response.data,
       providesTags: (result, error, customerId) => [{ type: 'Sale', id: `CUSTOMER_${customerId}` }],
     }),
+    // Real Cash Sales report (stat tiles, Sales/Payment Summary, donut,
+    // paginated transactions) for the Cashier Panel's Cash Sales page — see
+    // sale.service.js's getCashSalesReport for exactly what each field
+    // means. `params`: { date?: 'YYYY-MM-DD', page?, pageSize? }.
+    CashSalesReport: builder.query({
+      query: (params) => ({ url: '/sales/cash-summary', params }),
+      transformResponse: (response) => response.data,
+      providesTags: [{ type: 'Sale', id: 'CASH_SUMMARY' }],
+    }),
+    // Real Card Sales report — same shape as CashSalesReport above, scoped
+    // to card-tender sales. See sale.service.js's getCardSalesReport.
+    // `params`: { date?: 'YYYY-MM-DD', page?, pageSize? }.
+    CardSalesReport: builder.query({
+      query: (params) => ({ url: '/sales/card-summary', params }),
+      transformResponse: (response) => response.data,
+      providesTags: [{ type: 'Sale', id: 'CARD_SUMMARY' }],
+    }),
+    // Real UPI Sales report — same shape as CashSalesReport above, scoped
+    // to UPI-tender sales. See sale.service.js's getUpiSalesReport.
+    // `params`: { date?: 'YYYY-MM-DD', page?, pageSize? }.
+    UpiSalesReport: builder.query({
+      query: (params) => ({ url: '/sales/upi-summary', params }),
+      transformResponse: (response) => response.data,
+      providesTags: [{ type: 'Sale', id: 'UPI_SUMMARY' }],
+    }),
+    // Real Other Payments report (miscellaneous tenders — store credit,
+    // gift card, wallet, credit, cheque, bank transfer — plus same-day
+    // cash/card/upi context lines). See sale.service.js's
+    // getOtherPaymentsReport. `params`: { date?: 'YYYY-MM-DD', page?, pageSize? }.
+    OtherPaymentsReport: builder.query({
+      query: (params) => ({ url: '/sales/other-summary', params }),
+      transformResponse: (response) => response.data,
+      providesTags: [{ type: 'Sale', id: 'OTHER_SUMMARY' }],
+    }),
   }),
 });
 
@@ -74,3 +121,7 @@ export const useDiscountSummaryQuery = saleApi.useDiscountSummaryQuery;
 export const useSalesOverviewSummaryQuery = saleApi.useSalesOverviewSummaryQuery;
 export const useCustomerSalesSummariesQuery = saleApi.useCustomerSalesSummariesQuery;
 export const useCustomerSalesQuery = saleApi.useCustomerSalesQuery;
+export const useCashSalesReportQuery = saleApi.useCashSalesReportQuery;
+export const useCardSalesReportQuery = saleApi.useCardSalesReportQuery;
+export const useUpiSalesReportQuery = saleApi.useUpiSalesReportQuery;
+export const useOtherPaymentsReportQuery = saleApi.useOtherPaymentsReportQuery;

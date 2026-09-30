@@ -89,14 +89,18 @@ export default function AlertStatsRow({ alerts }) {
             >
               SAP
             </Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'success.main' }}>
+            {/* No SAP integration exists in this app yet — the backend
+                honestly reports 'Not Integrated' rather than a fabricated
+                "Connected" status, so this reads in a neutral color instead
+                of the fixed green a real connection would earn. */}
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: alerts.sapSyncStatus === 'Connected' ? 'success.main' : 'text.secondary' }}>
               {alerts.sapSyncStatus}
             </Typography>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
               SAP Sync Status
             </Typography>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              Last Sync: {alerts.sapLastSyncAt}
+              Last Sync: {alerts.sapLastSyncAt || '—'}
             </Typography>
           </Stack>
         </Paper>

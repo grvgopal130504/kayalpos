@@ -28,6 +28,7 @@ export async function nextBillNo(tenantId) {
 export async function createSale({
   tenantId, outletId, cashierName, customerId, customerName, lines,
   discountType, discountValue, paymentMethod, receivedAmount,
+  cardType, cardLast4, cardBank, upiApp, upiTxnId, paymentReference,
 }) {
   return prisma.$transaction(async (tx) => {
     if (customerId) {
@@ -94,6 +95,15 @@ export async function createSale({
         paymentMethod,
         receivedAmount,
         changeAmount,
+        cardType: paymentMethod === 'card' ? (cardType || null) : null,
+        cardLast4: paymentMethod === 'card' ? (cardLast4 || null) : null,
+        cardBank: paymentMethod === 'card' ? (cardBank || null) : null,
+        upiApp: paymentMethod === 'upi' ? (upiApp || null) : null,
+        upiTxnId: paymentMethod === 'upi' ? (upiTxnId || null) : null,
+        // Not gated to specific tenders like the card/UPI fields above —
+        // it's a generic reference any non-cash/card/upi tender can carry
+        // (cheque number, gift card code, bank transfer UTR, ...).
+        paymentReference: paymentReference || null,
         lines: { create: lineData },
       },
       include: { lines: true },
@@ -287,4 +297,399 @@ export async function getCustomerPurchaseSummary(tenantId, customerId) {
 async function nextBillNoWithinTx(tx, tenantId) {
   const count = await tx.sale.count({ where: { tenantId } });
   return `LS-${String(count + 1).padStart(5, '0')}`;
+}
+
+function round2(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+// Midnight-to-midnight bounds for one calendar day in the server's local
+// time zone. `dateStr` is a "YYYY-MM-DD" string (validated by
+// cashSalesQuerySchema/cardSalesQuerySchema); omitted, it defaults to today.
+function dayBounds(dateStr) {
+  const start = dateStr ? new Date(`${dateStr}T00:00:00`) : new Date();
+  if (Number.isNaN(start.getTime())) throw new ApiError(400, 'Invalid date');
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function formatDayLabel(date) {
+  return `${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/**
+ * Shared engine behind getCashSalesReport, getCardSalesReport,
+ * getUpiSalesReport, and getOtherPaymentsReport — all are "how did this
+ * tender (or tender bucket) do" reports built from real Sale/SalesReturn
+ * rows, differing only in which `paymentMethod`/`refundTo` values they
+ * scope to, their stat-tile keys, payment-summary field names, and whether
+ * a transaction row carries extra tender-specific columns (e.g. a card's
+ * type/last4/bank). See either exported wrapper's own doc comment for what
+ * each field means and which figures are all-time vs. scoped to `date`.
+ *
+ * `paymentMethodWhere`/`refundToWhere` accept anything Prisma's `where`
+ * clause does for a String column — a single value (`'cash'`) for a
+ * single-tender report, or a filter object (`{ notIn: [...] }`) for a
+ * bucket of tenders like "everything that isn't cash/card/upi". They
+ * default to the same value so single-tender callers only pass one.
+ */
+async function getTenderSalesReport(tenantId, outletId, { date, page, pageSize } = {}, {
+  paymentMethodWhere, refundToWhere = paymentMethodWhere, donutId, tenderLabel, mapExtraRowFields = () => ({}),
+}) {
+  const outletFilter = outletId ? { outletId } : {};
+  const { start: dayStart, end: dayEnd } = dayBounds(date);
+  const { start: todayStart, end: todayEnd } = dayBounds();
+
+  const [allTenderSales, todaysAgg, daySales, dayReturns] = await Promise.all([
+    prisma.sale.findMany({
+      where: { tenantId, ...outletFilter, paymentMethod: paymentMethodWhere },
+      select: { grandTotal: true, lines: { select: { qty: true } } },
+    }),
+    prisma.sale.aggregate({
+      where: {
+        tenantId, ...outletFilter, paymentMethod: paymentMethodWhere, createdAt: { gte: todayStart, lte: todayEnd },
+      },
+      _sum: { grandTotal: true },
+      _count: { _all: true },
+    }),
+    prisma.sale.findMany({
+      where: {
+        tenantId, ...outletFilter, paymentMethod: paymentMethodWhere, createdAt: { gte: dayStart, lte: dayEnd },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { lines: true },
+    }),
+    prisma.salesReturn.findMany({
+      where: {
+        tenantId,
+        refundMode: 'refund',
+        refundTo: refundToWhere,
+        createdAt: { gte: dayStart, lte: dayEnd },
+        ...(outletId ? { sale: { outletId } } : {}),
+      },
+      select: { grandTotal: true },
+    }),
+  ]);
+
+  let totalValue = 0;
+  let totalItems = 0;
+  let totalQty = 0;
+  allTenderSales.forEach((sale) => {
+    totalValue += Number(sale.grandTotal);
+    totalItems += sale.lines.length;
+    totalQty += sale.lines.reduce((sum, line) => sum + line.qty, 0);
+  });
+  const totalTransactions = allTenderSales.length;
+  const avgInvoiceValue = totalTransactions > 0 ? totalValue / totalTransactions : 0;
+
+  let grossSales = 0;
+  let discount = 0;
+  let taxAmount = 0;
+  let grandTotal = 0;
+  let received = 0;
+  let changeReturned = 0;
+  daySales.forEach((sale) => {
+    grossSales += Number(sale.subTotal);
+    discount += Number(sale.discountAmount);
+    taxAmount += Number(sale.taxAmount);
+    grandTotal += Number(sale.grandTotal);
+    received += Number(sale.receivedAmount);
+    changeReturned += Number(sale.changeAmount);
+  });
+  const taxableAmount = Math.max(grossSales - discount, 0);
+  const refunds = dayReturns.reduce((sum, ret) => sum + Number(ret.grandTotal), 0);
+  const netRetained = received - changeReturned;
+
+  const totalPages = Math.max(Math.ceil(daySales.length / pageSize), 1);
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * pageSize;
+  const transactions = daySales.slice(pageStart, pageStart + pageSize).map((sale) => ({
+    invoiceNo: sale.billNo,
+    dateTime: sale.createdAt,
+    items: sale.lines.length,
+    qty: sale.lines.reduce((sum, line) => sum + line.qty, 0),
+    discount: round2(sale.discountAmount),
+    tax: round2(sale.taxAmount),
+    totalAmount: round2(sale.grandTotal),
+    received: round2(sale.receivedAmount),
+    cashier: sale.cashierName,
+    ...mapExtraRowFields(sale),
+  }));
+
+  return {
+    stats: {
+      total: { value: round2(totalValue), transactions: totalTransactions },
+      totalItemsSold: { value: totalItems, totalQty: round2(totalQty) },
+      avgInvoiceValue: { value: round2(avgInvoiceValue) },
+      today: { value: round2(todaysAgg._sum.grandTotal || 0), transactions: todaysAgg._count._all },
+      selectedDateSales: { value: round2(grandTotal), date: formatDayLabel(dayStart) },
+    },
+    summary: {
+      grossSales: round2(grossSales),
+      discount: round2(discount),
+      taxableAmount: round2(taxableAmount),
+      cgstRate: 2.5,
+      cgstAmount: round2(taxAmount / 2),
+      sgstRate: 2.5,
+      sgstAmount: round2(taxAmount / 2),
+      grandTotal: round2(grandTotal),
+    },
+    payment: {
+      received: round2(received),
+      changeReturned: round2(changeReturned),
+      totalReceived: round2(netRetained),
+      refunds: round2(refunds),
+    },
+    donut: [
+      { id: donutId, label: tenderLabel, value: Math.max(round2(netRetained), 0), color: '#22C55E' },
+      { id: 'refunds', label: 'Refunds', value: round2(refunds), color: '#EF4444' },
+    ],
+    transactions,
+    totalPages,
+    page: safePage,
+    pageSize,
+  };
+}
+
+/**
+ * Powers the Cashier Panel's Cash Sales report — every figure here comes
+ * from real Sale/SalesReturn rows, scoped to `paymentMethod: 'cash'` only
+ * (this is a cash-tender report, not the general sales report):
+ *
+ * - stats.totalCashSales / stats.totalItemsSold / stats.avgInvoiceValue are
+ *   all-time totals for the cashier's outlet, so the tiles don't reset to
+ *   zero every time the date filter changes.
+ * - stats.todaysCashSales is always the server's current calendar day,
+ *   independent of the `date` filter, matching the reference UI's separate
+ *   "Today" vs "Selected Date" tiles.
+ * - stats.selectedDateSales / summary / payment / donut / transactions are
+ *   all scoped to `date` (defaults to today) — this is what the page's date
+ *   picker actually controls.
+ * - CGST/SGST are reported as an even split of the flat `taxAmount` this
+ *   schema stores (see TAX_RATE's comment) — an approximation, not a true
+ *   per-rate breakdown, since there's no separate CGST/SGST column.
+ * - payment.refunds is real cash refund value from SalesReturn rows
+ *   (`refundMode: 'refund'`, `refundTo: 'cash'`) processed on the selected
+ *   day — not derived from the Sale rows themselves.
+ */
+export async function getCashSalesReport(tenantId, outletId, params = {}) {
+  const report = await getTenderSalesReport(tenantId, outletId, params, {
+    paymentMethodWhere: 'cash',
+    donutId: 'cash',
+    tenderLabel: 'Cash Retained',
+    mapExtraRowFields: () => ({ paymentMode: 'Cash' }),
+  });
+  return {
+    ...report,
+    stats: {
+      totalCashSales: report.stats.total,
+      totalItemsSold: report.stats.totalItemsSold,
+      avgInvoiceValue: report.stats.avgInvoiceValue,
+      todaysCashSales: report.stats.today,
+      selectedDateSales: report.stats.selectedDateSales,
+    },
+    payment: {
+      cashReceived: report.payment.received,
+      changeReturned: report.payment.changeReturned,
+      totalReceived: report.payment.totalReceived,
+      refunds: report.payment.refunds,
+    },
+  };
+}
+
+/**
+ * Powers the Cashier Panel's Card Sales report — same shape/semantics as
+ * getCashSalesReport above (see its doc comment for the all-time-vs-`date`
+ * split and the CGST/SGST approximation caveat), scoped to
+ * `paymentMethod: 'card'` and with each transaction row also carrying the
+ * card's type/last-4/bank when known.
+ *
+ * The Line Sale checkout screen doesn't collect card network/last-4/bank
+ * yet (createSale accepts them as optional — see sale.schema.js), so those
+ * three columns are null on every sale made before that capture exists;
+ * the frontend renders them as "—" rather than guessing.
+ */
+export async function getCardSalesReport(tenantId, outletId, params = {}) {
+  const report = await getTenderSalesReport(tenantId, outletId, params, {
+    paymentMethodWhere: 'card',
+    donutId: 'card',
+    tenderLabel: 'Card Retained',
+    mapExtraRowFields: (sale) => ({
+      cardType: sale.cardType || null,
+      cardLast4: sale.cardLast4 || null,
+      cardBank: sale.cardBank || null,
+    }),
+  });
+  return {
+    ...report,
+    stats: {
+      totalCardSales: report.stats.total,
+      totalItemsSold: report.stats.totalItemsSold,
+      avgInvoiceValue: report.stats.avgInvoiceValue,
+      todaysCardSales: report.stats.today,
+      selectedDateSales: report.stats.selectedDateSales,
+    },
+    payment: {
+      cardReceived: report.payment.received,
+      changeReturned: report.payment.changeReturned,
+      totalReceived: report.payment.totalReceived,
+      refunds: report.payment.refunds,
+    },
+  };
+}
+
+/**
+ * Powers the Cashier Panel's UPI Sales report — same shape/semantics as
+ * getCashSalesReport above (see its doc comment for the all-time-vs-`date`
+ * split and the CGST/SGST approximation caveat), scoped to
+ * `paymentMethod: 'upi'` and with each transaction row also carrying the
+ * UPI app/transaction ID when known.
+ *
+ * The Line Sale checkout screen doesn't collect the UPI app/transaction ID
+ * yet (createSale accepts them as optional — see sale.schema.js), so those
+ * two columns are null on every sale made before that capture exists; the
+ * frontend renders them as "—" rather than guessing.
+ */
+export async function getUpiSalesReport(tenantId, outletId, params = {}) {
+  const report = await getTenderSalesReport(tenantId, outletId, params, {
+    paymentMethodWhere: 'upi',
+    donutId: 'upi',
+    tenderLabel: 'UPI Retained',
+    mapExtraRowFields: (sale) => ({
+      upiApp: sale.upiApp || null,
+      upiTxnId: sale.upiTxnId || null,
+    }),
+  });
+  return {
+    ...report,
+    stats: {
+      totalUpiSales: report.stats.total,
+      totalItemsSold: report.stats.totalItemsSold,
+      avgInvoiceValue: report.stats.avgInvoiceValue,
+      todaysUpiSales: report.stats.today,
+      selectedDateSales: report.stats.selectedDateSales,
+    },
+    payment: {
+      upiReceived: report.payment.received,
+      changeReturned: report.payment.changeReturned,
+      totalReceived: report.payment.totalReceived,
+      refunds: report.payment.refunds,
+    },
+  };
+}
+
+// The three "primary" tenders that each get their own dedicated report
+// (Cash/Card/UPI Sales) — everything else falls into the Other Payments
+// bucket below.
+const PRIMARY_TENDER_METHODS = ['cash', 'card', 'upi'];
+
+// Human-readable labels for the "other" tender tokens accepted by
+// createSaleSchema — falls back to title-casing an unknown token (defensive
+// only; every token createSale accepts today has an explicit entry here).
+const OTHER_PAYMENT_MODE_LABELS = {
+  wallet: 'Wallet',
+  credit: 'Credit',
+  'store-credit': 'Store Credit',
+  'gift-card': 'Gift Card',
+  cheque: 'Cheque',
+  'bank-transfer': 'Bank Transfer',
+};
+
+function labelForPaymentMethod(method) {
+  if (OTHER_PAYMENT_MODE_LABELS[method]) return OTHER_PAYMENT_MODE_LABELS[method];
+  if (!method) return 'Other';
+  return method
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * Powers the Cashier Panel's Other Payments report — the miscellaneous-
+ * tender bucket that isn't cash, card, or UPI (store credit, gift card,
+ * wallet, credit, cheque, bank transfer). Same all-time-vs-`date` split and
+ * CGST/SGST approximation caveat as getCashSalesReport above, but scoped to
+ * `paymentMethod NOT IN ('cash', 'card', 'upi')` via the shared engine's
+ * filter-object support, and with two differences from the single-tender
+ * reports:
+ *
+ * - Each transaction row carries a `paymentMode` (the tender's own label —
+ *   "Gift Card", "Cheque", ...) and a free-text `reference` from
+ *   `paymentReference`, since these tenders don't share a common structured
+ *   detail shape the way card/UPI do. The Line Sale checkout screen doesn't
+ *   collect `paymentReference` yet (createSale accepts it as optional — see
+ *   sale.schema.js), so it's "—" on every sale made before that capture
+ *   exists.
+ * - payment.cash/card/upi and the donut are same-day totals for the three
+ *   *primary* tenders, shown here purely as reconciliation context (so a
+ *   cashier can see the full day's payment mix on one screen) — they are
+ *   NOT summed into payment.totalReceived, which stays this bucket's own
+ *   net retained amount, same as every other tender report.
+ */
+export async function getOtherPaymentsReport(tenantId, outletId, params = {}) {
+  const outletFilter = outletId ? { outletId } : {};
+  const { start: dayStart, end: dayEnd } = dayBounds(params.date);
+
+  // One groupBy instead of three separate aggregate() calls for the
+  // cash/card/upi context lines — same result, but one connection instead
+  // of three. getTenderSalesReport below already needs 4 of its own
+  // (see its doc comment), so this keeps this endpoint's total worst-case
+  // concurrent connections at 5 instead of 7 — right at the pool's `max`
+  // (see config/prisma.js) rather than over it.
+  const [report, primaryTenderTotals] = await Promise.all([
+    getTenderSalesReport(tenantId, outletId, params, {
+      paymentMethodWhere: { notIn: PRIMARY_TENDER_METHODS },
+      refundToWhere: { notIn: PRIMARY_TENDER_METHODS },
+      donutId: 'other',
+      tenderLabel: 'Other Payments Retained',
+      mapExtraRowFields: (sale) => ({
+        paymentMode: labelForPaymentMethod(sale.paymentMethod),
+        reference: sale.paymentReference || null,
+      }),
+    }),
+    prisma.sale.groupBy({
+      by: ['paymentMethod'],
+      where: {
+        tenantId, ...outletFilter, paymentMethod: { in: PRIMARY_TENDER_METHODS }, createdAt: { gte: dayStart, lte: dayEnd },
+      },
+      _sum: { receivedAmount: true },
+    }),
+  ]);
+
+  const receivedByMethod = Object.fromEntries(
+    primaryTenderTotals.map((row) => [row.paymentMethod, round2(row._sum.receivedAmount || 0)]),
+  );
+  const cash = receivedByMethod.cash || 0;
+  const card = receivedByMethod.card || 0;
+  const upi = receivedByMethod.upi || 0;
+
+  return {
+    ...report,
+    stats: {
+      totalOtherPayments: report.stats.total,
+      totalItemsSold: report.stats.totalItemsSold,
+      avgInvoiceValue: report.stats.avgInvoiceValue,
+      todaysOtherPayments: report.stats.today,
+      selectedDateSales: report.stats.selectedDateSales,
+    },
+    payment: {
+      otherPaymentsReceived: report.payment.received,
+      cash,
+      card,
+      upi,
+      changeReturned: report.payment.changeReturned,
+      totalReceived: report.payment.totalReceived,
+      refunds: report.payment.refunds,
+    },
+    // No refunds slice here (unlike the single-tender reports) — this donut
+    // is a same-day payment-mix picture across all four buckets instead.
+    donut: [
+      { id: 'other', label: 'Other Payments', value: Math.max(round2(report.payment.totalReceived), 0), color: '#F5A623' },
+      { id: 'cash', label: 'Cash', value: cash, color: '#22A06B' },
+      { id: 'card', label: 'Card', value: card, color: '#2563EB' },
+      { id: 'upi', label: 'UPI', value: upi, color: '#8B5CF6' },
+    ],
+  };
 }

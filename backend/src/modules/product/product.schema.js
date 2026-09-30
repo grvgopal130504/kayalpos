@@ -7,6 +7,10 @@ export const createProductSchema = z.object({
   code: z.string().trim().min(1).optional(),
   name: z.string().trim().min(1, 'Product name is required'),
   group: z.string().trim().min(1, 'Product group is required'),
+  // Kept loose (non-empty-when-present, not a hard enum) same reasoning as
+  // group/brand below — its option list lives in the frontend's
+  // createProductSchema.js and can grow without a matching backend redeploy.
+  productType: z.string().trim().optional().nullable(),
   brand: z.string().trim().optional().nullable(),
   uom: z.string().trim().min(1, 'UOM is required'),
   hsnSac: z.string().trim().optional().nullable(),

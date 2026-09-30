@@ -35,6 +35,11 @@ const UNPAGINATED_LIMIT = 1000;
  * @param {object} [opts.listSelect] - Prisma `select` object to trim the list
  *   response to only the columns the UI needs (e.g. omit tenantId). Omit to
  *   return full rows (get/create/update always return full rows regardless).
+ * @param {object} [opts.detailInclude] - Prisma `include` object applied only
+ *   to the single-record GET /:id route, for a module whose detail screen
+ *   needs a related list the plain list view doesn't (e.g. Outlet's
+ *   `{ contacts: { orderBy: { createdAt: 'asc' } } }`). Omit for the plain
+ *   scalar-only row every other module already gets.
  * @param {number} [opts.cacheTtlMs] - list-response cache TTL; 0 disables caching.
  */
 export function createCrudRouter({
@@ -47,6 +52,7 @@ export function createCrudRouter({
   codeField = 'code',
   codeLength = 3,
   listSelect,
+  detailInclude,
   cacheTtlMs = 15_000,
 }) {
   const router = Router();
@@ -58,11 +64,17 @@ export function createCrudRouter({
   const listCache = createMemoryCache({ ttlMs: cacheTtlMs });
 
   function buildWhere(req) {
-    const { search, status } = req.query;
+    const { search, status, isActive } = req.query;
     const where = { tenantId: req.user.tenantId };
 
     if (status && status !== 'All') {
       where.status = String(status).toUpperCase();
+    }
+    // For a model with a plain `isActive` boolean instead of a `status`
+    // enum (e.g. Outlet) — separate query param so it never collides with
+    // `status` above on a model that has both concepts.
+    if (isActive !== undefined && isActive !== '') {
+      where.isActive = isActive === 'true' || isActive === true;
     }
     if (search && searchFields.length) {
       where.OR = searchFields.map((field) => ({
@@ -121,7 +133,7 @@ export function createCrudRouter({
 
   router.get('/:id', async (req, res, next) => {
     try {
-      const row = await model.findFirst({ where: { id: req.params.id, tenantId: req.user.tenantId } });
+      const row = await model.findFirst({ where: { id: req.params.id, tenantId: req.user.tenantId }, include: detailInclude });
       if (!row) throw new ApiError(404, 'Record not found');
       res.json({ success: true, data: row });
     } catch (err) {
@@ -167,7 +179,7 @@ export function createCrudRouter({
       listCache.clear();
       res.json({ success: true, data: { id: req.params.id } });
     } catch (err) {
-      next(prismaKnownError(err));
+      next(prismaKnownError(err, { onDeleteConflict: true }));
     }
   });
 
@@ -187,10 +199,19 @@ async function nextCode({ model, tenantId, prefix, length = 3 }) {
   return `${prefix}${String(count + 1).padStart(length, '0')}`;
 }
 
-/** Turns a Prisma unique-constraint violation into a friendly 409 instead of a raw 500. */
-function prismaKnownError(err) {
+/**
+ * Turns known Prisma error codes into friendly 4xx responses instead of a
+ * raw 500. `onDeleteConflict` is only passed by the DELETE route — P2003
+ * there means "this row is still referenced elsewhere" (e.g. an Outlet
+ * with existing Sales/ShiftSessions/Expenses), which is a normal, expected
+ * 409 for that route, not a server error.
+ */
+function prismaKnownError(err, { onDeleteConflict = false } = {}) {
   if (err?.code === 'P2002') {
     return new ApiError(409, 'A record with that value already exists', err.meta);
+  }
+  if (onDeleteConflict && err?.code === 'P2003') {
+    return new ApiError(409, 'This record still has related data (sales, shifts, cash transactions, or expenses) and cannot be deleted', err.meta);
   }
   return err;
 }

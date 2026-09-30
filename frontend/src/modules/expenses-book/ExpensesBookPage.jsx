@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, TextField, InputAdornment, Button,
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, Skeleton, Alert,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
@@ -11,16 +11,19 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 
-import { useAppDispatch } from '../../app/hooks';
-import { logout } from '../../features/auth/authSlice';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { logout, selectCurrentUser } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 import StatCard from '../../components/common/StatCard';
 import DonutChart from '../../components/common/DonutChart';
+import { DatePickerField, formatPickerDate, parsePickerDate } from '../../components/form/FormDatePicker';
 import { formatCurrency } from '../../utils/format';
+import { useExpenseReportQuery } from '../../api/expenseApi';
 
 import ExpenseTransactionsTable from './components/ExpenseTransactionsTable';
 import AddExpensePage from './AddExpensePage';
-import { CASHIER, EXPENSES_BOOK } from './expensesBookMockData';
+
+const PAGE_SIZE = 10;
 
 function SummaryTile({ label, value, valueColor }) {
   return (
@@ -33,6 +36,17 @@ function SummaryTile({ label, value, valueColor }) {
   );
 }
 
+// yyyy-mm-dd in the *local* time zone — what the backend's `date` query
+// param expects (see CashSalesPage.jsx's toDateKey for the same
+// local-vs-UTC reasoning).
+function toDateKey(pickerValue) {
+  const date = parsePickerDate(pickerValue) || new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /**
  * Expenses Book — the cashier's day-to-day expense log, reached from the
  * main sidebar's "Expense Book" item (not the Cashier Panel). Same overall
@@ -40,30 +54,57 @@ function SummaryTile({ label, value, valueColor }) {
  * panels + transactions table), with two donuts side by side at the bottom
  * (Expenses by Category next to the transactions table's "View All", and
  * Expenses by Payment Mode beside it) and an "Add Expenses" button that
- * routes to the create-expense form.
+ * swaps in the create-expense form via local state.
  *
- * There's no expenses backend module yet, so every figure comes from
- * EXPENSES_BOOK mock data. The Add Expenses form swaps in via local state
- * instead of a separate /expenses-book/add route.
+ * Every figure comes from GET /expenses/summary (see expense.service.js's
+ * getExpenseReport) — real Expense rows, keyed off each row's own
+ * (possibly backdated) expenseDate rather than when it was logged.
  */
 export default function ExpensesBookPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const user = useAppSelector(selectCurrentUser);
   const [tab, setTab] = useState('list');
   const [page, setPage] = useState(1);
+  const [selectedDate, setSelectedDate] = useState(() => formatPickerDate(new Date()));
 
-  if (tab === 'create') {
-    return <AddExpensePage onBack={() => setTab('list')} />;
-  }
+  const dateKey = toDateKey(selectedDate);
+  const {
+    data: report, isLoading, isFetching, isError, refetch,
+  } = useExpenseReportQuery({ date: dateKey, page, pageSize: PAGE_SIZE }, { skip: tab === 'create' });
 
-  const { stats, summary, byCategory, byPaymentMode, transactions, totalPages, selectedDate } = EXPENSES_BOOK;
+  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
 
-  const handleDatePick = () => dispatch(showToast('Date picker is coming soon', 'info'));
   const handleViewAll = () => dispatch(showToast('Full expense list is coming soon', 'info'));
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
+  const handleDateChange = (value) => {
+    setSelectedDate(value || formatPickerDate(new Date()));
+    setPage(1);
+  };
+
+  if (tab === 'create') {
+    return <AddExpensePage onBack={() => setTab('list')} />;
+  }
+
+  if (isError) {
+    return (
+      <Stack spacing={2}>
+        <Alert
+          severity="error"
+          action={(
+            <MuiLink component="button" type="button" variant="body2" underline="hover" onClick={refetch}>
+              Retry
+            </MuiLink>
+          )}
+        >
+          Couldn&apos;t load the Expenses Book from the server. Check your connection and try reloading.
+        </Alert>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
@@ -77,7 +118,7 @@ export default function ExpensesBookPage() {
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
+            Cashier : {cashierLabel}
           </Typography>
           <MuiLink
             component="button"
@@ -100,120 +141,134 @@ export default function ExpensesBookPage() {
         </Stack>
       </Stack>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={PointOfSaleOutlinedIcon}
-            iconColor="success"
-            iconShape="circle"
-            label="Total Expenses"
-            value={formatCurrency(stats.totalExpenses.value, { decimals: true })}
-            caption={`Transactions : ${stats.totalExpenses.transactions}`}
-          />
+      {isLoading || !report ? (
+        <Grid container spacing={2}>
+          {[1, 2, 3, 4, 5].map((key) => (
+            <Grid key={key} size={{ xs: 12, sm: 6, lg: 2.4 }}>
+              <Skeleton variant="rounded" height={92} />
+            </Grid>
+          ))}
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={DescriptionOutlinedIcon}
-            iconColor="#2563EB"
-            iconShape="circle"
-            label="Total Entries"
-            value={String(stats.totalEntries.value)}
-            caption="Total Quantity : -"
-          />
+      ) : (
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={PointOfSaleOutlinedIcon}
+              iconColor="success"
+              iconShape="circle"
+              label="Total Expenses"
+              value={formatCurrency(report.stats.totalExpenses.value, { decimals: true })}
+              caption={`Transactions : ${report.stats.totalExpenses.transactions}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={DescriptionOutlinedIcon}
+              iconColor="#2563EB"
+              iconShape="circle"
+              label="Total Entries"
+              value={String(report.stats.totalEntries.value)}
+              caption="Total Quantity : -"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CurrencyRupeeOutlinedIcon}
+              iconColor="warning"
+              iconShape="circle"
+              label="Average Expense"
+              value={formatCurrency(report.stats.avgExpense.value, { decimals: true })}
+              caption="Per Entry"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#8B5CF6"
+              iconShape="circle"
+              label="Today's Expenses"
+              value={formatCurrency(report.stats.todaysExpenses.value, { decimals: true })}
+              caption={`${report.stats.todaysExpenses.transactions} Transactions`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#0EA5A4"
+              iconShape="circle"
+              label="Selected Date Expenses"
+              value={formatCurrency(report.stats.selectedDateExpenses.value, { decimals: true })}
+              caption={report.stats.selectedDateExpenses.date}
+            />
+          </Grid>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CurrencyRupeeOutlinedIcon}
-            iconColor="warning"
-            iconShape="circle"
-            label="Average Expense"
-            value={formatCurrency(stats.avgExpense.value, { decimals: true })}
-            caption="Per Entry"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#8B5CF6"
-            iconShape="circle"
-            label="Today's Expenses"
-            value={formatCurrency(stats.todaysExpenses.value, { decimals: true })}
-            caption={`${stats.todaysExpenses.transactions} Transactions`}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#0EA5A4"
-            iconShape="circle"
-            label="Selected Date Expenses"
-            value={formatCurrency(stats.selectedDateExpenses.value, { decimals: true })}
-            caption={stats.selectedDateExpenses.date}
-          />
-        </Grid>
-      </Grid>
+      )}
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Expense Summary</Typography>
-              <TextField
-                size="small"
+              <DatePickerField
                 value={selectedDate}
-                onClick={handleDatePick}
-                slotProps={{
-                  input: {
-                    readOnly: true,
-                    startAdornment: <InputAdornment position="start"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment>,
-                    endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment>,
-                  },
-                }}
-                sx={{ cursor: 'pointer', width: { xs: '100%', sm: 200 } }}
+                onChange={handleDateChange}
+                sx={{ width: { xs: '100%', sm: 200 } }}
               />
             </Stack>
 
-            <Grid container spacing={1.5}>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Expenses" value={formatCurrency(summary.totalExpenses, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Transactions" value={String(summary.totalTransactions)} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Payment Modes" value={String(summary.totalPaymentModes)} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Categories" value={String(summary.totalCategories)} valueColor="#2563EB" />
-              </Grid>
-            </Grid>
+            {!report ? (
+              <Skeleton variant="rounded" height={160} />
+            ) : (
+              <>
+                <Grid container spacing={1.5}>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Expenses" value={formatCurrency(report.summary.totalExpenses, { decimals: true })} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Transactions" value={String(report.summary.totalTransactions)} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Payment Modes" value={String(report.summary.totalPaymentModes)} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Categories" value={String(report.summary.totalCategories)} valueColor="#2563EB" />
+                  </Grid>
+                </Grid>
 
-            <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Cash Expenses" value={formatCurrency(summary.cashExpenses, { decimals: true })} valueColor="success.main" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Card Expenses" value={formatCurrency(summary.cardExpenses, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="UPI Expenses" value={formatCurrency(summary.upiExpenses, { decimals: true })} valueColor="#8B5CF6" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Other Expenses" value={formatCurrency(summary.otherExpenses, { decimals: true })} valueColor="#C1560A" />
-              </Grid>
-            </Grid>
+                <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Cash Expenses" value={formatCurrency(report.summary.cashExpenses, { decimals: true })} valueColor="success.main" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Card Expenses" value={formatCurrency(report.summary.cardExpenses, { decimals: true })} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="UPI Expenses" value={formatCurrency(report.summary.upiExpenses, { decimals: true })} valueColor="#8B5CF6" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Other Expenses" value={formatCurrency(report.summary.otherExpenses, { decimals: true })} valueColor="#C1560A" />
+                  </Grid>
+                </Grid>
+              </>
+            )}
           </Paper>
         </Grid>
 
         <Grid size={{ xs: 12, lg: 5 }}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Expenses by Category</Typography>
-            <DonutChart
-              data={byCategory}
-              centerValue={formatCurrency(summary.totalExpenses, { decimals: true })}
-              centerLabel="Total Expenses"
-              formatValue={(v) => formatCurrency(v, { decimals: true })}
-            />
+            {!report ? (
+              <Skeleton variant="rounded" height={220} />
+            ) : report.summary.totalExpenses === 0 ? (
+              <Alert severity="info">No expenses were logged on this date yet.</Alert>
+            ) : (
+              <DonutChart
+                data={report.byCategory}
+                centerValue={formatCurrency(report.summary.totalExpenses, { decimals: true })}
+                centerLabel="Total Expenses"
+                formatValue={(v) => formatCurrency(v, { decimals: true })}
+              />
+            )}
           </Paper>
         </Grid>
       </Grid>
@@ -234,19 +289,35 @@ export default function ExpensesBookPage() {
                 View All <NavigateNextIcon fontSize="small" />
               </MuiLink>
             </Stack>
-            <ExpenseTransactionsTable rows={transactions} totalPages={totalPages} page={page} onPageChange={setPage} />
+            {!report ? (
+              <Skeleton variant="rounded" height={240} />
+            ) : (
+              <ExpenseTransactionsTable
+                rows={report.transactions}
+                totalPages={report.totalPages}
+                page={report.page}
+                onPageChange={setPage}
+                loading={isFetching}
+              />
+            )}
           </Paper>
         </Grid>
 
         <Grid size={{ xs: 12, lg: 4 }}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Expenses by Payment Mode</Typography>
-            <DonutChart
-              data={byPaymentMode}
-              centerValue={formatCurrency(summary.totalExpenses, { decimals: true })}
-              centerLabel="Total Expenses"
-              formatValue={(v) => formatCurrency(v, { decimals: true })}
-            />
+            {!report ? (
+              <Skeleton variant="rounded" height={220} />
+            ) : report.summary.totalExpenses === 0 ? (
+              <Alert severity="info">No expenses were logged on this date yet.</Alert>
+            ) : (
+              <DonutChart
+                data={report.byPaymentMode}
+                centerValue={formatCurrency(report.summary.totalExpenses, { decimals: true })}
+                centerLabel="Total Expenses"
+                formatValue={(v) => formatCurrency(v, { decimals: true })}
+              />
+            )}
           </Paper>
         </Grid>
       </Grid>

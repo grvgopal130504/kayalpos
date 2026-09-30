@@ -1,36 +1,89 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton,
-  Stack, Typography, Button, Grid, TextField, MenuItem,
+  Stack, Typography, Button, Grid, CircularProgress,
 } from '@mui/material';
+import { FormProvider, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import CloseIcon from '@mui/icons-material/Close';
 import ReceiptOutlinedIcon from '@mui/icons-material/ReceiptOutlined';
 
 import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
-import { UOM_GROUPS, BASE_UOM_OPTIONS } from '../uomMockData';
+import FormTextField from '../../../../components/form/FormTextField';
+import FormSelect from '../../../../components/form/FormSelect';
+import { useCreateUomMutation, useUpdateUomMutation, useGetUomGroupsQuery, useGetUomsQuery } from '../../../../api/uomApi';
+import {
+  createUomSchema, createUomDefaultValues, uomToFormValues, uomFormValuesToPayload, STATUS_OPTIONS,
+  GROUP_PLACEHOLDER_OPTION, BASE_UOM_PLACEHOLDER_OPTION,
+} from '../createUomSchema';
 
-const EMPTY_VALUES = {
-  code: '', name: '', group: UOM_GROUPS[0]?.name || '', baseUom: BASE_UOM_OPTIONS[0], conversionFactor: '', status: 'Active',
-};
-
-/** Add/Edit dialog for a UOM row. No backend yet, so Save/Update just toasts and closes. */
+/**
+ * Add/Edit dialog for a UOM, backed by the real UOM API (see api/uomApi.js)
+ * — react-hook-form + zod, same shape as Product/Brand's form dialogs.
+ * Unlike those, UOM Code is a real editable field on Add (disabled on Edit)
+ * since it's a short user-chosen abbreviation (KG, PC, ...), not
+ * server-generated. The UOM Group dropdown is backed by the real UOM Group
+ * master (active groups); Base UOM is backed by the other UOMs already in
+ * the catalog (excluding this row itself when editing) with a "None"
+ * option, same "keep the existing value selectable even if it's fallen out
+ * of the active list" fallback ProductFormDialog uses for Brand.
+ */
 export default function UomFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
-  const [values, setValues] = useState(EMPTY_VALUES);
   const isEdit = mode === 'edit';
 
+  const [createUom] = useCreateUomMutation();
+  const [updateUom] = useUpdateUomMutation();
+  const { data: groups = [] } = useGetUomGroupsQuery(open ? { status: 'ACTIVE' } : undefined, { skip: !open });
+  const { data: allUoms = [] } = useGetUomsQuery(open ? {} : undefined, { skip: !open });
+
+  const groupOptions = useMemo(() => {
+    const options = [GROUP_PLACEHOLDER_OPTION, ...groups.map((g) => ({ value: g.id, label: g.name }))];
+    const existingGroupId = isEdit ? (initialValues?.groupId || initialValues?.group?.id) : '';
+    const existingGroupName = isEdit ? initialValues?.group?.name : '';
+    if (existingGroupId && !options.some((o) => o.value === existingGroupId) && existingGroupName) {
+      options.push({ value: existingGroupId, label: existingGroupName });
+    }
+    return options;
+  }, [groups, isEdit, initialValues]);
+
+  const baseUomOptions = useMemo(() => {
+    const others = allUoms.filter((u) => u.code !== initialValues?.code);
+    const options = [BASE_UOM_PLACEHOLDER_OPTION, ...others.map((u) => ({ value: u.code, label: `${u.code} — ${u.name}` }))];
+    const existingBaseUom = isEdit ? initialValues?.baseUom : '';
+    if (existingBaseUom && !options.some((o) => o.value === existingBaseUom)) {
+      options.push({ value: existingBaseUom, label: existingBaseUom });
+    }
+    return options;
+  }, [allUoms, isEdit, initialValues]);
+
+  const methods = useForm({
+    resolver: zodResolver(createUomSchema),
+    defaultValues: createUomDefaultValues,
+    mode: 'onTouched',
+  });
+  const { handleSubmit, reset, formState: { isSubmitting } } = methods;
+
   useEffect(() => {
-    if (open) setValues(isEdit && initialValues ? { ...EMPTY_VALUES, ...initialValues } : EMPTY_VALUES);
-  }, [open, isEdit, initialValues]);
+    if (open) reset(isEdit && initialValues ? uomToFormValues(initialValues) : createUomDefaultValues);
+  }, [open, isEdit, initialValues, reset]);
 
-  const setField = (field) => (e) => setValues((prev) => ({ ...prev, [field]: e.target.value }));
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    dispatch(showToast(isEdit ? 'UOM updated successfully' : 'UOM saved successfully', 'success'));
-    onClose?.();
-  };
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      const payload = uomFormValuesToPayload(values);
+      if (isEdit) {
+        await updateUom({ id: initialValues.id, ...payload }).unwrap();
+        dispatch(showToast('UOM updated successfully', 'success'));
+      } else {
+        await createUom(payload).unwrap();
+        dispatch(showToast('UOM saved successfully', 'success'));
+      }
+      onClose?.();
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to save UOM', 'error'));
+    }
+  });
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -41,41 +94,43 @@ export default function UomFormDialog({ open, mode = 'add', initialValues, onClo
         </Stack>
         <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
       </DialogTitle>
-      <form onSubmit={handleSubmit} noValidate>
-        <DialogContent dividers>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="UOM Code *" value={values.code} onChange={setField('code')} placeholder="e.g. KG" fullWidth required disabled={isEdit} />
+      <FormProvider {...methods}>
+        <form onSubmit={onSubmit} noValidate>
+          <DialogContent dividers>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="code" label="UOM Code *" placeholder="e.g. KG" disabled={isEdit} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="name" label="UOM Name *" placeholder="Enter UOM name" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="groupId" label="UOM Group" options={groupOptions} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="baseUom" label="Base UOM" options={baseUomOptions} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="conversionFactor" label="Conversion Factor" placeholder="1" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="status" label="Status *" options={STATUS_OPTIONS} />
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="UOM Name *" value={values.name} onChange={setField('name')} placeholder="Enter UOM name" fullWidth required />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="UOM Group" value={values.group} onChange={setField('group')} fullWidth>
-                {UOM_GROUPS.map((g) => <MenuItem key={g.code} value={g.name}>{g.name}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Base UOM" value={values.baseUom} onChange={setField('baseUom')} fullWidth>
-                {BASE_UOM_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Conversion Factor" value={values.conversionFactor} onChange={setField('conversionFactor')} placeholder="1" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Status" value={values.status} onChange={setField('status')} fullWidth>
-                <MenuItem value="Active">Active</MenuItem>
-                <MenuItem value="Inactive">Inactive</MenuItem>
-              </TextField>
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained">{isEdit ? 'Update' : 'Save'}</Button>
-        </DialogActions>
-      </form>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={14} /> : null}
+            >
+              {isEdit ? 'Update' : 'Save'}
+            </Button>
+          </DialogActions>
+        </form>
+      </FormProvider>
     </Dialog>
   );
 }

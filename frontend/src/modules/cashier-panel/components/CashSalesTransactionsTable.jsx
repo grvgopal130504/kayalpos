@@ -1,5 +1,5 @@
 import {
-  Box, Table, TableHead, TableBody, TableRow, TableCell, Chip, Pagination, Stack,
+  Box, Table, TableHead, TableBody, TableRow, TableCell, Chip, Pagination, Stack, Typography,
 } from '@mui/material';
 
 import { formatCurrency, formatNumber } from '../../../utils/format';
@@ -18,14 +18,29 @@ const COLUMNS = [
   { key: 'cashier', label: 'Cashier' },
 ];
 
+// `dateTime` arrives as a raw ISO timestamp from the API (Sale.createdAt) —
+// formatted here, once, rather than baked into the row shape the backend
+// returns.
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
 /**
  * "Recent Cash Sales Transactions" table — a plain data grid (not the
  * shared DataTable, since this one needs a footer Total row DataTable
  * doesn't support) plus a page-number Pagination control below, matching
- * the reference. Pagination is cosmetic for now (`totalPages` comes from
- * mock data; there's only one page of mock rows behind it).
+ * the reference. `rows` is one page of real Sale rows from
+ * GET /sales/cash-summary; pagination is server-side (`page`/`totalPages`
+ * come straight from that response).
  */
-export default function CashSalesTransactionsTable({ rows, totalPages, page, onPageChange }) {
+export default function CashSalesTransactionsTable({
+  rows, totalPages, page, onPageChange, loading,
+}) {
   const totals = rows.reduce(
     (acc, row) => ({
       items: acc.items + row.items,
@@ -39,7 +54,7 @@ export default function CashSalesTransactionsTable({ rows, totalPages, page, onP
   );
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
       <Box sx={{ overflowX: 'auto' }}>
         <Table size="small" sx={{ minWidth: 900 }}>
           <TableHead>
@@ -52,11 +67,20 @@ export default function CashSalesTransactionsTable({ rows, totalPages, page, onP
             </TableRow>
           </TableHead>
           <TableBody>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={COLUMNS.length} sx={{ textAlign: 'center', py: 3 }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    No cash sales on this date yet.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
             {rows.map((row, index) => (
               <TableRow key={row.invoiceNo} hover>
                 <TableCell sx={{ color: 'text.secondary' }}>{index + 1}</TableCell>
                 <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.invoiceNo}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.dateTime}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(row.dateTime)}</TableCell>
                 <TableCell>{row.items}</TableCell>
                 <TableCell>{formatNumber(row.qty)}</TableCell>
                 <TableCell>{row.discount.toFixed(2)}</TableCell>
@@ -73,16 +97,18 @@ export default function CashSalesTransactionsTable({ rows, totalPages, page, onP
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.cashier}</TableCell>
               </TableRow>
             ))}
-            <TableRow sx={{ '& td': { borderBottom: 'none', fontWeight: 800 } }}>
-              <TableCell colSpan={3} />
-              <TableCell>{totals.items}</TableCell>
-              <TableCell>{formatNumber(totals.qty)}</TableCell>
-              <TableCell>{totals.discount.toFixed(2)}</TableCell>
-              <TableCell>{totals.tax.toFixed(2)}</TableCell>
-              <TableCell>{formatCurrency(totals.totalAmount, { decimals: true })}</TableCell>
-              <TableCell>{formatCurrency(totals.received, { decimals: true })}</TableCell>
-              <TableCell colSpan={2} />
-            </TableRow>
+            {rows.length > 0 && (
+              <TableRow sx={{ '& td': { borderBottom: 'none', fontWeight: 800 } }}>
+                <TableCell colSpan={3} />
+                <TableCell>{totals.items}</TableCell>
+                <TableCell>{formatNumber(totals.qty)}</TableCell>
+                <TableCell>{totals.discount.toFixed(2)}</TableCell>
+                <TableCell>{totals.tax.toFixed(2)}</TableCell>
+                <TableCell>{formatCurrency(totals.totalAmount, { decimals: true })}</TableCell>
+                <TableCell>{formatCurrency(totals.received, { decimals: true })}</TableCell>
+                <TableCell colSpan={2} />
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Box>

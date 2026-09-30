@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
-  TextField, MenuItem, InputAdornment, Pagination,
+  TextField, MenuItem, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
@@ -15,13 +15,16 @@ import CloseIcon from '@mui/icons-material/Close';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import ReceiptOutlinedIcon from '@mui/icons-material/ReceiptOutlined';
-import KeyboardReturnOutlinedIcon from '@mui/icons-material/KeyboardReturnOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
 import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
+import { CASHIER } from '../mastersMockData';
+import {
+  useGetUomGroupsQuery, useGetUomsQuery, useDeleteUomGroupMutation, useDeleteUomMutation,
+} from '../../../api/uomApi';
 
 import UomGroupTable from './components/UomGroupTable';
 import UomTable from './components/UomTable';
@@ -29,35 +32,50 @@ import UomGroupFormDialog from './components/UomGroupFormDialog';
 import UomGroupViewDialog from './components/UomGroupViewDialog';
 import UomFormDialog from './components/UomFormDialog';
 import UomViewDialog from './components/UomViewDialog';
-import { CASHIER } from '../mastersMockData';
-import {
-  UOM_GROUPS, UOMS, BASE_UOM_OPTIONS, STATS, uomTotalRecords, uomTotalPages,
-} from './uomMockData';
 
 /**
- * UOM / UOM Group — reached from the Masters page's "UOM" card. Two
- * panels side by side: UOM Group List (its own search box + table +
- * pager) and the larger UOM List (a fuller filter bar + table + pager),
- * matching the reference. `UOMS` only mocks the first page of a 22-row
- * catalog (`uomTotalPages` covers the rest), so paging past page 1 on
- * either list surfaces a toast — there's no UOM backend module yet.
+ * UOM / UOM Group — reached from the Masters page's "UOM" card. Two panels
+ * side by side: UOM Group List (its own search box + table) and the larger
+ * UOM List (a fuller filter bar + table), wired to the real UOM/UOM Group
+ * API (see api/uomApi.js) — list/search/status run server-side; UOM Group
+ * and Base UOM filters run client-side over whatever the current
+ * search/status filter returned (no backend aggregation endpoint for
+ * those), same convention as ProductPage's Brand/Product Type filters.
+ * "Total UOMs" per group is likewise computed client-side by counting UOMs
+ * whose groupId matches, since the backend doesn't return that count.
  */
 export default function UomPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
   const [groupSearch, setGroupSearch] = useState('');
-  const [groupPage, setGroupPage] = useState(1);
+  const [groupFormDialog, setGroupFormDialog] = useState({ open: false, mode: 'add', row: null });
+  const [viewGroupRow, setViewGroupRow] = useState(null);
 
   const [uomGroupFilter, setUomGroupFilter] = useState('All');
   const [uomStatus, setUomStatus] = useState('All');
-  const [baseUom, setBaseUom] = useState('All');
+  const [baseUomFilter, setBaseUomFilter] = useState('All');
+  const [uomSearchInput, setUomSearchInput] = useState('');
   const [uomAppliedSearch, setUomAppliedSearch] = useState('');
-  const [uomPage, setUomPage] = useState(1);
-  const [groupFormDialog, setGroupFormDialog] = useState({ open: false, mode: 'add', row: null });
-  const [viewGroupRow, setViewGroupRow] = useState(null);
   const [uomFormDialog, setUomFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewUomRow, setViewUomRow] = useState(null);
+
+  const {
+    data: groupRows = [],
+    isLoading: isGroupLoading,
+    isError: isGroupError,
+  } = useGetUomGroupsQuery({ search: groupSearch.trim() || undefined });
+  const [deleteUomGroup] = useDeleteUomGroupMutation();
+
+  const {
+    data: uomRows = [],
+    isLoading: isUomLoading,
+    isError: isUomError,
+  } = useGetUomsQuery({
+    search: uomAppliedSearch || undefined,
+    status: uomStatus !== 'All' ? uomStatus.toUpperCase() : undefined,
+  });
+  const [deleteUom] = useDeleteUomMutation();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -68,44 +86,84 @@ export default function UomPage() {
   const handleNewUomGroup = () => setGroupFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import UOMs is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export UOMs is coming soon', 'info'));
+
   const handleViewGroupRow = (row) => setViewGroupRow(row);
   const handleEditGroupRow = (row) => setGroupFormDialog({ open: true, mode: 'edit', row });
-  const handleDeleteGroupRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
+  const handleDeleteGroupRow = async (row) => {
+    if (!window.confirm(`Delete UOM group "${row.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteUomGroup(row.id).unwrap();
+      dispatch(showToast(`${row.name} deleted`, 'success'));
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to delete UOM group', 'error'));
+    }
+  };
+  const closeGroupFormDialog = () => setGroupFormDialog((prev) => ({ ...prev, open: false }));
+
   const handleViewUomRow = (row) => setViewUomRow(row);
   const handleEditUomRow = (row) => setUomFormDialog({ open: true, mode: 'edit', row });
-  const handleDeleteUomRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
-  const closeGroupFormDialog = () => setGroupFormDialog((prev) => ({ ...prev, open: false }));
+  const handleDeleteUomRow = async (row) => {
+    if (!window.confirm(`Delete UOM "${row.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteUom(row.id).unwrap();
+      dispatch(showToast(`${row.name} deleted`, 'success'));
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to delete UOM', 'error'));
+    }
+  };
   const closeUomFormDialog = () => setUomFormDialog((prev) => ({ ...prev, open: false }));
-  const handleUomSearch = () => setUomAppliedSearch('');
+  const handleUomSearch = () => setUomAppliedSearch(uomSearchInput.trim());
   const handleUomReset = () => {
+    setUomSearchInput('');
     setUomGroupFilter('All');
     setUomStatus('All');
-    setBaseUom('All');
+    setBaseUomFilter('All');
     setUomAppliedSearch('');
   };
-  const handleGroupPageChange = (value) => {
-    setGroupPage(value);
-    if (value !== 1) dispatch(showToast('Loading further pages is coming soon', 'info'));
-  };
-  const handleUomPageChange = (value) => {
-    setUomPage(value);
-    if (value !== 1) dispatch(showToast('Loading further pages is coming soon', 'info'));
-  };
 
-  const filteredGroups = useMemo(() => UOM_GROUPS.filter((row) => {
-    if (!groupSearch.trim()) return true;
-    const haystack = `${row.code} ${row.name}`.toLowerCase();
-    return haystack.includes(groupSearch.trim().toLowerCase());
-  }), [groupSearch]);
+  // Flatten each group row to the view shape the table/view dialog expect
+  // (status 'Active'/'Inactive', totalUoms counted client-side from the
+  // current UOM list).
+  const groupViewRows = useMemo(() => groupRows.map((g) => ({
+    id: g.id,
+    code: g.code,
+    name: g.name,
+    description: g.description || '',
+    totalUoms: uomRows.filter((u) => (u.groupId || u.group?.id) === g.id).length,
+    status: g.status === 'ACTIVE' ? 'Active' : 'Inactive',
+  })), [groupRows, uomRows]);
 
-  const filteredUoms = useMemo(() => UOMS.filter((row) => {
-    if (uomGroupFilter !== 'All' && row.group !== uomGroupFilter) return false;
-    if (uomStatus !== 'All' && row.status !== uomStatus) return false;
-    if (baseUom !== 'All' && row.baseUom !== baseUom) return false;
+  // Flatten each UOM row to the view shape the table/view dialog expect
+  // (group: the group's name as a plain string for display, status:
+  // 'Active'/'Inactive').
+  const uomViewRows = useMemo(() => uomRows.map((u) => ({
+    id: u.id,
+    code: u.code,
+    name: u.name,
+    groupId: u.groupId || u.group?.id || '',
+    group: u.group?.name || '',
+    baseUom: u.baseUom || '',
+    conversionFactor: u.conversionFactor != null ? Number(u.conversionFactor) : null,
+    status: u.status === 'ACTIVE' ? 'Active' : 'Inactive',
+  })), [uomRows]);
+
+  const filteredUomRows = useMemo(() => uomViewRows.filter((row) => {
+    if (uomGroupFilter !== 'All' && row.groupId !== uomGroupFilter) return false;
+    if (baseUomFilter !== 'All' && row.baseUom !== baseUomFilter) return false;
     return true;
-  }), [uomGroupFilter, uomStatus, baseUom]);
+  }), [uomViewRows, uomGroupFilter, baseUomFilter]);
 
-  const uomIsFiltered = uomGroupFilter !== 'All' || uomStatus !== 'All' || baseUom !== 'All';
+  const baseUomFilterOptions = useMemo(
+    () => Array.from(new Set(uomViewRows.map((r) => r.baseUom).filter(Boolean))).sort(),
+    [uomViewRows],
+  );
+
+  const stats = useMemo(() => ({
+    totalUomGroups: groupViewRows.length,
+    activeUomGroups: groupViewRows.filter((g) => g.status === 'Active').length,
+    totalUoms: uomViewRows.length,
+    activeUoms: uomViewRows.filter((u) => u.status === 'Active').length,
+  }), [groupViewRows, uomViewRows]);
 
   return (
     <Stack spacing={2}>
@@ -191,14 +249,19 @@ export default function UomPage() {
               />
             </Stack>
 
-            <UomGroupTable rows={filteredGroups} onViewRow={handleViewGroupRow} onEditRow={handleEditGroupRow} onDeleteRow={handleDeleteGroupRow} />
-
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Showing 1 to {filteredGroups.length} of {UOM_GROUPS.length} records
+            {isGroupError ? (
+              <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
+                Failed to load UOM groups. Please try again.
               </Typography>
-              <Pagination count={1} page={groupPage} onChange={(_e, value) => handleGroupPageChange(value)} color="primary" shape="rounded" />
-            </Stack>
+            ) : (
+              <Box sx={{ opacity: isGroupLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
+                <UomGroupTable rows={groupViewRows} onViewRow={handleViewGroupRow} onEditRow={handleEditGroupRow} onDeleteRow={handleDeleteGroupRow} />
+              </Box>
+            )}
+
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
+              Showing {groupViewRows.length} of {groupViewRows.length} records
+            </Typography>
           </Paper>
         </Grid>
 
@@ -207,68 +270,77 @@ export default function UomPage() {
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>UOM List</Typography>
 
             <Grid container spacing={1.5} sx={{ alignItems: 'flex-end', mb: 2 }}>
-              <Grid size={{ xs: 12, sm: 4, md: 3 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <TextField
+                  label="Search UOM"
+                  placeholder="Search by UOM code or name..."
+                  value={uomSearchInput}
+                  onChange={(e) => setUomSearchInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleUomSearch(); }}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4, md: 2.5 }}>
                 <TextField select label="UOM Group" value={uomGroupFilter} onChange={(e) => setUomGroupFilter(e.target.value)} fullWidth size="small">
                   <MenuItem value="All">All</MenuItem>
-                  {UOM_GROUPS.map((g) => <MenuItem key={g.code} value={g.name}>{g.name}</MenuItem>)}
+                  {groupRows.map((g) => <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>)}
                 </TextField>
               </Grid>
-              <Grid size={{ xs: 12, sm: 4, md: 3 }}>
+              <Grid size={{ xs: 12, sm: 4, md: 2 }}>
                 <TextField select label="Status" value={uomStatus} onChange={(e) => setUomStatus(e.target.value)} fullWidth size="small">
                   <MenuItem value="All">All</MenuItem>
                   <MenuItem value="Active">Active</MenuItem>
                   <MenuItem value="Inactive">Inactive</MenuItem>
                 </TextField>
               </Grid>
-              <Grid size={{ xs: 12, sm: 4, md: 3 }}>
-                <TextField select label="Base UOM" value={baseUom} onChange={(e) => setBaseUom(e.target.value)} fullWidth size="small">
+              <Grid size={{ xs: 12, sm: 4, md: 2 }}>
+                <TextField select label="Base UOM" value={baseUomFilter} onChange={(e) => setBaseUomFilter(e.target.value)} fullWidth size="small">
                   <MenuItem value="All">All</MenuItem>
-                  {BASE_UOM_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                  {baseUomFilterOptions.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
                 </TextField>
               </Grid>
-              <Grid size={{ xs: 6, sm: 6, md: 1.8 }}>
+              <Grid size={{ xs: 6, sm: 6, md: 1.2 }}>
                 <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleUomSearch} fullWidth>
                   Search
                 </Button>
               </Grid>
-              <Grid size={{ xs: 6, sm: 6, md: 1.2 }}>
+              <Grid size={{ xs: 6, sm: 6, md: 1.3 }}>
                 <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleUomReset} fullWidth>
                   Reset
                 </Button>
               </Grid>
             </Grid>
 
-            <UomTable rows={filteredUoms} onViewRow={handleViewUomRow} onEditRow={handleEditUomRow} onDeleteRow={handleDeleteUomRow} />
-
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {uomIsFiltered
-                  ? `Showing ${filteredUoms.length} of ${uomTotalRecords} records`
-                  : `Showing 1 to ${filteredUoms.length} of ${formatNumber(uomTotalRecords)} records`}
+            {isUomError ? (
+              <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
+                Failed to load UOMs. Please try again.
               </Typography>
-              {!uomIsFiltered && (
-                <Pagination count={uomTotalPages} page={uomPage} onChange={(_e, value) => handleUomPageChange(value)} color="primary" shape="rounded" />
-              )}
-            </Stack>
+            ) : (
+              <Box sx={{ opacity: isUomLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
+                <UomTable rows={filteredUomRows} onViewRow={handleViewUomRow} onEditRow={handleEditUomRow} onDeleteRow={handleDeleteUomRow} />
+              </Box>
+            )}
+
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
+              Showing {filteredUomRows.length} of {formatNumber(uomViewRows.length)} records
+            </Typography>
           </Paper>
         </Grid>
       </Grid>
 
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={Inventory2OutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total UOM Groups" value={formatNumber(STATS.totalUomGroups)} />
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard icon={Inventory2OutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total UOM Groups" value={formatNumber(stats.totalUomGroups)} />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active UOM Groups" value={formatNumber(STATS.activeUomGroups)} />
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active UOM Groups" value={formatNumber(stats.activeUomGroups)} />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={ReceiptOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total UOMs" value={formatNumber(STATS.totalUoms)} />
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard icon={ReceiptOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total UOMs" value={formatNumber(stats.totalUoms)} />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active UOMs" value={formatNumber(STATS.activeUoms)} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={KeyboardReturnOutlinedIcon} iconColor="warning" iconShape="circle" label="Active UOMs" value={formatNumber(STATS.activeUomsAlt)} />
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active UOMs" value={formatNumber(stats.activeUoms)} />
         </Grid>
       </Grid>
 

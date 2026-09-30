@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
-  TextField, MenuItem, InputAdornment, Pagination,
+  TextField, MenuItem, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
@@ -21,22 +21,24 @@ import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
+import { formatPickerDate } from '../../../components/form/FormDatePicker';
 
 import TaxCodeTable from './components/TaxCodeTable';
 import TaxCodeFormDialog from './components/TaxCodeFormDialog';
 import TaxCodeViewDialog from './components/TaxCodeViewDialog';
 import { CASHIER } from '../mastersMockData';
-import {
-  TAX_CODES, TAX_TYPE_OPTIONS, TAX_CATEGORY_OPTIONS, STATS, taxCodeTotalRecords, taxCodeTotalPages,
-} from './taxCodeMockData';
+import { TAX_TYPE_OPTIONS, TAX_CATEGORY_OPTIONS } from './createTaxCodeSchema';
+import { useGetTaxCodesQuery, useDeleteTaxCodeMutation } from '../../../api/taxCodeApi';
 
 /**
  * Tax Code — the Tax Code master's list screen, reached from the Masters
- * page's "Tax Code" card. Same searchable/filterable list shape as
- * Product/Brand (filter bar + table + records footer + bottom stat row).
- * `TAX_CODES` only mocks the first page of an 18-row catalog
- * (`taxCodeTotalPages` covers the rest), so paging past page 1 surfaces a
- * toast — there's no Tax Code backend module yet.
+ * page's "Tax Code" card. Wired to the real Tax Code API (see
+ * api/taxCodeApi.js) — search/status run server-side; Tax Type/Tax Category
+ * filters run client-side over whatever the current search/status filter
+ * returned (no backend aggregation endpoint for those), same convention as
+ * UomPage's Base UOM filter. Same single-page-list pattern as Brand/UOM
+ * (server already caps the unpaginated list at 1000 rows — see
+ * backend/src/utils/crudFactory.js), so there's no fake pagination here.
  */
 export default function TaxCodePage() {
   const dispatch = useAppDispatch();
@@ -46,9 +48,18 @@ export default function TaxCodePage() {
   const [taxCategory, setTaxCategory] = useState('All');
   const [status, setStatus] = useState('All');
   const [appliedSearch, setAppliedSearch] = useState('');
-  const [page, setPage] = useState(1);
   const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewRow, setViewRow] = useState(null);
+
+  const {
+    data: rows = [],
+    isLoading,
+    isError,
+  } = useGetTaxCodesQuery({
+    search: appliedSearch || undefined,
+    status: status !== 'All' ? status.toUpperCase() : undefined,
+  });
+  const [deleteTaxCode] = useDeleteTaxCodeMutation();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -58,7 +69,7 @@ export default function TaxCodePage() {
   const handleNewTaxCode = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Tax Codes is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export Tax Codes is coming soon', 'info'));
-  const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
+  const handleSearch = () => setAppliedSearch(searchInput.trim());
   const handleReset = () => {
     setSearchInput('');
     setTaxType('All');
@@ -68,25 +79,46 @@ export default function TaxCodePage() {
   };
   const handleViewRow = (row) => setViewRow(row);
   const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
-  const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.name} is coming soon`, 'info'));
-  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
-  const handlePageChange = (value) => {
-    setPage(value);
-    if (value !== 1) dispatch(showToast('Loading further pages is coming soon', 'info'));
-  };
-
-  const filteredRows = useMemo(() => TAX_CODES.filter((row) => {
-    if (appliedSearch) {
-      const haystack = `${row.code} ${row.name}`.toLowerCase();
-      if (!haystack.includes(appliedSearch)) return false;
+  const handleDeleteRow = async (row) => {
+    if (!window.confirm(`Delete tax code "${row.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteTaxCode(row.id).unwrap();
+      dispatch(showToast(`${row.name} deleted`, 'success'));
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to delete tax code', 'error'));
     }
+  };
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
+
+  // Flatten each raw API row (status 'ACTIVE'/'INACTIVE', rate as a Decimal
+  // serialized to string, effectiveFrom as an ISO date string) to the view
+  // shape the table/view dialog expect (status 'Active'/'Inactive', rate as
+  // a number, effectiveFrom as the app-wide "DD Mon YYYY" display string).
+  const viewRows = useMemo(() => rows.map((row) => ({
+    ...row,
+    rate: row.rate != null ? Number(row.rate) : null,
+    effectiveFrom: row.effectiveFrom ? formatPickerDate(new Date(row.effectiveFrom)) : '',
+    status: row.status === 'ACTIVE' ? 'Active' : 'Inactive',
+  })), [rows]);
+
+  const filteredRows = useMemo(() => viewRows.filter((row) => {
     if (taxType !== 'All' && row.type !== taxType) return false;
     if (taxCategory !== 'All' && row.category !== taxCategory) return false;
-    if (status !== 'All' && row.status !== status) return false;
     return true;
-  }), [appliedSearch, taxType, taxCategory, status]);
+  }), [viewRows, taxType, taxCategory]);
 
-  const isFiltered = Boolean(appliedSearch) || taxType !== 'All' || taxCategory !== 'All' || status !== 'All';
+  const stats = useMemo(() => {
+    const total = viewRows.length;
+    const active = viewRows.filter((r) => r.status === 'Active').length;
+    const rates = viewRows.map((r) => r.rate).filter((r) => typeof r === 'number');
+    const averageRate = rates.length ? rates.reduce((sum, r) => sum + r, 0) / rates.length : 0;
+    return {
+      totalTaxCodes: total,
+      activeTaxCodes: active,
+      inactiveTaxCodes: total - active,
+      averageTaxRate: averageRate,
+    };
+  }, [viewRows]);
 
   return (
     <Stack spacing={2}>
@@ -201,32 +233,34 @@ export default function TaxCodePage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Tax Code List</Typography>
-        <TaxCodeTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {isFiltered
-              ? `Showing ${filteredRows.length} of ${taxCodeTotalRecords} records`
-              : `Showing 1 to ${filteredRows.length} of ${formatNumber(taxCodeTotalRecords)} records`}
+        {isError ? (
+          <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
+            Failed to load tax codes. Please try again.
           </Typography>
-          {!isFiltered && (
-            <Pagination count={taxCodeTotalPages} page={page} onChange={(_e, value) => handlePageChange(value)} color="primary" shape="rounded" />
-          )}
-        </Stack>
+        ) : (
+          <Box sx={{ opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
+            <TaxCodeTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+          </Box>
+        )}
+
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
+          Showing {filteredRows.length} of {formatNumber(viewRows.length)} records
+        </Typography>
       </Paper>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={ReceiptLongOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total Tax Codes" value={formatNumber(STATS.totalTaxCodes)} />
+          <StatCard icon={ReceiptLongOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total Tax Codes" value={formatNumber(stats.totalTaxCodes)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Tax Codes" value={formatNumber(STATS.activeTaxCodes)} />
+          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Tax Codes" value={formatNumber(stats.activeTaxCodes)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={CloseIcon} iconColor="error" iconShape="circle" label="Inactive Tax Codes" value={formatNumber(STATS.inactiveTaxCodes)} />
+          <StatCard icon={CloseIcon} iconColor="error" iconShape="circle" label="Inactive Tax Codes" value={formatNumber(stats.inactiveTaxCodes)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard icon={CurrencyRupeeOutlinedIcon} iconColor="warning" iconShape="circle" label="Average Tax Rate" value={`${STATS.averageTaxRate.toFixed(2)}%`} />
+          <StatCard icon={CurrencyRupeeOutlinedIcon} iconColor="warning" iconShape="circle" label="Average Tax Rate" value={`${stats.averageTaxRate.toFixed(2)}%`} />
         </Grid>
       </Grid>
 

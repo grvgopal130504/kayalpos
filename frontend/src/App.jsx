@@ -47,6 +47,7 @@ import MastersPage from './modules/masters/MastersPage';
 import CompanyPage from './modules/masters/company/CompanyPage';
 import OutletPage from './modules/masters/outlet/OutletPage';
 import WarehousePage from './modules/masters/warehouse/WarehousePage';
+import WarehouseListPage from './modules/masters/warehouse/WarehouseListPage';
 import ProductPage from './modules/masters/product/ProductPage';
 import BrandPage from './modules/masters/brand/BrandPage';
 import UomPage from './modules/masters/uom/UomPage';
@@ -108,7 +109,9 @@ export default function App() {
             <Route path="/masters" element={<MastersPage />} />
             <Route path="/masters/company" element={<CompanyPage />} />
             <Route path="/masters/outlet" element={<OutletPage />} />
-            <Route path="/masters/warehouse" element={<WarehousePage />} />
+            <Route path="/masters/warehouse" element={<WarehouseListPage />} />
+            <Route path="/masters/warehouse/new" element={<WarehousePage />} />
+            <Route path="/masters/warehouse/:id" element={<WarehousePage />} />
             <Route path="/masters/product" element={<ProductPage />} />
             <Route path="/masters/brand" element={<BrandPage />} />
             <Route path="/masters/uom" element={<UomPage />} />

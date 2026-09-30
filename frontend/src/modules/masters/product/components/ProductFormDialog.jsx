@@ -1,26 +1,42 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton,
-  Stack, Typography, Button, Grid, TextField, MenuItem,
+  Stack, Typography, Button, Grid, TextField, CircularProgress,
 } from '@mui/material';
+import { FormProvider, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import CloseIcon from '@mui/icons-material/Close';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 
 import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
-import { PRODUCT_GROUP_OPTIONS, PRODUCT_TYPE_OPTIONS, BRAND_OPTIONS, UOM_OPTIONS } from '../productMockData';
+import FormTextField from '../../../../components/form/FormTextField';
+import FormSelect from '../../../../components/form/FormSelect';
+import { useGetBrandsQuery } from '../../../../api/brandApi';
 import { useCreateProductMutation, useUpdateProductMutation, useNextProductCode } from '../../../../api/productApi';
+import {
+  createProductSchema, createProductDefaultValues, productToFormValues, productFormValuesToPayload,
+  PRODUCT_GROUP_SELECT_OPTIONS, PRODUCT_TYPE_SELECT_OPTIONS, UOM_SELECT_OPTIONS, STATUS_OPTIONS,
+  BRAND_PLACEHOLDER_OPTION,
+} from '../createProductSchema';
 
-const EMPTY_VALUES = {
-  code: '', name: '', group: PRODUCT_GROUP_OPTIONS[0], brand: BRAND_OPTIONS[0], uom: UOM_OPTIONS[0],
-  hsnSac: '', taxCode: '', salePrice: '', mrp: '', availableQty: '', status: 'Active',
-};
-
-/** Add/Edit dialog for the Product master, backed by the real Product API. */
+/**
+ * Add/Edit dialog for the Product master, backed by the real Product API
+ * (see api/productApi.js). Same react-hook-form + zod shape as the
+ * Outlet/Warehouse detail pages (FormTextField/FormSelect + inline
+ * per-field errors) rather than the older hand-rolled useState + one-toast
+ * validation this dialog used to have — every field here is checked
+ * against the same rules as the backend's createProductSchema
+ * (product.schema.js) before the request ever leaves the browser. The
+ * Brand dropdown is backed by the real Brand master (useGetBrandsQuery)
+ * instead of a static list, though Product.brand itself stays a plain
+ * name string (not a foreign key) — this app's Brand master has no other
+ * consumer that needs a hard relation yet, and free text also means an
+ * older/bulk-imported brand name that isn't in the Brand master can still
+ * be edited without being silently reset.
+ */
 export default function ProductFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
-  const [values, setValues] = useState(EMPTY_VALUES);
-  const [submitting, setSubmitting] = useState(false);
   const isEdit = mode === 'edit';
 
   const [createProduct] = useCreateProductMutation();
@@ -28,37 +44,36 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
   // Only fetched while the dialog is open in Add mode — skipped for Edit
   // (real code already known) and while closed.
   const nextCode = useNextProductCode(open && !isEdit);
+  const { data: brands = [] } = useGetBrandsQuery(open ? { status: 'ACTIVE' } : undefined, { skip: !open });
+
+  const brandOptions = useMemo(() => {
+    const options = [BRAND_PLACEHOLDER_OPTION, ...brands.map((b) => ({ value: b.name, label: b.name }))];
+    // Editing a row whose brand isn't in the current active Brand list
+    // (renamed/deactivated brand, or a bulk-imported free-text value) —
+    // keep it selectable so opening Edit never silently blanks the field.
+    const existingBrand = isEdit ? initialValues?.brand : '';
+    if (existingBrand && !options.some((o) => o.value === existingBrand)) {
+      options.push({ value: existingBrand, label: existingBrand });
+    }
+    return options;
+  }, [brands, isEdit, initialValues]);
+
+  const methods = useForm({
+    resolver: zodResolver(createProductSchema),
+    defaultValues: createProductDefaultValues,
+    mode: 'onTouched',
+  });
+  const { handleSubmit, reset, formState: { isSubmitting } } = methods;
 
   useEffect(() => {
-    if (open) setValues(isEdit && initialValues ? { ...EMPTY_VALUES, ...initialValues } : EMPTY_VALUES);
-  }, [open, isEdit, initialValues]);
+    if (open) reset(isEdit && initialValues ? productToFormValues(initialValues) : createProductDefaultValues);
+  }, [open, isEdit, initialValues, reset]);
 
-  const setField = (field) => (e) => setValues((prev) => ({ ...prev, [field]: e.target.value }));
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!values.name.trim()) {
-      dispatch(showToast('Product name is required', 'error'));
-      return;
-    }
-
-    setSubmitting(true);
+  const onSubmit = handleSubmit(async (values) => {
     try {
-      const payload = {
-        name: values.name.trim(),
-        group: values.group,
-        brand: values.brand || undefined,
-        uom: values.uom,
-        hsnSac: values.hsnSac?.trim() || undefined,
-        taxCode: values.taxCode?.trim() || undefined,
-        salePrice: values.salePrice === '' ? 0 : Number(values.salePrice),
-        mrp: values.mrp === '' ? 0 : Number(values.mrp),
-        availableQty: values.availableQty === '' ? 0 : Number(values.availableQty),
-        status: values.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
-      };
-
+      const payload = productFormValuesToPayload(values);
       if (isEdit) {
-        await updateProduct({ id: values.id, ...payload }).unwrap();
+        await updateProduct({ id: initialValues.id, ...payload }).unwrap();
         dispatch(showToast('Product updated successfully', 'success'));
       } else {
         await createProduct(payload).unwrap();
@@ -67,10 +82,8 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
       onClose?.();
     } catch (err) {
       dispatch(showToast(err?.data?.message || 'Failed to save product', 'error'));
-    } finally {
-      setSubmitting(false);
     }
-  };
+  });
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -81,69 +94,67 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
         </Stack>
         <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
       </DialogTitle>
-      <form onSubmit={handleSubmit} noValidate>
-        <DialogContent dividers>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label="Product Code *"
-                value={isEdit ? values.code : (nextCode || 'Auto generated')}
-                disabled
-                fullWidth
-                slotProps={{ input: { readOnly: true } }}
-              />
+      <FormProvider {...methods}>
+        <form onSubmit={onSubmit} noValidate>
+          <DialogContent dividers>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="Product Code *"
+                  value={isEdit ? (initialValues?.code || '') : (nextCode || 'Auto generated')}
+                  disabled
+                  fullWidth
+                  slotProps={{ input: { readOnly: true } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="name" label="Product Name *" placeholder="Enter product name" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="group" label="Product Group *" options={[{ value: '', label: 'Select Product Group', disabled: true }, ...PRODUCT_GROUP_SELECT_OPTIONS]} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="productType" label="Product Type" options={PRODUCT_TYPE_SELECT_OPTIONS} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="brand" label="Brand" options={brandOptions} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="uom" label="UOM *" options={[{ value: '', label: 'Select UOM', disabled: true }, ...UOM_SELECT_OPTIONS]} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="hsnSac" label="HSN / SAC" placeholder="Enter HSN/SAC code" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="taxCode" label="Tax Code" placeholder="e.g. GST 5%" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="salePrice" label="Sale Price (₹) *" placeholder="0.00" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="mrp" label="MRP (₹) *" placeholder="0.00" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="availableQty" label="Available Qty *" placeholder="0" numeric />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormSelect name="status" label="Status *" options={STATUS_OPTIONS} />
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Product Name *" value={values.name} onChange={setField('name')} placeholder="Enter product name" fullWidth required />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Product Group" value={values.group} onChange={setField('group')} fullWidth>
-                {PRODUCT_GROUP_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Product Type" value={values.productType || PRODUCT_TYPE_OPTIONS[0]} onChange={setField('productType')} fullWidth>
-                {PRODUCT_TYPE_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Brand" value={values.brand} onChange={setField('brand')} fullWidth>
-                {BRAND_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="UOM" value={values.uom} onChange={setField('uom')} fullWidth>
-                {UOM_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="HSN / SAC" value={values.hsnSac} onChange={setField('hsnSac')} placeholder="Enter HSN/SAC code" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Tax Code" value={values.taxCode} onChange={setField('taxCode')} placeholder="e.g. GST 5%" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Sale Price (₹)" value={values.salePrice} onChange={setField('salePrice')} placeholder="0.00" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="MRP (₹)" value={values.mrp} onChange={setField('mrp')} placeholder="0.00" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Available Qty" value={values.availableQty} onChange={setField('availableQty')} placeholder="0" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select label="Status" value={values.status} onChange={setField('status')} fullWidth>
-                <MenuItem value="Active">Active</MenuItem>
-                <MenuItem value="Inactive">Inactive</MenuItem>
-              </TextField>
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained" disabled={submitting}>{isEdit ? 'Update' : 'Save'}</Button>
-        </DialogActions>
-      </form>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button variant="outlined" color="inherit" onClick={onClose}>Cancel</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={14} /> : null}
+            >
+              {isEdit ? 'Update' : 'Save'}
+            </Button>
+          </DialogActions>
+        </form>
+      </FormProvider>
     </Dialog>
   );
 }

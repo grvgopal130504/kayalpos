@@ -20,7 +20,13 @@ const salesReturnApi = baseApi.injectEndpoints({
     SalesReturnCreate: builder.mutation({
       query: (body) => ({ url: '/sales-returns', method: 'POST', body }),
       transformResponse: (response) => response.data,
-      invalidatesTags: [{ type: 'SalesReturn', id: 'NEXT' }, { type: 'Product', id: 'LIST' }],
+      // Also invalidates the Cashier Panel landing page's summary, whose
+      // Alerts panel surfaces today's real return count/total.
+      invalidatesTags: [
+        { type: 'SalesReturn', id: 'NEXT' },
+        { type: 'Product', id: 'LIST' },
+        { type: 'CashierPanel', id: 'SUMMARY' },
+      ],
     }),
   }),
 });

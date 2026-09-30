@@ -29,7 +29,7 @@ import ProductFormDialog from './components/ProductFormDialog';
 import ProductViewDialog from './components/ProductViewDialog';
 import ProductBulkImportDialog from './components/ProductBulkImportDialog';
 import { CASHIER } from '../mastersMockData';
-import { PRODUCT_GROUP_OPTIONS, PRODUCT_TYPE_OPTIONS, BRAND_OPTIONS, UOM_OPTIONS } from './productMockData';
+import { PRODUCT_GROUP_OPTIONS, UOM_OPTIONS } from './productMockData';
 import { useGetProductsQuery, useDeleteProductMutation, useInfiniteProducts } from '../../../api/productApi';
 import { useOfflineListSnapshot, buildListCacheKey } from '../../../api/offlineCache';
 
@@ -43,6 +43,7 @@ function toViewRow(row) {
     code: row.code,
     name: row.name,
     group: row.group,
+    productType: row.productType || '',
     brand: row.brand || '',
     uom: row.uom,
     hsnSac: row.hsnSac || '',
@@ -153,15 +154,30 @@ export default function ProductPage() {
 
   const viewRows = useMemo(() => productRows.map(toViewRow), [productRows]);
 
-  // Product Group / Brand / UOM are filtered client-side (the backend
-  // doesn't index on them yet); search and status are already applied
-  // server-side via the query above.
+  // Product Group / Type / Brand / UOM are filtered client-side (the
+  // backend doesn't index on them yet); search and status are already
+  // applied server-side via the query above.
   const filteredRows = useMemo(() => viewRows.filter((row) => {
     if (productGroup !== 'All' && row.group !== productGroup) return false;
+    if (productType !== 'All' && row.productType !== productType) return false;
     if (brand !== 'All' && row.brand !== brand) return false;
     if (uom !== 'All' && row.uom !== uom) return false;
     return true;
-  }), [viewRows, productGroup, brand, uom]);
+  }), [viewRows, productGroup, productType, brand, uom]);
+
+  // Brand/Product Type filter option lists are derived from whatever the
+  // catalog actually contains (real data), rather than a static mock
+  // list — Product Group/UOM stay tied to PRODUCT_GROUP_OPTIONS/UOM_OPTIONS
+  // below since those are also the controlled option lists the Add/Edit
+  // dialog writes from (see createProductSchema.js).
+  const brandFilterOptions = useMemo(
+    () => Array.from(new Set(viewRows.map((r) => r.brand).filter(Boolean))).sort(),
+    [viewRows],
+  );
+  const productTypeFilterOptions = useMemo(
+    () => Array.from(new Set(viewRows.map((r) => r.productType).filter(Boolean))).sort(),
+    [viewRows],
+  );
 
   const rangeStart = filteredRows.length ? 1 : 0;
   const rangeEnd = filteredRows.length;
@@ -272,13 +288,13 @@ export default function ProductPage() {
           <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
             <TextField select label="Product Type" value={productType} onChange={(e) => setProductType(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
-              {PRODUCT_TYPE_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+              {productTypeFilterOptions.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
           <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
             <TextField select label="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
-              {BRAND_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+              {brandFilterOptions.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
           <Grid size={{ xs: 6, sm: 4, md: 1.4 }}>

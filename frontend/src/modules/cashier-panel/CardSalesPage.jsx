@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Divider,
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Divider, Alert, Skeleton,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
@@ -10,16 +10,18 @@ import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 
-import { useAppDispatch } from '../../app/hooks';
-import { logout } from '../../features/auth/authSlice';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { logout, selectCurrentUser } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 import StatCard from '../../components/common/StatCard';
 import DonutChart from '../../components/common/DonutChart';
-import { DatePickerField } from '../../components/form/FormDatePicker';
+import { DatePickerField, formatPickerDate, parsePickerDate } from '../../components/form/FormDatePicker';
 import { formatCurrency, formatNumber } from '../../utils/format';
+import { useCardSalesReportQuery } from '../../api/saleApi';
 
 import CardSalesTransactionsTable from './components/CardSalesTransactionsTable';
-import { CASHIER, CARD_SALES } from './cashierPanelMockData';
+
+const PAGE_SIZE = 10;
 
 function SummaryTile({ label, value, valueColor }) {
   return (
@@ -32,31 +34,77 @@ function SummaryTile({ label, value, valueColor }) {
   );
 }
 
+// yyyy-mm-dd in the *local* time zone — what the backend's `date` query
+// param expects. `pickerValue` is DatePickerField's own "DD Mon YYYY"
+// string; falls back to today when it can't be parsed.
+function toDateKey(pickerValue) {
+  const date = parsePickerDate(pickerValue) || new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /**
  * Card Sales — the cashier's card-tender sales report reached from the
- * Cashier Panel's "Card Sales" quick action. Same layout as CashSalesPage
- * (5-tile stat strip, Sales Summary + Payment Summary side by side,
- * transactions table with a footer Total row and page numbers), with the
- * transactions table swapping Payment Mode for Card Type / Card No (Last
- * 4) / Bank-Provider — the card-specific detail the reference calls out.
+ * Cashier Panel's "Card Sales" quick action. Every figure comes from real
+ * Sale/SalesReturn rows via GET /sales/card-summary (see sale.service.js's
+ * getCardSalesReport): the stat tiles, Sales Summary/Payment Summary cards,
+ * the payment-mix donut, and the paginated Recent Card Sales Transactions
+ * table are all backed by the signed-in cashier's own outlet, scoped to the
+ * selected date where the reference UI's date picker implies that.
  *
- * There's no sales-reporting backend wired to this screen yet, so every
- * figure comes from CARD_SALES mock data.
+ * The transactions table's Card Type/Card No (Last 4)/Bank columns show
+ * "—" for any sale made before the Line Sale checkout screen captures that
+ * detail — createSale accepts it as optional today, but nothing sends it
+ * yet, so it's honestly blank rather than guessed.
  */
 export default function CardSalesPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const user = useAppSelector(selectCurrentUser);
   const [page, setPage] = useState(1);
+  const [selectedDate, setSelectedDate] = useState(() => formatPickerDate(new Date()));
 
-  const { stats, summary, payment, donut, transactions, totalPages } = CARD_SALES;
-  const [selectedDate, setSelectedDate] = useState(CARD_SALES.selectedDate);
+  const dateKey = toDateKey(selectedDate);
+  const {
+    data: report, isLoading, isFetching, isError, refetch,
+  } = useCardSalesReportQuery({ date: dateKey, page, pageSize: PAGE_SIZE });
 
-  const handleBack = () => navigate('/cashier-panel');
+  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
+
   const handleViewAll = () => dispatch(showToast('Full card sales list is coming soon', 'info'));
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
+  const handleDateChange = (value) => {
+    setSelectedDate(value || formatPickerDate(new Date()));
+    setPage(1);
+  };
+
+  const donutTotal = useMemo(
+    () => (report ? report.donut.reduce((sum, slice) => sum + slice.value, 0) : 0),
+    [report],
+  );
+  const donutCenterPct = report && donutTotal > 0 ? Math.round((report.donut[0].value / donutTotal) * 100) : 0;
+
+  if (isError) {
+    return (
+      <Stack spacing={2}>
+        <Alert
+          severity="error"
+          action={(
+            <MuiLink component="button" type="button" variant="body2" underline="hover" onClick={refetch}>
+              Retry
+            </MuiLink>
+          )}
+        >
+          Couldn&apos;t load the Card Sales report from the server. Check your connection and try reloading.
+        </Alert>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
@@ -71,7 +119,7 @@ export default function CardSalesPage() {
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
+            Cashier : {cashierLabel}
           </Typography>
           <MuiLink
             component="button"
@@ -86,58 +134,68 @@ export default function CardSalesPage() {
         </Stack>
       </Stack>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={ReceiptOutlinedIcon}
-            iconColor="success"
-            iconShape="circle"
-            label="Total Card Sales"
-            value={formatCurrency(stats.totalCardSales.value, { decimals: true })}
-            caption={`Transactions : ${stats.totalCardSales.transactions}`}
-          />
+      {isLoading || !report ? (
+        <Grid container spacing={2}>
+          {[1, 2, 3, 4, 5].map((key) => (
+            <Grid key={key} size={{ xs: 12, sm: 6, lg: 2.4 }}>
+              <Skeleton variant="rounded" height={92} />
+            </Grid>
+          ))}
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={ShoppingCartOutlinedIcon}
-            iconColor="#2563EB"
-            iconShape="circle"
-            label="Total Items Sold"
-            value={formatNumber(stats.totalItemsSold.value)}
-            caption={`Total Quantity : ${stats.totalItemsSold.totalQty.toFixed(3)}`}
-          />
+      ) : (
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={ReceiptOutlinedIcon}
+              iconColor="success"
+              iconShape="circle"
+              label="Total Card Sales"
+              value={formatCurrency(report.stats.totalCardSales.value, { decimals: true })}
+              caption={`Transactions : ${report.stats.totalCardSales.transactions}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={ShoppingCartOutlinedIcon}
+              iconColor="#2563EB"
+              iconShape="circle"
+              label="Total Items Sold"
+              value={formatNumber(report.stats.totalItemsSold.value)}
+              caption={`Total Quantity : ${report.stats.totalItemsSold.totalQty.toFixed(3)}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={ReceiptLongOutlinedIcon}
+              iconColor="warning"
+              iconShape="circle"
+              label="Average Invoice Value"
+              value={formatCurrency(report.stats.avgInvoiceValue.value, { decimals: true })}
+              caption="Per Transaction"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#8B5CF6"
+              iconShape="circle"
+              label="Today's Card Sales"
+              value={formatCurrency(report.stats.todaysCardSales.value, { decimals: true })}
+              caption={`${report.stats.todaysCardSales.transactions} Transactions`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#0EA5A4"
+              iconShape="circle"
+              label="Selected Date Sales"
+              value={formatCurrency(report.stats.selectedDateSales.value, { decimals: true })}
+              caption={report.stats.selectedDateSales.date}
+            />
+          </Grid>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={ReceiptLongOutlinedIcon}
-            iconColor="warning"
-            iconShape="circle"
-            label="Average Invoice Value"
-            value={formatCurrency(stats.avgInvoiceValue.value, { decimals: true })}
-            caption="Per Transaction"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#8B5CF6"
-            iconShape="circle"
-            label="Today's Card Sales"
-            value={formatCurrency(stats.todaysCardSales.value, { decimals: true })}
-            caption={`${stats.todaysCardSales.transactions} Transactions`}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#0EA5A4"
-            iconShape="circle"
-            label="Selected Date Sales"
-            value={formatCurrency(stats.selectedDateSales.value, { decimals: true })}
-            caption={stats.selectedDateSales.date}
-          />
-        </Grid>
-      </Grid>
+      )}
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
@@ -146,62 +204,72 @@ export default function CardSalesPage() {
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Sales Summary</Typography>
               <DatePickerField
                 value={selectedDate}
-                onChange={setSelectedDate}
+                onChange={handleDateChange}
                 sx={{ width: { xs: '100%', sm: 200 } }}
               />
             </Stack>
 
-            <Grid container spacing={1.5}>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Gross Sales" value={formatCurrency(summary.grossSales, { decimals: true })} valueColor="#2563EB" />
+            {!report ? (
+              <Skeleton variant="rounded" height={160} />
+            ) : (
+              <Grid container spacing={1.5}>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label="Gross Sales" value={formatCurrency(report.summary.grossSales, { decimals: true })} valueColor="#2563EB" />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label="Discount" value={formatCurrency(report.summary.discount, { decimals: true })} valueColor="error.main" />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label="Taxable Amount" value={formatCurrency(report.summary.taxableAmount, { decimals: true })} valueColor="#2563EB" />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label={`CGST (${report.summary.cgstRate}%)`} value={formatCurrency(report.summary.cgstAmount, { decimals: true })} valueColor="#2563EB" />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label={`SGST (${report.summary.sgstRate}%)`} value={formatCurrency(report.summary.sgstAmount, { decimals: true })} valueColor="#2563EB" />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label="Grand Total" value={formatCurrency(report.summary.grandTotal, { decimals: true })} valueColor="success.main" />
+                </Grid>
               </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Discount" value={formatCurrency(summary.discount, { decimals: true })} valueColor="error.main" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Taxable Amount" value={formatCurrency(summary.taxableAmount, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label={`CGST (${summary.cgstRate}%)`} value={formatCurrency(summary.cgstAmount, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label={`SGST (${summary.sgstRate}%)`} value={formatCurrency(summary.sgstAmount, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Grand Total" value={formatCurrency(summary.grandTotal, { decimals: true })} valueColor="success.main" />
-              </Grid>
-            </Grid>
+            )}
           </Paper>
         </Grid>
 
         <Grid size={{ xs: 12, lg: 5 }}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Payment Summary</Typography>
-            <Stack spacing={1.25} sx={{ mb: 2 }}>
-              <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>Card Received</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatCurrency(payment.cardReceived, { decimals: true })}</Typography>
-              </Stack>
-              <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>Other Payments</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatCurrency(payment.otherPayments, { decimals: true })}</Typography>
-              </Stack>
-              <Divider sx={{ my: 0.5 }} />
-              <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                <Typography variant="body2" sx={{ fontWeight: 800 }}>Total Received</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 800 }}>{formatCurrency(payment.totalReceived, { decimals: true })}</Typography>
-              </Stack>
-              <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>Refunds</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700, color: 'error.main' }}>{formatCurrency(payment.refunds, { decimals: true })}</Typography>
-              </Stack>
-            </Stack>
+            {!report ? (
+              <Skeleton variant="rounded" height={220} />
+            ) : (
+              <>
+                <Stack spacing={1.25} sx={{ mb: 2 }}>
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Card Received</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatCurrency(report.payment.cardReceived, { decimals: true })}</Typography>
+                  </Stack>
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Change Returned</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatCurrency(report.payment.changeReturned, { decimals: true })}</Typography>
+                  </Stack>
+                  <Divider sx={{ my: 0.5 }} />
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 800 }}>Total Received</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 800 }}>{formatCurrency(report.payment.totalReceived, { decimals: true })}</Typography>
+                  </Stack>
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Refunds</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: 'error.main' }}>{formatCurrency(report.payment.refunds, { decimals: true })}</Typography>
+                  </Stack>
+                </Stack>
 
-            <DonutChart
-              data={donut}
-              centerValue={`${donut[0].value ? Math.round((donut[0].value / donut.reduce((s, d) => s + d.value, 0)) * 100) : 0}%`}
-              formatValue={(v) => formatCurrency(v, { decimals: true })}
-            />
+                <DonutChart
+                  data={report.donut}
+                  centerValue={`${donutCenterPct}%`}
+                  formatValue={(v) => formatCurrency(v, { decimals: true })}
+                />
+              </>
+            )}
           </Paper>
         </Grid>
       </Grid>
@@ -220,7 +288,17 @@ export default function CardSalesPage() {
             View All <NavigateNextIcon fontSize="small" />
           </MuiLink>
         </Stack>
-        <CardSalesTransactionsTable rows={transactions} totalPages={totalPages} page={page} onPageChange={setPage} />
+        {!report ? (
+          <Skeleton variant="rounded" height={240} />
+        ) : (
+          <CardSalesTransactionsTable
+            rows={report.transactions}
+            totalPages={report.totalPages}
+            page={report.page}
+            onPageChange={setPage}
+            loading={isFetching}
+          />
+        )}
       </Paper>
     </Stack>
   );

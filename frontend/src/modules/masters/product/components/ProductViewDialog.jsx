@@ -37,6 +37,7 @@ export default function ProductViewDialog({ open, row, onClose, onEdit }) {
           <Field label="Product Code" value={row.code} />
           <Field label="Product Name" value={row.name} />
           <Field label="Product Group" value={row.group} />
+          <Field label="Product Type" value={row.productType} />
           <Field label="Brand" value={row.brand} />
           <Field label="UOM" value={row.uom} />
           <Field label="HSN / SAC" value={row.hsnSac} />

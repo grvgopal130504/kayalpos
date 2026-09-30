@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, Menu, MenuItem,
@@ -30,20 +30,23 @@ import BatchSerialTable from './components/BatchSerialTable';
 import BatchSerialFormDialog from './components/BatchSerialFormDialog';
 import BatchSerialViewDialog from './components/BatchSerialViewDialog';
 import { CASHIER } from '../mastersMockData';
-import {
-  BATCH_SERIALS, BATCH_SERIAL_TYPE_OPTIONS, WAREHOUSE_OPTIONS, DEFAULT_DATE_RANGE,
-  batchSerialTotalRecords, batchSerialTotalPages, STATS,
-} from './batchSerialMockData';
+import { BATCH_SERIAL_TYPE_OPTIONS } from './batchSerialMockData';
+import { useGetWarehousesQuery } from '../../../api/warehouseApi';
+import { useGetBatchSerialsPageQuery, useDeleteBatchSerialMutation } from '../../../api/batchSerialApi';
+
+const PAGE_SIZE = 20;
 
 /**
  * Batch / Serial Number Information — the Batch/Serial master's list
  * screen, reached from the Masters page's "Batch or Serial Number" card.
- * Same searchable/filterable list shape as the other Masters list pages
- * (info banner + action buttons, filter bar with a date range, table,
- * records footer, bottom stat row). Filters run client-side over the
- * mocked BATCH_SERIALS list; every row action and the New Batch/Serial,
- * Import/Export/More buttons are mocked — there's no Batch/Serial backend
- * module yet.
+ * Wired to the real Batch/Serial API (see api/batchSerialApi.js) — search/
+ * type/warehouse/status and pagination all run server-side; the five stat
+ * tiles come from the list response's `meta.stats` (tenant-wide totals,
+ * independent of the current filters — see batchSerial.service.js's
+ * getBatchSerialStats). The Date Range filter stays display-only for now
+ * (no matching backend query param) — same accepted gap as Price List's
+ * Effective Date filter, left as a follow-up rather than guessing whether
+ * it should filter by mfgDate, expiryDate, or createdAt.
  */
 export default function BatchSerialPage() {
   const dispatch = useAppDispatch();
@@ -53,12 +56,32 @@ export default function BatchSerialPage() {
   const [batchSerialType, setBatchSerialType] = useState('All');
   const [warehouse, setWarehouse] = useState('All');
   const [status, setStatus] = useState('All');
-  const [dateFrom, setDateFrom] = useState(DEFAULT_DATE_RANGE.from);
-  const [dateTo, setDateTo] = useState(DEFAULT_DATE_RANGE.to);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewRow, setViewRow] = useState(null);
+
+  // Warehouse is an `isActive` boolean model, not a `status` enum — see the
+  // same note in BatchSerialFormDialog.jsx.
+  const { data: warehouses = [] } = useGetWarehousesQuery({ isActive: true });
+
+  const { data, isLoading, isError } = useGetBatchSerialsPageQuery({
+    search: appliedSearch || undefined,
+    type: batchSerialType !== 'All' ? batchSerialType.toUpperCase() : undefined,
+    warehouseId: warehouse !== 'All' ? warehouse : undefined,
+    status: status !== 'All' ? status.toUpperCase() : undefined,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+  const [deleteBatchSerial] = useDeleteBatchSerialMutation();
+
+  const rows = data?.rows || [];
+  const meta = data?.meta;
+  const stats = meta?.stats || {
+    totalBatches: 0, totalSerials: 0, totalItemsTracked: 0, warehousesOutlets: 0, totalAvailableQty: 0,
+  };
 
   const handleLogout = () => {
     dispatch(logout());
@@ -72,33 +95,37 @@ export default function BatchSerialPage() {
     setMoreAnchor(null);
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
-  const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
+  const handleSearch = () => { setAppliedSearch(searchInput.trim()); setPage(1); };
   const handleReset = () => {
     setSearchInput('');
     setBatchSerialType('All');
     setWarehouse('All');
     setStatus('All');
-    setDateFrom(DEFAULT_DATE_RANGE.from);
-    setDateTo(DEFAULT_DATE_RANGE.to);
+    setDateFrom('');
+    setDateTo('');
     setAppliedSearch('');
+    setPage(1);
   };
   const handleOpenRow = (row) => setViewRow(row);
   const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
-  const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.number} is coming soon`, 'info'));
+  const handleDeleteRow = async (row) => {
+    if (!window.confirm(`Delete batch / serial "${row.number}"? This cannot be undone.`)) return;
+    try {
+      await deleteBatchSerial(row.id).unwrap();
+      dispatch(showToast(`${row.number} deleted`, 'success'));
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to delete batch / serial record', 'error'));
+    }
+  };
   const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
 
-  const filteredRows = useMemo(() => BATCH_SERIALS.filter((row) => {
-    if (appliedSearch) {
-      const haystack = `${row.itemCode} ${row.itemName}`.toLowerCase();
-      if (!haystack.includes(appliedSearch)) return false;
-    }
-    if (batchSerialType !== 'All' && row.type !== batchSerialType) return false;
-    if (warehouse !== 'All' && row.warehouse !== warehouse) return false;
-    if (status !== 'All' && row.status !== status) return false;
-    return true;
-  }), [appliedSearch, batchSerialType, warehouse, status]);
+  const isFiltered = Boolean(appliedSearch) || batchSerialType !== 'All' || warehouse !== 'All' || status !== 'All'
+    || Boolean(dateFrom) || Boolean(dateTo);
 
-  const isFiltered = Boolean(appliedSearch) || batchSerialType !== 'All' || warehouse !== 'All' || status !== 'All';
+  const total = meta?.total ?? 0;
+  const totalPages = meta?.totalPages ?? 1;
+  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = total === 0 ? 0 : Math.min(page * PAGE_SIZE, total);
 
   return (
     <Stack spacing={2}>
@@ -196,7 +223,7 @@ export default function BatchSerialPage() {
           <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
             <TextField select label="Warehouse / Outlet" value={warehouse} onChange={(e) => setWarehouse(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
-              {WAREHOUSE_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+              {warehouses.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
             </TextField>
           </Grid>
           <Grid size={{ xs: 6, sm: 4, md: 1.4 }}>
@@ -247,37 +274,46 @@ export default function BatchSerialPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Batch / Serial Number List</Typography>
-        <BatchSerialTable rows={filteredRows} onOpenRow={handleOpenRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+
+        {isError ? (
+          <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
+            Failed to load batch / serial records. Please try again.
+          </Typography>
+        ) : (
+          <Box sx={{ opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
+            <BatchSerialTable rows={rows} onOpenRow={handleOpenRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+          </Box>
+        )}
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Showing {filteredRows.length ? 1 : 0} to {filteredRows.length} of {isFiltered ? filteredRows.length : batchSerialTotalRecords} records
+            Showing {rangeStart} to {rangeEnd} of {formatNumber(total)} records{isFiltered ? ' (filtered)' : ''}
           </Typography>
-          <Pagination
-            count={isFiltered ? 1 : batchSerialTotalPages}
-            page={page}
-            onChange={(_e, value) => setPage(value)}
-            color="primary"
-            shape="rounded"
-          />
+          <Pagination count={totalPages} page={page} onChange={(_e, value) => setPage(value)} color="primary" shape="rounded" />
         </Stack>
       </Paper>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={DescriptionOutlinedIcon} iconColor="#7C3AED" iconShape="circle" label="Total Batches" value={formatNumber(STATS.totalBatches)} />
+          <StatCard icon={DescriptionOutlinedIcon} iconColor="#7C3AED" iconShape="circle" label="Total Batches" value={formatNumber(stats.totalBatches)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={QrCode2OutlinedIcon} iconColor="success" iconShape="circle" label="Total Serials" value={formatNumber(STATS.totalSerials)} />
+          <StatCard icon={QrCode2OutlinedIcon} iconColor="success" iconShape="circle" label="Total Serials" value={formatNumber(stats.totalSerials)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={Inventory2OutlinedIcon} iconColor="#F5A623" iconShape="circle" label="Total Items Tracked" value={formatNumber(STATS.totalItemsTracked)} />
+          <StatCard icon={Inventory2OutlinedIcon} iconColor="#F5A623" iconShape="circle" label="Total Items Tracked" value={formatNumber(stats.totalItemsTracked)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={ApartmentOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Warehouses / Outlets" value={formatNumber(STATS.warehousesOutlets)} />
+          <StatCard icon={ApartmentOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Warehouses / Outlets" value={formatNumber(stats.warehousesOutlets)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={SellOutlinedIcon} iconColor="#F26B21" iconShape="circle" label="Total Available Qty" value={STATS.totalAvailableQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
+          <StatCard
+            icon={SellOutlinedIcon}
+            iconColor="#F26B21"
+            iconShape="circle"
+            label="Total Available Qty"
+            value={Number(stats.totalAvailableQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          />
         </Grid>
       </Grid>
 

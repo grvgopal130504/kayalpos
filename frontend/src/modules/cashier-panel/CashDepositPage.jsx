@@ -1,24 +1,36 @@
 import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { FormProvider, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper,
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, Alert, Skeleton,
+  Dialog, DialogTitle, DialogContent, DialogActions, Tooltip,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
+import AddIcon from '@mui/icons-material/Add';
 
-import { useAppDispatch } from '../../app/hooks';
-import { logout } from '../../features/auth/authSlice';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { logout, selectCurrentUser } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 import StatCard from '../../components/common/StatCard';
 import DonutChart from '../../components/common/DonutChart';
-import { DatePickerField } from '../../components/form/FormDatePicker';
+import { DatePickerField, formatPickerDate, parsePickerDate } from '../../components/form/FormDatePicker';
+import FormSelect from '../../components/form/FormSelect';
+import FormTextField from '../../components/form/FormTextField';
 import { formatCurrency } from '../../utils/format';
+import { useShiftSessionStatusQuery } from '../../api/shiftSessionApi';
+import { useCashDepositReportQuery, useCreateCashDepositMutation } from '../../api/cashDepositApi';
 
 import CashDepositTransactionsTable from './components/CashDepositTransactionsTable';
-import { CASHIER, CASH_DEPOSIT } from './cashierPanelMockData';
+import {
+  PURPOSE_OPTIONS, cashDepositFormSchema, cashDepositDefaultValues, cashDepositFormValuesToPayload,
+} from './cashDepositSchema';
+
+const PAGE_SIZE = 10;
 
 function SummaryTile({ label, value, valueColor }) {
   return (
@@ -31,33 +43,111 @@ function SummaryTile({ label, value, valueColor }) {
   );
 }
 
+function toDateKey(pickerValue) {
+  const date = parsePickerDate(pickerValue) || new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /**
- * Cash Deposit — the cashier's cash-in report reached from the Cashier
- * Panel's "Cash Deposit" quick action. Mirrors CashWithdrawalPage's
- * shape exactly (same cash-position summary tiles, same list+donut
- * by-purpose breakdown), since a deposit is the same kind of drawer
- * movement as a withdrawal just in the opposite direction — only the
- * purpose categories (Bank Deposit / Owner Deposit / Float Adjustment /
- * Other Purpose) and the transactions table's Deposited By / Bank-Account
- * columns differ.
+ * Cash Deposit — the cashier's cash-out (to the bank / owner / a float
+ * adjustment) report reached from the Cashier Panel's "Cash Deposit" quick
+ * action. Mirrors CashWithdrawalPage's shape exactly (same "New ___"
+ * dialog, same cash-position summary tiles, same by-purpose donut), since
+ * a deposit is the same kind of drawer movement as a withdrawal — cash
+ * leaving the drawer — just categorized differently and, for "Bank
+ * Deposit", tagged with the account it landed in. Every figure and the
+ * create flow are real, via GET/POST /cash-deposits (see backend/src/
+ * modules/cash-deposit).
  *
- * There's no sales-reporting backend wired to this screen yet, so every
- * figure comes from CASH_DEPOSIT mock data.
+ * A deposit can only be recorded while a shift is OPEN for this outlet and
+ * can't exceed the drawer's real available cash — both enforced again
+ * server-side, never trusted from this form alone (see
+ * cashDeposit.service.js's createCashDeposit, which also accounts for any
+ * withdrawals already taken this shift, since both movements share the
+ * same drawer). "New Deposit" is disabled with an explanatory tooltip when
+ * no shift is open.
  */
 export default function CashDepositPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const user = useAppSelector(selectCurrentUser);
   const [page, setPage] = useState(1);
+  const [selectedDate, setSelectedDate] = useState(() => formatPickerDate(new Date()));
+  const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { stats, summary, byPurpose, transactions, totalPages } = CASH_DEPOSIT;
-  const [selectedDate, setSelectedDate] = useState(CASH_DEPOSIT.selectedDate);
-  const totalByPurpose = byPurpose.reduce((sum, p) => sum + p.value, 0);
+  const dateKey = toDateKey(selectedDate);
+  const {
+    data: report, isLoading, isFetching, isError, refetch,
+  } = useCashDepositReportQuery({ date: dateKey, page, pageSize: PAGE_SIZE });
+  const { data: shiftStatus } = useShiftSessionStatusQuery();
+  const [createDeposit, { isLoading: isSubmitting }] = useCreateCashDepositMutation();
+
+  const isShiftOpen = Boolean(shiftStatus?.currentShift);
+  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
+
+  const methods = useForm({
+    resolver: zodResolver(cashDepositFormSchema),
+    defaultValues: cashDepositDefaultValues(),
+    mode: 'onTouched',
+  });
+  const { handleSubmit, reset, watch } = methods;
+  const purpose = watch('purpose');
+  const isBankDeposit = purpose === 'bank-deposit';
 
   const handleViewAll = () => dispatch(showToast('Full cash deposit list is coming soon', 'info'));
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
+  const handleDateChange = (value) => {
+    setSelectedDate(value || formatPickerDate(new Date()));
+    setPage(1);
+  };
+  const handleOpenDialog = () => {
+    reset(cashDepositDefaultValues());
+    setDialogOpen(true);
+  };
+  const handleCloseDialog = () => setDialogOpen(false);
+
+  const onSubmit = handleSubmit(
+    async (values) => {
+      try {
+        const payload = cashDepositFormValuesToPayload(values);
+        const created = await createDeposit(payload).unwrap();
+        dispatch(showToast(
+          `Deposit ${created.referenceNo} recorded for ₹${Number(created.amount).toFixed(2)}`,
+          'success',
+        ));
+        setDialogOpen(false);
+      } catch (err) {
+        dispatch(showToast(err?.data?.message || 'Failed to record the deposit', 'error'));
+      }
+    },
+    (formErrors) => {
+      const firstKey = Object.keys(formErrors)[0];
+      dispatch(showToast(formErrors[firstKey]?.message || 'Please fix the highlighted fields', 'error'));
+    },
+  );
+
+  if (isError) {
+    return (
+      <Stack spacing={2}>
+        <Alert
+          severity="error"
+          action={(
+            <MuiLink component="button" type="button" variant="body2" underline="hover" onClick={refetch}>
+              Retry
+            </MuiLink>
+          )}
+        >
+          Couldn&apos;t load the Cash Deposit report from the server. Check your connection and try reloading.
+        </Alert>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
@@ -72,7 +162,7 @@ export default function CashDepositPage() {
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
+            Cashier : {cashierLabel}
           </Typography>
           <MuiLink
             component="button"
@@ -87,58 +177,83 @@ export default function CashDepositPage() {
         </Stack>
       </Stack>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={ReceiptLongOutlinedIcon}
-            iconColor="success"
-            iconShape="circle"
-            label="Total Cash Deposit"
-            value={formatCurrency(stats.totalCashDeposit.value, { decimals: true })}
-            caption={`Transactions : ${stats.totalCashDeposit.transactions}`}
-          />
+      <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+        <Tooltip title={isShiftOpen ? '' : 'Open a shift before recording a cash deposit'}>
+          <span>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleOpenDialog}
+              disabled={!isShiftOpen}
+            >
+              New Deposit
+            </Button>
+          </span>
+        </Tooltip>
+      </Stack>
+
+      {isLoading || !report ? (
+        <Grid container spacing={2}>
+          {[1, 2, 3, 4, 5].map((key) => (
+            <Grid key={key} size={{ xs: 12, sm: 6, lg: 2.4 }}>
+              <Skeleton variant="rounded" height={92} />
+            </Grid>
+          ))}
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={DescriptionOutlinedIcon}
-            iconColor="#2563EB"
-            iconShape="circle"
-            label="Total Deposits"
-            value={String(stats.totalDeposits.value)}
-            caption="Total Quantity : -"
-          />
+      ) : (
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={ReceiptLongOutlinedIcon}
+              iconColor="success"
+              iconShape="circle"
+              label="Total Cash Deposit"
+              value={formatCurrency(report.stats.totalCashDeposit.value, { decimals: true })}
+              caption={`Transactions : ${report.stats.totalCashDeposit.transactions}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={DescriptionOutlinedIcon}
+              iconColor="#2563EB"
+              iconShape="circle"
+              label="Total Deposits"
+              value={String(report.stats.totalDeposits.value)}
+              caption="Total Quantity : -"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={ReceiptLongOutlinedIcon}
+              iconColor="warning"
+              iconShape="circle"
+              label="Average Deposit Value"
+              value={formatCurrency(report.stats.avgDepositValue.value, { decimals: true })}
+              caption="Per Transaction"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#8B5CF6"
+              iconShape="circle"
+              label="Today's Cash Deposit"
+              value={formatCurrency(report.stats.todaysCashDeposit.value, { decimals: true })}
+              caption={`${report.stats.todaysCashDeposit.transactions} Transactions`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#0EA5A4"
+              iconShape="circle"
+              label="Selected Date Deposit"
+              value={formatCurrency(report.stats.selectedDateDeposit.value, { decimals: true })}
+              caption={report.stats.selectedDateDeposit.date}
+            />
+          </Grid>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={ReceiptLongOutlinedIcon}
-            iconColor="warning"
-            iconShape="circle"
-            label="Average Deposit Value"
-            value={formatCurrency(stats.avgDepositValue.value, { decimals: true })}
-            caption="Per Transaction"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#8B5CF6"
-            iconShape="circle"
-            label="Today's Cash Deposit"
-            value={formatCurrency(stats.todaysCashDeposit.value, { decimals: true })}
-            caption={`${stats.todaysCashDeposit.transactions} Transactions`}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#0EA5A4"
-            iconShape="circle"
-            label="Selected Date Deposit"
-            value={formatCurrency(stats.selectedDateDeposit.value, { decimals: true })}
-            caption={stats.selectedDateDeposit.date}
-          />
-        </Grid>
-      </Grid>
+      )}
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
@@ -147,54 +262,70 @@ export default function CashDepositPage() {
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Deposit Summary</Typography>
               <DatePickerField
                 value={selectedDate}
-                onChange={setSelectedDate}
+                onChange={handleDateChange}
                 sx={{ width: { xs: '100%', sm: 200 } }}
               />
             </Stack>
 
-            <Grid container spacing={1.5}>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Total Cash Deposit" value={formatCurrency(summary.totalCashDeposit, { decimals: true })} valueColor="#2563EB" />
+            {!report ? (
+              <Skeleton variant="rounded" height={160} />
+            ) : (
+              <Grid container spacing={1.5}>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label="Total Cash Deposit" value={formatCurrency(report.summary.totalCashDeposit, { decimals: true })} valueColor="#2563EB" />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label="Total Transactions" value={String(report.summary.totalTransactions)} valueColor="#2563EB" />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label="Total Deposited By" value={report.summary.totalDepositedBy} valueColor="#2563EB" />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label="Opening Cash" value={formatCurrency(report.summary.openingCash, { decimals: true })} valueColor="#2563EB" />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label="Total Sales (All Modes)" value={formatCurrency(report.summary.totalSalesAllModes, { decimals: true })} valueColor="#2563EB" />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <SummaryTile label="Closing Cash (Actual)" value={formatCurrency(report.summary.closingCashActual, { decimals: true })} valueColor="success.main" />
+                </Grid>
               </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Total Transactions" value={String(summary.totalTransactions)} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Total Deposited By" value={summary.totalDepositedBy} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Opening Cash" value={formatCurrency(summary.openingCash, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Total Sales (All Modes)" value={formatCurrency(summary.totalSalesAllModes, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <SummaryTile label="Closing Cash (Actual)" value={formatCurrency(summary.closingCashActual, { decimals: true })} valueColor="success.main" />
-              </Grid>
-            </Grid>
+            )}
           </Paper>
         </Grid>
 
         <Grid size={{ xs: 12, lg: 5 }}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Deposit Summary (By Purpose)</Typography>
-            <Stack spacing={1.25} sx={{ mb: 2 }}>
-              {byPurpose.map((p) => (
-                <Stack key={p.id} direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>{p.label}</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                    {formatCurrency(p.value, { decimals: true })} ({totalByPurpose ? Math.round((p.value / totalByPurpose) * 100 * 100) / 100 : 0}%)
-                  </Typography>
-                </Stack>
-              ))}
-            </Stack>
-
-            <DonutChart
-              data={byPurpose}
-              centerValue={formatCurrency(totalByPurpose, { decimals: true })}
-              centerLabel="Total"
-              formatValue={(v) => formatCurrency(v, { decimals: true })}
-            />
+            {!report ? (
+              <Skeleton variant="rounded" height={220} />
+            ) : (
+              <>
+                {(() => {
+                  const totalByPurpose = report.byPurpose.reduce((sum, p) => sum + p.value, 0);
+                  return (
+                    <>
+                      <Stack spacing={1.25} sx={{ mb: 2 }}>
+                        {report.byPurpose.map((p) => (
+                          <Stack key={p.id} direction="row" sx={{ justifyContent: 'space-between' }}>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>{p.label}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {formatCurrency(p.value, { decimals: true })} ({totalByPurpose ? Math.round((p.value / totalByPurpose) * 100 * 100) / 100 : 0}%)
+                            </Typography>
+                          </Stack>
+                        ))}
+                      </Stack>
+                      <DonutChart
+                        data={report.byPurpose}
+                        centerValue={formatCurrency(totalByPurpose, { decimals: true })}
+                        centerLabel="Total"
+                        formatValue={(v) => formatCurrency(v, { decimals: true })}
+                      />
+                    </>
+                  );
+                })()}
+              </>
+            )}
           </Paper>
         </Grid>
       </Grid>
@@ -213,8 +344,45 @@ export default function CashDepositPage() {
             View All <NavigateNextIcon fontSize="small" />
           </MuiLink>
         </Stack>
-        <CashDepositTransactionsTable rows={transactions} totalPages={totalPages} page={page} onPageChange={setPage} />
+        {!report ? (
+          <Skeleton variant="rounded" height={240} />
+        ) : (
+          <CashDepositTransactionsTable
+            rows={report.transactions}
+            totalPages={report.totalPages}
+            page={report.page}
+            onPageChange={setPage}
+            loading={isFetching}
+          />
+        )}
       </Paper>
+
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+        <FormProvider {...methods}>
+          <form onSubmit={onSubmit}>
+            <DialogTitle sx={{ fontWeight: 800 }}>New Cash Deposit</DialogTitle>
+            <DialogContent>
+              <Stack spacing={2} sx={{ mt: 0.5 }}>
+                {!isShiftOpen && (
+                  <Alert severity="warning">Open a shift before recording a cash deposit.</Alert>
+                )}
+                <FormSelect name="purpose" label="Purpose" options={PURPOSE_OPTIONS} />
+                <FormTextField name="amount" label="Amount (₹)" />
+                {isBankDeposit && (
+                  <FormTextField name="bankAccount" label="Bank / Account" />
+                )}
+                <FormTextField name="remarks" label="Remarks (optional)" multiline minRows={2} />
+              </Stack>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2.5 }}>
+              <Button onClick={handleCloseDialog}>Cancel</Button>
+              <Button type="submit" variant="contained" disabled={!isShiftOpen || isSubmitting}>
+                {isSubmitting ? 'Recording…' : 'Record Deposit'}
+              </Button>
+            </DialogActions>
+          </form>
+        </FormProvider>
+      </Dialog>
     </Stack>
   );
 }

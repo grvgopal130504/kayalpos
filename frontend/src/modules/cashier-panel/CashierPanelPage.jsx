@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, TextField,
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, TextField, Skeleton, Alert,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 
-import { useAppDispatch } from '../../app/hooks';
-import { logout } from '../../features/auth/authSlice';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { logout, selectCurrentUser } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
+import { useCashierPanelSummaryQuery } from '../../api/cashierPanelApi';
 
 import CashierStatCard from './components/CashierStatCard';
 import CashierQuickActions from './components/CashierQuickActions';
@@ -18,28 +19,40 @@ import CashierCashSummary from './components/CashierCashSummary';
 import CashierRecentTransactions from './components/CashierRecentTransactions';
 import CashierQuickInfo from './components/CashierQuickInfo';
 import CashierAlerts from './components/CashierAlerts';
-import { CASHIER, SHIFT, STATS, PAYMENT_SUMMARY, CASH_SUMMARY, RECENT_TRANSACTIONS, QUICK_INFO, ALERTS } from './cashierPanelMockData';
 import { formatCurrency, formatNumber } from '../../utils/format';
+
+// Static operating reminders — plain UI copy, not data, so there's nothing
+// to fetch here (unlike Alerts, which is real, derived state — see
+// cashierPanel.service.js's getCashierPanelSummary).
+const QUICK_INFO = [
+  'Use PIN login for secure operations.',
+  'Please perform Shift Closing & Reconciliation at the end of the day.',
+  'Ensure cash in hand matches with expected amount.',
+];
 
 /**
  * Cashier Panel — the front-of-house cash register operator screen:
  * shift/cash-in-hand/sales/receipt stat strip, a Quick Actions grid for
  * every shift & cash-drawer action, then Current Shift Details / Payment
  * Summary / Cash Summary / Recent Transactions side by side, and a
- * closing Quick Info / Notes / Alerts row — matching the reference
- * layout exactly.
- *
- * There's no Cashier Panel backend module yet (shift/cash-drawer tracking
- * isn't modeled in the API), so every figure here comes from
- * cashierPanelMockData and every Quick Action tile just surfaces a
- * "coming soon" toast. Logout reuses the real auth flow (same as
- * UserMenu) since that part of the reference — the "Cashier : Name (Code)
- * / Logout" strip — maps onto a real, already-wired action.
+ * closing Quick Info / Notes / Alerts row. Every figure comes from
+ * GET /cashier-panel/summary (see cashierPanel.service.js's
+ * getCashierPanelSummary) — real ShiftSession/Sale/SalesReturn/
+ * CashWithdrawal/CashDeposit/CashTransfer rows, reshaped for this
+ * dashboard, never a table of its own. Every Quick Action tile already
+ * routes to a real, fully-wired cashier-panel screen.
  */
 export default function CashierPanelPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const user = useAppSelector(selectCurrentUser);
   const [notes, setNotes] = useState('');
+
+  const {
+    data: summary, isLoading, isError, refetch,
+  } = useCashierPanelSummaryQuery();
+
+  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
 
   const handleAction = (label, path) => {
     if (path) {
@@ -54,6 +67,23 @@ export default function CashierPanelPage() {
     navigate('/login', { replace: true });
   };
 
+  if (isError) {
+    return (
+      <Stack spacing={2}>
+        <Alert
+          severity="error"
+          action={(
+            <MuiLink component="button" type="button" variant="body2" underline="hover" onClick={refetch}>
+              Retry
+            </MuiLink>
+          )}
+        >
+          Couldn&apos;t load the Cashier Panel from the server. Check your connection and try reloading.
+        </Alert>
+      </Stack>
+    );
+  }
+
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}>
@@ -66,7 +96,7 @@ export default function CashierPanelPage() {
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
+            Cashier : {cashierLabel}
           </Typography>
           <MuiLink
             component="button"
@@ -81,40 +111,50 @@ export default function CashierPanelPage() {
         </Stack>
       </Stack>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <CashierStatCard
-            label="Current Shift"
-            value={SHIFT.status}
-            valueColor="success.main"
-            captionLines={[SHIFT.openedAt, SHIFT.openedDate]}
-          />
+      {isLoading || !summary ? (
+        <Grid container spacing={2}>
+          {[1, 2, 3, 4].map((key) => (
+            <Grid key={key} size={{ xs: 12, sm: 6, lg: 3 }}>
+              <Skeleton variant="rounded" height={92} />
+            </Grid>
+          ))}
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <CashierStatCard
-            label="Current Cash in Hand (₹)"
-            value={formatCurrency(STATS.cashInHand.value, { decimals: true })}
-            valueColor="#2563EB"
-            caption={`Expected : ${formatCurrency(STATS.cashInHand.expected, { decimals: true })}`}
-          />
+      ) : (
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+            <CashierStatCard
+              label="Current Shift"
+              value={summary.shift ? summary.shift.status : 'No Shift Open'}
+              valueColor={summary.shift ? 'success.main' : 'error.main'}
+              captionLines={summary.shift ? [summary.shift.openedOn] : ['Open a shift to begin']}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+            <CashierStatCard
+              label="Current Cash in Hand (₹)"
+              value={formatCurrency(summary.stats.cashInHand.value, { decimals: true })}
+              valueColor="#2563EB"
+              caption={`Expected : ${formatCurrency(summary.stats.cashInHand.expected, { decimals: true })}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+            <CashierStatCard
+              label="Today's Sales (₹)"
+              value={formatCurrency(summary.stats.todaysSales.value, { decimals: true })}
+              valueColor="#2563EB"
+              caption={`Transactions : ${formatNumber(summary.stats.todaysSales.transactions)}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+            <CashierStatCard
+              label="Today's Receipt (₹)"
+              value={formatCurrency(summary.stats.todaysReceipt.value, { decimals: true })}
+              valueColor="#2563EB"
+              caption={`Refunds : ${formatCurrency(summary.stats.todaysReceipt.refunds, { decimals: true })}`}
+            />
+          </Grid>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <CashierStatCard
-            label="Today's Sales (₹)"
-            value={formatCurrency(STATS.todaysSales.value, { decimals: true })}
-            valueColor="#2563EB"
-            caption={`Transactions : ${formatNumber(STATS.todaysSales.transactions)}`}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <CashierStatCard
-            label="Today's Receipt (₹)"
-            value={formatCurrency(STATS.todaysReceipt.value, { decimals: true })}
-            valueColor="#2563EB"
-            caption={`Refunds : ${formatCurrency(STATS.todaysReceipt.refunds, { decimals: true })}`}
-          />
-        </Grid>
-      </Grid>
+      )}
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Quick Actions</Typography>
@@ -123,16 +163,38 @@ export default function CashierPanelPage() {
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <CashierShiftDetails shift={SHIFT} />
+          {!summary ? (
+            <Skeleton variant="rounded" height={220} />
+          ) : summary.shift ? (
+            <CashierShiftDetails shift={summary.shift} />
+          ) : (
+            <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>Current Shift Details</Typography>
+              <Alert severity="info">No shift is currently open for this outlet.</Alert>
+            </Paper>
+          )}
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <CashierPaymentSummary summary={PAYMENT_SUMMARY} />
+          {!summary ? <Skeleton variant="rounded" height={220} /> : <CashierPaymentSummary summary={summary.paymentSummary} />}
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <CashierCashSummary summary={CASH_SUMMARY} />
+          {!summary ? (
+            <Skeleton variant="rounded" height={220} />
+          ) : summary.cashSummary ? (
+            <CashierCashSummary summary={summary.cashSummary} />
+          ) : (
+            <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>Cash Summary (Today)</Typography>
+              <Alert severity="info">Open a shift to start tracking today&apos;s cash summary.</Alert>
+            </Paper>
+          )}
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <CashierRecentTransactions transactions={RECENT_TRANSACTIONS} onViewAll={handleViewAllTransactions} />
+          {!summary ? (
+            <Skeleton variant="rounded" height={220} />
+          ) : (
+            <CashierRecentTransactions transactions={summary.recentTransactions} onViewAll={handleViewAllTransactions} />
+          )}
         </Grid>
       </Grid>
 
@@ -146,7 +208,10 @@ export default function CashierPanelPage() {
             <TextField
               // Standalone field (no surrounding form on this page), so it's
               // plain value/onChange rather than the react-hook-form-backed
-              // FormTextField used on the create-form pages.
+              // FormTextField used on the create-form pages. Scratch-pad
+              // only — nothing here is persisted server-side, so it clears
+              // on refresh; there's no "cashier notes" table in the schema
+              // to save it to.
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Enter notes (optional)"
@@ -157,7 +222,7 @@ export default function CashierPanelPage() {
           </Paper>
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
-          <CashierAlerts alerts={ALERTS} />
+          {!summary ? <Skeleton variant="rounded" height={140} /> : <CashierAlerts alerts={summary.alerts} />}
         </Grid>
       </Grid>
     </Stack>

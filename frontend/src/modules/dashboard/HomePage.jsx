@@ -25,10 +25,13 @@ const PAYMENT_COLORS = { Cash: '#22A06B', UPI: '#2563EB', Card: '#8B5CF6', Walle
 
 export default function HomePage() {
   const outletId = useAppSelector(selectActiveOutletId);
-  const { data, isLoading, isError } = useGetHomeDashboardQuery(outletId);
-  const quickAccessItems = useQuickAccessItems();
   const [salesPeriod, setSalesPeriod] = useState('month');
   const [topSellingPeriod, setTopSellingPeriod] = useState('month');
+  // Both period dropdowns are real query params now (see dashboardApi.js /
+  // dashboard.schema.js) — changing either refetches just that panel's data
+  // via RTK Query's cache-key-changed refetch, not the whole page reloading.
+  const { data, isLoading, isError } = useGetHomeDashboardQuery({ outletId, salesPeriod, topSellingPeriod });
+  const quickAccessItems = useQuickAccessItems();
 
   if (isLoading) {
     return (

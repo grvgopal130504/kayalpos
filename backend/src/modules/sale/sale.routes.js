@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
 import { validateRequest } from '../../middleware/validateRequest.js';
-import { createSaleSchema } from './sale.schema.js';
+import {
+  createSaleSchema, cashSalesQuerySchema, cardSalesQuerySchema, upiSalesQuerySchema, otherPaymentsQuerySchema,
+} from './sale.schema.js';
 import {
   createSale, nextBillNo, getDiscountSummary,
   getSalesOverviewSummary, getCustomerPurchaseSummaries, getCustomerPurchaseSummary,
+  getCashSalesReport, getCardSalesReport, getUpiSalesReport, getOtherPaymentsReport,
 } from './sale.service.js';
 
 const router = Router();
@@ -62,6 +65,64 @@ router.get('/customer/:customerId', async (req, res, next) => {
   try {
     const summary = await getCustomerPurchaseSummary(req.user.tenantId, req.params.customerId);
     res.json({ success: true, data: summary });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Feeds the Cashier Panel's Cash Sales report — stat tiles, Sales
+// Summary/Payment Summary cards, the payment-mix donut, and the paginated
+// Recent Cash Sales Transactions table. Scoped to the cashier's own outlet
+// (from their JWT, same as createSale) so one cashier never sees another
+// outlet's cash drawer. See sale.service.js's getCashSalesReport for exactly
+// which figures are all-time vs. scoped to the `date` query param.
+router.get('/cash-summary', validateRequest(cashSalesQuerySchema, 'query'), async (req, res, next) => {
+  try {
+    const report = await getCashSalesReport(req.user.tenantId, req.user.outletId, req.query);
+    res.json({ success: true, data: report });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Feeds the Cashier Panel's Card Sales report — same shape as the Cash
+// Sales report above, scoped to card-tender sales instead. See
+// sale.service.js's getCardSalesReport for exactly which figures are
+// all-time vs. scoped to the `date` query param, and the caveat about
+// card type/last-4/bank not being captured by checkout yet.
+router.get('/card-summary', validateRequest(cardSalesQuerySchema, 'query'), async (req, res, next) => {
+  try {
+    const report = await getCardSalesReport(req.user.tenantId, req.user.outletId, req.query);
+    res.json({ success: true, data: report });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Feeds the Cashier Panel's UPI Sales report — same shape as the Cash
+// Sales report above, scoped to UPI-tender sales instead. See
+// sale.service.js's getUpiSalesReport for exactly which figures are
+// all-time vs. scoped to the `date` query param, and the caveat about the
+// UPI app/transaction ID not being captured by checkout yet.
+router.get('/upi-summary', validateRequest(upiSalesQuerySchema, 'query'), async (req, res, next) => {
+  try {
+    const report = await getUpiSalesReport(req.user.tenantId, req.user.outletId, req.query);
+    res.json({ success: true, data: report });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Feeds the Cashier Panel's Other Payments report — the miscellaneous-
+// tender bucket (store credit, gift card, wallet, credit, cheque, bank
+// transfer). See sale.service.js's getOtherPaymentsReport for exactly which
+// figures are all-time vs. scoped to the `date` query param, the real
+// same-day cash/card/upi context lines, and the caveat about
+// paymentReference not being captured by checkout yet.
+router.get('/other-summary', validateRequest(otherPaymentsQuerySchema, 'query'), async (req, res, next) => {
+  try {
+    const report = await getOtherPaymentsReport(req.user.tenantId, req.user.outletId, req.query);
+    res.json({ success: true, data: report });
   } catch (err) {
     next(err);
   }

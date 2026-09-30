@@ -5,6 +5,8 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined';
 
+import { formatPickerDate } from '../../../../components/form/FormDatePicker';
+
 function Field({ label, value }) {
   return (
     <Grid size={{ xs: 12, sm: 6 }}>
@@ -14,9 +16,14 @@ function Field({ label, value }) {
   );
 }
 
-/** Read-only "View Batch / Serial" dialog opened from the Item Code link in BatchSerialTable. */
+function formatRowDate(value) {
+  return value ? formatPickerDate(new Date(value)) : '—';
+}
+
+/** Read-only "View Batch / Serial" dialog opened from the Item Code link in BatchSerialTable — real API row shape (product/warehouse joined in, type/status enums). */
 export default function BatchSerialViewDialog({ open, row, onClose, onEdit }) {
   if (!row) return null;
+  const status = String(row.status).toUpperCase() === 'INACTIVE' ? 'Inactive' : 'Active';
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1.5 }}>
@@ -28,22 +35,22 @@ export default function BatchSerialViewDialog({ open, row, onClose, onEdit }) {
       </DialogTitle>
       <DialogContent dividers>
         <Grid container spacing={2}>
-          <Field label="Item Code" value={row.itemCode} />
-          <Field label="Item Name" value={row.itemName} />
+          <Field label="Item Code" value={row.product?.code} />
+          <Field label="Item Name" value={row.product?.name} />
           <Field label="Batch / Serial No." value={row.number} />
-          <Field label="Batch / Serial Type" value={row.type} />
-          <Field label="Manufacturing Date" value={row.mfgDate} />
-          <Field label="Expiry Date" value={row.expiryDate || '—'} />
-          <Field label="Warehouse / Outlet" value={row.warehouse} />
-          <Field label="Available Qty" value={typeof row.qty === 'number' ? `${row.qty.toFixed(2)} ${row.uom}` : row.qty} />
+          <Field label="Batch / Serial Type" value={row.type === 'SERIAL' ? 'Serial' : 'Batch'} />
+          <Field label="Manufacturing Date" value={formatRowDate(row.mfgDate)} />
+          <Field label="Expiry Date" value={formatRowDate(row.expiryDate)} />
+          <Field label="Warehouse / Outlet" value={row.warehouse?.name || '-'} />
+          <Field label="Available Qty" value={`${Number(row.qty).toFixed(2)} ${row.uom}`} />
           <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>Status</Typography>
             <Chip
-              label={row.status}
+              label={status}
               size="small"
               sx={{
-                bgcolor: row.status === 'Active' ? 'rgba(34,160,107,0.12)' : 'rgba(229,72,77,0.12)',
-                color: row.status === 'Active' ? 'success.main' : 'error.main',
+                bgcolor: status === 'Active' ? 'rgba(34,160,107,0.12)' : 'rgba(229,72,77,0.12)',
+                color: status === 'Active' ? 'success.main' : 'error.main',
                 fontWeight: 700, height: 22, mt: 0.5,
               }}
             />

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Pagination,
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Skeleton, Alert,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
@@ -10,18 +10,20 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 
-import { useAppDispatch } from '../../app/hooks';
-import { logout } from '../../features/auth/authSlice';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { logout, selectCurrentUser } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 import StatCard from '../../components/common/StatCard';
 import DonutChart from '../../components/common/DonutChart';
-import { DatePickerField } from '../../components/form/FormDatePicker';
+import { DatePickerField, formatPickerDate, parsePickerDate } from '../../components/form/FormDatePicker';
 import { formatCurrency, formatNumber } from '../../utils/format';
+import { useCashierWiseSalesReportQuery } from '../../api/cashierWiseSalesApi';
 
 import CashierWiseSalesTable from './components/CashierWiseSalesTable';
 import CashierSalesTrendChart from './components/CashierSalesTrendChart';
 import TopPerformingCashiers from './components/TopPerformingCashiers';
-import { CASHIER, CASHIER_WISE_SALES } from './cashierPanelMockData';
+
+const PAGE_SIZE = 10;
 
 function SummaryTile({ label, value, valueColor }) {
   return (
@@ -34,6 +36,17 @@ function SummaryTile({ label, value, valueColor }) {
   );
 }
 
+// yyyy-mm-dd in the *local* time zone (Date#toISOString is UTC, which can
+// land on the wrong calendar day) — this is what the backend's `date`
+// query param expects. Same helper as CashSalesPage.jsx's toDateKey.
+function toDateKey(pickerValue) {
+  const date = parsePickerDate(pickerValue) || new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /**
  * Cashier Wise Sales — the store-wide, per-cashier sales report reached
  * from the Cashier Panel's "Cashier-wise Sales" quick action. Unlike the
@@ -41,24 +54,50 @@ function SummaryTile({ label, value, valueColor }) {
  * cashier's own activity: it compares every cashier side by side via a
  * Sales Summary + Sales Contribution donut, a full per-cashier details
  * table, a multi-line Sales Trend chart, and a Top Performing Cashiers
- * ranked list.
- *
- * There's no sales-reporting backend wired to this screen yet, so every
- * figure comes from CASHIER_WISE_SALES mock data.
+ * ranked list — all built from real Sale/SaleLine/SalesReturn rows via
+ * GET /cashier-wise-sales/summary (see cashierWiseSales.service.js's
+ * getCashierWiseSalesReport).
  */
 export default function CashierWiseSalesPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const user = useAppSelector(selectCurrentUser);
   const [page, setPage] = useState(1);
+  const [selectedDate, setSelectedDate] = useState(() => formatPickerDate(new Date()));
 
-  const { stats, summary, byCashier, cashiers, trend, topPerformers, totalPages } = CASHIER_WISE_SALES;
-  const [selectedDate, setSelectedDate] = useState(CASHIER_WISE_SALES.selectedDate);
+  const dateKey = toDateKey(selectedDate);
+  const {
+    data: report, isLoading, isFetching, isError, refetch,
+  } = useCashierWiseSalesReportQuery({ date: dateKey, page, pageSize: PAGE_SIZE });
+
+  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
 
   const handleViewAll = () => dispatch(showToast('Full cashier wise sales list is coming soon', 'info'));
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login', { replace: true });
   };
+  const handleDateChange = (value) => {
+    setSelectedDate(value || formatPickerDate(new Date()));
+    setPage(1);
+  };
+
+  if (isError) {
+    return (
+      <Stack spacing={2}>
+        <Alert
+          severity="error"
+          action={(
+            <MuiLink component="button" type="button" variant="body2" underline="hover" onClick={refetch}>
+              Retry
+            </MuiLink>
+          )}
+        >
+          Couldn&apos;t load the Cashier Wise Sales report from the server. Check your connection and try reloading.
+        </Alert>
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
@@ -73,7 +112,7 @@ export default function CashierWiseSalesPage() {
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
+            Cashier : {cashierLabel}
           </Typography>
           <MuiLink
             component="button"
@@ -88,58 +127,68 @@ export default function CashierWiseSalesPage() {
         </Stack>
       </Stack>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={PeopleAltOutlinedIcon}
-            iconColor="success"
-            iconShape="circle"
-            label="Total Sales (All Cashiers)"
-            value={formatCurrency(stats.totalSalesAllCashiers.value, { decimals: true })}
-            caption={`Transactions : ${stats.totalSalesAllCashiers.transactions}`}
-          />
+      {isLoading || !report ? (
+        <Grid container spacing={2}>
+          {[1, 2, 3, 4, 5].map((key) => (
+            <Grid key={key} size={{ xs: 12, sm: 6, lg: 2.4 }}>
+              <Skeleton variant="rounded" height={92} />
+            </Grid>
+          ))}
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={DescriptionOutlinedIcon}
-            iconColor="#2563EB"
-            iconShape="circle"
-            label="Total Invoices"
-            value={String(stats.totalInvoices.value)}
-            caption={`Total Quantity : ${formatNumber(stats.totalInvoices.quantity)}`}
-          />
+      ) : (
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={PeopleAltOutlinedIcon}
+              iconColor="success"
+              iconShape="circle"
+              label="Total Sales (All Cashiers)"
+              value={formatCurrency(report.stats.totalSalesAllCashiers.value, { decimals: true })}
+              caption={`Transactions : ${report.stats.totalSalesAllCashiers.transactions}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={DescriptionOutlinedIcon}
+              iconColor="#2563EB"
+              iconShape="circle"
+              label="Total Invoices"
+              value={String(report.stats.totalInvoices.value)}
+              caption={`Total Quantity : ${formatNumber(report.stats.totalInvoices.quantity)}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CurrencyRupeeOutlinedIcon}
+              iconColor="warning"
+              iconShape="circle"
+              label="Average Invoice Value"
+              value={formatCurrency(report.stats.avgInvoiceValue.value, { decimals: true })}
+              caption="Per Invoice"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#8B5CF6"
+              iconShape="circle"
+              label="Today's Sales"
+              value={formatCurrency(report.stats.todaysSales.value, { decimals: true })}
+              caption={`${report.stats.todaysSales.transactions} Transactions`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
+            <StatCard
+              icon={CalendarTodayOutlinedIcon}
+              iconColor="#0EA5A4"
+              iconShape="circle"
+              label="Selected Date Sales"
+              value={formatCurrency(report.stats.selectedDateSales.value, { decimals: true })}
+              caption={report.stats.selectedDateSales.date}
+            />
+          </Grid>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CurrencyRupeeOutlinedIcon}
-            iconColor="warning"
-            iconShape="circle"
-            label="Average Invoice Value"
-            value={formatCurrency(stats.avgInvoiceValue.value, { decimals: true })}
-            caption="Per Invoice"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#8B5CF6"
-            iconShape="circle"
-            label="Today's Sales"
-            value={formatCurrency(stats.todaysSales.value, { decimals: true })}
-            caption={`${stats.todaysSales.transactions} Transactions`}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-          <StatCard
-            icon={CalendarTodayOutlinedIcon}
-            iconColor="#0EA5A4"
-            iconShape="circle"
-            label="Selected Date Sales"
-            value={formatCurrency(stats.selectedDateSales.value, { decimals: true })}
-            caption={stats.selectedDateSales.date}
-          />
-        </Grid>
-      </Grid>
+      )}
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
@@ -148,52 +197,64 @@ export default function CashierWiseSalesPage() {
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Sales Summary</Typography>
               <DatePickerField
                 value={selectedDate}
-                onChange={setSelectedDate}
+                onChange={handleDateChange}
                 sx={{ width: { xs: '100%', sm: 200 } }}
               />
             </Stack>
 
-            <Grid container spacing={1.5}>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Sales" value={formatCurrency(summary.totalSales, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Transactions" value={String(summary.totalTransactions)} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Quantity" value={formatNumber(summary.totalQuantity)} valueColor="#2563EB" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Invoices" value={String(summary.totalInvoices)} valueColor="#2563EB" />
-              </Grid>
-            </Grid>
+            {!report ? (
+              <Skeleton variant="rounded" height={160} />
+            ) : (
+              <>
+                <Grid container spacing={1.5}>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Sales" value={formatCurrency(report.summary.totalSales, { decimals: true })} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Transactions" value={String(report.summary.totalTransactions)} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Quantity" value={formatNumber(report.summary.totalQuantity)} valueColor="#2563EB" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Invoices" value={String(report.summary.totalInvoices)} valueColor="#2563EB" />
+                  </Grid>
+                </Grid>
 
-            <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Discounts" value={formatCurrency(summary.totalDiscounts, { decimals: true })} valueColor="error.main" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Total Returns" value={formatCurrency(summary.totalReturns, { decimals: true })} valueColor="error.main" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Net Sales" value={formatCurrency(summary.netSales, { decimals: true })} valueColor="success.main" />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <SummaryTile label="Tax Collected" value={formatCurrency(summary.taxCollected, { decimals: true })} valueColor="#2563EB" />
-              </Grid>
-            </Grid>
+                <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Discounts" value={formatCurrency(report.summary.totalDiscounts, { decimals: true })} valueColor="error.main" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Total Returns" value={formatCurrency(report.summary.totalReturns, { decimals: true })} valueColor="error.main" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Net Sales" value={formatCurrency(report.summary.netSales, { decimals: true })} valueColor="success.main" />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <SummaryTile label="Tax Collected" value={formatCurrency(report.summary.taxCollected, { decimals: true })} valueColor="#2563EB" />
+                  </Grid>
+                </Grid>
+              </>
+            )}
           </Paper>
         </Grid>
 
         <Grid size={{ xs: 12, lg: 5 }}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Sales Contribution (By Cashier)</Typography>
-            <DonutChart
-              data={byCashier}
-              centerValue={formatCurrency(summary.totalSales, { decimals: true })}
-              centerLabel="Total Sales"
-              formatValue={(v) => formatCurrency(v, { decimals: true })}
-            />
+            {!report ? (
+              <Skeleton variant="rounded" height={220} />
+            ) : report.byCashier.length === 0 ? (
+              <Alert severity="info">No cashier sold anything on this date yet.</Alert>
+            ) : (
+              <DonutChart
+                data={report.byCashier}
+                centerValue={formatCurrency(report.summary.totalSales, { decimals: true })}
+                centerLabel="Total Sales"
+                formatValue={(v) => formatCurrency(v, { decimals: true })}
+              />
+            )}
           </Paper>
         </Grid>
       </Grid>
@@ -212,38 +273,46 @@ export default function CashierWiseSalesPage() {
             View All <NavigateNextIcon fontSize="small" />
           </MuiLink>
         </Stack>
-        <CashierWiseSalesTable rows={cashiers} />
+        {!report ? (
+          <Skeleton variant="rounded" height={240} />
+        ) : (
+          <CashierWiseSalesTable
+            rows={report.cashiers}
+            totalPages={report.totalPages}
+            page={report.page}
+            onPageChange={setPage}
+            loading={isFetching}
+          />
+        )}
       </Paper>
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
         <Grid size={{ xs: 12, lg: 7 }}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Sales Trend (By Cashier)</Typography>
-            <CashierSalesTrendChart categories={trend.categories} series={trend.series} />
+            {!report ? (
+              <Skeleton variant="rounded" height={280} />
+            ) : report.trend.series.length === 0 ? (
+              <Alert severity="info">No cashier sold anything on this date yet.</Alert>
+            ) : (
+              <CashierSalesTrendChart categories={report.trend.categories} series={report.trend.series} />
+            )}
           </Paper>
         </Grid>
 
         <Grid size={{ xs: 12, lg: 5 }}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Top Performing Cashiers</Typography>
-            <TopPerformingCashiers rows={topPerformers} />
+            {!report ? (
+              <Skeleton variant="rounded" height={200} />
+            ) : report.topPerformers.length === 0 ? (
+              <Alert severity="info">No cashier sold anything on this date yet.</Alert>
+            ) : (
+              <TopPerformingCashiers rows={report.topPerformers} />
+            )}
           </Paper>
         </Grid>
       </Grid>
-
-      {totalPages > 1 && (
-        <Stack direction="row" sx={{ justifyContent: 'center' }}>
-          <Pagination
-            count={totalPages}
-            page={page}
-            onChange={(_e, value) => setPage(value)}
-            showFirstButton
-            showLastButton
-            color="primary"
-            shape="rounded"
-          />
-        </Stack>
-      )}
     </Stack>
   );
 }

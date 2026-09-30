@@ -14,6 +14,7 @@ const COLUMNS = [
   { key: 'code', label: 'Product Code' },
   { key: 'name', label: 'Product Name' },
   { key: 'group', label: 'Product Group' },
+  { key: 'productType', label: 'Product Type' },
   { key: 'brand', label: 'Brand' },
   { key: 'uom', label: 'UOM' },
   { key: 'hsnSac', label: 'HSN / SAC' },
@@ -61,6 +62,7 @@ function ProductRow({ row, onOpenProduct, onEditRow, onDeleteRow, style }) {
       </TableCell>
       <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
       <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.group}</TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.productType || '—'}</TableCell>
       <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.brand}</TableCell>
       <TableCell>{row.uom}</TableCell>
       <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.hsnSac}</TableCell>
@@ -123,7 +125,7 @@ function EmptyRow() {
 function PlainProductTable({ rows, onOpenProduct, onEditRow, onDeleteRow }) {
   return (
     <Box sx={{ overflowX: 'auto' }}>
-      <Table size="small" sx={{ minWidth: 1350 }}>
+      <Table size="small" sx={{ minWidth: 1470 }}>
         <Header />
         <TableBody>
           {rows.map((row) => (
@@ -159,7 +161,7 @@ function VirtualizedProductTable({ rows, onOpenProduct, onEditRow, onDeleteRow }
 
   return (
     <Box ref={scrollRef} sx={{ overflow: 'auto', maxHeight: VIRTUAL_VIEWPORT_HEIGHT }}>
-      <Table size="small" stickyHeader sx={{ minWidth: 1350 }}>
+      <Table size="small" stickyHeader sx={{ minWidth: 1470 }}>
         <Header />
         <TableBody>
           {paddingTop > 0 && (

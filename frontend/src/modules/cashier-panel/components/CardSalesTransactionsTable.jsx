@@ -20,13 +20,28 @@ const COLUMNS = [
   { key: 'cashier', label: 'Cashier' },
 ];
 
+// `dateTime` arrives as a raw ISO timestamp from the API (Sale.createdAt).
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
 /**
  * Small text badge standing in for each card network's logo (VISA,
  * Mastercard, RuPay) — no external logo assets, just brand-ish
  * colored/styled text so the column stays instantly scannable like the
- * reference's real logos.
+ * reference's real logos. Falls back to a plain "—" when the sale has no
+ * card type on record (see CardSalesPage's doc comment on why that's
+ * common today).
  */
 function CardBrandBadge({ type }) {
+  if (!type) {
+    return <Typography variant="body2" sx={{ color: 'text.secondary' }}>—</Typography>;
+  }
   if (type === 'Mastercard') {
     return (
       <Stack direction="row" spacing={0} sx={{ alignItems: 'center', width: 34 }}>
@@ -43,21 +58,28 @@ function CardBrandBadge({ type }) {
       </Typography>
     );
   }
-  return (
-    <Typography sx={{ fontWeight: 800, fontStyle: 'italic', color: '#1A1F71', fontSize: 14, whiteSpace: 'nowrap' }}>
-      VISA
-    </Typography>
-  );
+  if (type === 'VISA') {
+    return (
+      <Typography sx={{ fontWeight: 800, fontStyle: 'italic', color: '#1A1F71', fontSize: 14, whiteSpace: 'nowrap' }}>
+        VISA
+      </Typography>
+    );
+  }
+  // Any other/unrecognized network name — show it as plain text rather
+  // than silently defaulting to a VISA-styled badge that isn't accurate.
+  return <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{type}</Typography>;
 }
 
 /**
  * "Recent Card Sales Transactions" table — same footer-Total-row +
  * page-number Pagination pattern as CashSalesTransactionsTable, with
  * Payment Mode swapped for Card Type / Card No (Last 4) / Bank-Provider
- * columns since a card sale's identifying details differ from a cash
- * sale's.
+ * columns. `rows` is one page of real Sale rows from
+ * GET /sales/card-summary; pagination is server-side.
  */
-export default function CardSalesTransactionsTable({ rows, totalPages, page, onPageChange }) {
+export default function CardSalesTransactionsTable({
+  rows, totalPages, page, onPageChange, loading,
+}) {
   const totals = rows.reduce(
     (acc, row) => ({
       items: acc.items + row.items,
@@ -71,7 +93,7 @@ export default function CardSalesTransactionsTable({ rows, totalPages, page, onP
   );
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
       <Box sx={{ overflowX: 'auto' }}>
         <Table size="small" sx={{ minWidth: 1100 }}>
           <TableHead>
@@ -84,11 +106,20 @@ export default function CardSalesTransactionsTable({ rows, totalPages, page, onP
             </TableRow>
           </TableHead>
           <TableBody>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={COLUMNS.length} sx={{ textAlign: 'center', py: 3 }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    No card sales on this date yet.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
             {rows.map((row, index) => (
               <TableRow key={row.invoiceNo} hover>
                 <TableCell sx={{ color: 'text.secondary' }}>{index + 1}</TableCell>
                 <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.invoiceNo}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.dateTime}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(row.dateTime)}</TableCell>
                 <TableCell>{row.items}</TableCell>
                 <TableCell>{formatNumber(row.qty)}</TableCell>
                 <TableCell>{row.discount.toFixed(2)}</TableCell>
@@ -96,21 +127,23 @@ export default function CardSalesTransactionsTable({ rows, totalPages, page, onP
                 <TableCell sx={{ fontWeight: 600 }}>{formatCurrency(row.totalAmount, { decimals: true })}</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>{formatCurrency(row.received, { decimals: true })}</TableCell>
                 <TableCell><CardBrandBadge type={row.cardType} /></TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>**** {row.cardLast4}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.bank}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.cardLast4 ? `**** ${row.cardLast4}` : '—'}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.cardBank || '—'}</TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.cashier}</TableCell>
               </TableRow>
             ))}
-            <TableRow sx={{ '& td': { borderBottom: 'none', fontWeight: 800 } }}>
-              <TableCell colSpan={3} />
-              <TableCell>{totals.items}</TableCell>
-              <TableCell>{formatNumber(totals.qty)}</TableCell>
-              <TableCell>{totals.discount.toFixed(2)}</TableCell>
-              <TableCell>{totals.tax.toFixed(2)}</TableCell>
-              <TableCell>{formatCurrency(totals.totalAmount, { decimals: true })}</TableCell>
-              <TableCell>{formatCurrency(totals.received, { decimals: true })}</TableCell>
-              <TableCell colSpan={4} />
-            </TableRow>
+            {rows.length > 0 && (
+              <TableRow sx={{ '& td': { borderBottom: 'none', fontWeight: 800 } }}>
+                <TableCell colSpan={3} />
+                <TableCell>{totals.items}</TableCell>
+                <TableCell>{formatNumber(totals.qty)}</TableCell>
+                <TableCell>{totals.discount.toFixed(2)}</TableCell>
+                <TableCell>{totals.tax.toFixed(2)}</TableCell>
+                <TableCell>{formatCurrency(totals.totalAmount, { decimals: true })}</TableCell>
+                <TableCell>{formatCurrency(totals.received, { decimals: true })}</TableCell>
+                <TableCell colSpan={4} />
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Box>

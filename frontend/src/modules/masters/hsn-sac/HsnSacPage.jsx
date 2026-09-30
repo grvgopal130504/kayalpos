@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
-  TextField, MenuItem, InputAdornment, Pagination,
+  TextField, MenuItem, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
@@ -22,23 +22,25 @@ import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
+import { formatPickerDate } from '../../../components/form/FormDatePicker';
 
 import HsnSacTable from './components/HsnSacTable';
 import HsnSacFormDialog from './components/HsnSacFormDialog';
 import HsnSacViewDialog from './components/HsnSacViewDialog';
 import { CASHIER } from '../mastersMockData';
-import {
-  HSN_SAC_CODES, TYPE_OPTIONS, CHAPTER_OPTIONS, TAX_RATE_OPTIONS, STATS,
-  hsnSacTotalRecords, hsnSacTotalPages,
-} from './hsnSacMockData';
+import { TYPE_OPTIONS, CHAPTER_OPTIONS, TAX_RATE_OPTIONS } from './createHsnSacSchema';
+import { useGetHsnSacCodesQuery, useDeleteHsnSacMutation } from '../../../api/hsnSacApi';
 
 /**
  * HSN / SAC — the HSN/SAC master's list screen, reached from the Masters
- * page's "HSN/SAC" card. Same searchable/filterable list shape as
- * Product/Brand/Tax Code (filter bar + table + records footer + bottom
- * stat row). `HSN_SAC_CODES` only mocks the first page of a 42-row
- * catalog (`hsnSacTotalPages` covers the rest), so paging past page 1
- * surfaces a toast — there's no HSN/SAC backend module yet.
+ * page's "HSN/SAC" card. Wired to the real HSN/SAC API (see
+ * api/hsnSacApi.js) — search/status run server-side; Type/Chapter/Tax Rate
+ * filters run client-side over whatever the current search/status filter
+ * returned (no backend aggregation endpoint for those), same convention as
+ * TaxCodePage's Tax Type/Tax Category filters. Same single-page-list
+ * pattern as Brand/UOM/Tax Code (server already caps the unpaginated list
+ * at 1000 rows — see backend/src/utils/crudFactory.js), so there's no fake
+ * pagination here.
  */
 export default function HsnSacPage() {
   const dispatch = useAppDispatch();
@@ -49,9 +51,18 @@ export default function HsnSacPage() {
   const [taxRate, setTaxRate] = useState('All');
   const [status, setStatus] = useState('All');
   const [appliedSearch, setAppliedSearch] = useState('');
-  const [page, setPage] = useState(1);
   const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewRow, setViewRow] = useState(null);
+
+  const {
+    data: rows = [],
+    isLoading,
+    isError,
+  } = useGetHsnSacCodesQuery({
+    search: appliedSearch || undefined,
+    status: status !== 'All' ? status.toUpperCase() : undefined,
+  });
+  const [deleteHsnSac] = useDeleteHsnSacMutation();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -61,7 +72,7 @@ export default function HsnSacPage() {
   const handleNewHsnSac = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import HSN / SAC codes is coming soon', 'info'));
   const handleExport = () => dispatch(showToast('Export HSN / SAC codes is coming soon', 'info'));
-  const handleSearch = () => setAppliedSearch(searchInput.trim().toLowerCase());
+  const handleSearch = () => setAppliedSearch(searchInput.trim());
   const handleReset = () => {
     setSearchInput('');
     setType('All');
@@ -72,26 +83,49 @@ export default function HsnSacPage() {
   };
   const handleViewRow = (row) => setViewRow(row);
   const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
-  const handleDeleteRow = (row) => dispatch(showToast(`Delete ${row.code} is coming soon`, 'info'));
-  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
-  const handlePageChange = (value) => {
-    setPage(value);
-    if (value !== 1) dispatch(showToast('Loading further pages is coming soon', 'info'));
-  };
-
-  const filteredRows = useMemo(() => HSN_SAC_CODES.filter((row) => {
-    if (appliedSearch) {
-      const haystack = `${row.code} ${row.description}`.toLowerCase();
-      if (!haystack.includes(appliedSearch)) return false;
+  const handleDeleteRow = async (row) => {
+    if (!window.confirm(`Delete HSN / SAC code "${row.code}"? This cannot be undone.`)) return;
+    try {
+      await deleteHsnSac(row.id).unwrap();
+      dispatch(showToast(`${row.code} deleted`, 'success'));
+    } catch (err) {
+      dispatch(showToast(err?.data?.message || 'Failed to delete HSN / SAC code', 'error'));
     }
+  };
+  const closeFormDialog = () => setFormDialog((prev) => ({ ...prev, open: false }));
+
+  // Flatten each raw API row (status 'ACTIVE'/'INACTIVE', taxRate as a
+  // Decimal serialized to string, effectiveFrom as an ISO date string) to
+  // the view shape the table/view dialog expect (status
+  // 'Active'/'Inactive', taxRate as a number, effectiveFrom as the app-wide
+  // "DD Mon YYYY" display string).
+  const viewRows = useMemo(() => rows.map((row) => ({
+    ...row,
+    taxRate: row.taxRate != null ? Number(row.taxRate) : null,
+    effectiveFrom: row.effectiveFrom ? formatPickerDate(new Date(row.effectiveFrom)) : '',
+    status: row.status === 'ACTIVE' ? 'Active' : 'Inactive',
+  })), [rows]);
+
+  const filteredRows = useMemo(() => viewRows.filter((row) => {
     if (type !== 'All' && row.type !== type) return false;
     if (chapter !== 'All' && row.chapter !== chapter) return false;
     if (taxRate !== 'All' && row.taxRate !== Number(taxRate)) return false;
-    if (status !== 'All' && row.status !== status) return false;
     return true;
-  }), [appliedSearch, type, chapter, taxRate, status]);
+  }), [viewRows, type, chapter, taxRate]);
 
-  const isFiltered = Boolean(appliedSearch) || type !== 'All' || chapter !== 'All' || taxRate !== 'All' || status !== 'All';
+  const stats = useMemo(() => {
+    const hsnRows = viewRows.filter((r) => r.type === 'HSN');
+    const sacRows = viewRows.filter((r) => r.type === 'SAC');
+    const rates = viewRows.map((r) => r.taxRate).filter((r) => typeof r === 'number');
+    const averageTaxRate = rates.length ? rates.reduce((sum, r) => sum + r, 0) / rates.length : 0;
+    return {
+      totalHsnCodes: hsnRows.length,
+      activeHsnCodes: hsnRows.filter((r) => r.status === 'Active').length,
+      totalSacCodes: sacRows.length,
+      activeSacCodes: sacRows.filter((r) => r.status === 'Active').length,
+      averageTaxRate,
+    };
+  }, [viewRows]);
 
   return (
     <Stack spacing={2}>
@@ -214,35 +248,37 @@ export default function HsnSacPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>HSN / SAC List</Typography>
-        <HsnSacTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {isFiltered
-              ? `Showing ${filteredRows.length} of ${hsnSacTotalRecords} records`
-              : `Showing 1 to ${filteredRows.length} of ${formatNumber(hsnSacTotalRecords)} records`}
+        {isError ? (
+          <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
+            Failed to load HSN / SAC codes. Please try again.
           </Typography>
-          {!isFiltered && (
-            <Pagination count={hsnSacTotalPages} page={page} onChange={(_e, value) => handlePageChange(value)} color="primary" shape="rounded" />
-          )}
-        </Stack>
+        ) : (
+          <Box sx={{ opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
+            <HsnSacTable rows={filteredRows} onViewRow={handleViewRow} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+          </Box>
+        )}
+
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
+          Showing {filteredRows.length} of {formatNumber(viewRows.length)} records
+        </Typography>
       </Paper>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={DescriptionOutlinedIcon} iconColor="#8B5CF6" iconShape="circle" label="Total HSN Codes" value={formatNumber(STATS.totalHsnCodes)} />
+          <StatCard icon={DescriptionOutlinedIcon} iconColor="#8B5CF6" iconShape="circle" label="Total HSN Codes" value={formatNumber(stats.totalHsnCodes)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active HSN Codes" value={formatNumber(STATS.activeHsnCodes)} />
+          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active HSN Codes" value={formatNumber(stats.activeHsnCodes)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={PeopleAltOutlinedIcon} iconColor="warning" iconShape="circle" label="Total SAC Codes" value={formatNumber(STATS.totalSacCodes)} />
+          <StatCard icon={PeopleAltOutlinedIcon} iconColor="warning" iconShape="circle" label="Total SAC Codes" value={formatNumber(stats.totalSacCodes)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active SAC Codes" value={formatNumber(STATS.activeSacCodes)} />
+          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active SAC Codes" value={formatNumber(stats.activeSacCodes)} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard icon={CurrencyRupeeOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Average Tax Rate" value={`${STATS.averageTaxRate.toFixed(2)}%`} />
+          <StatCard icon={CurrencyRupeeOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Average Tax Rate" value={`${stats.averageTaxRate.toFixed(2)}%`} />
         </Grid>
       </Grid>
 
