@@ -4,6 +4,9 @@ import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined';
 import AssignmentReturnOutlinedIcon from '@mui/icons-material/AssignmentReturnOutlined';
+import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
 import FavoriteBorderOutlinedIcon from '@mui/icons-material/FavoriteBorderOutlined';
@@ -47,28 +50,51 @@ import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
  * shape with a translated `label` filled in — don't read `label` off the
  * raw NAV_SECTIONS/ALL_NAV_ITEMS/QUICK_ACCESS_ITEMS constants directly.
  */
+/**
+ * Sub-modules grouped under the sidebar's "Marketing" menu. They no longer
+ * have their own sidebar rows; /marketing shows them as tiles instead. They
+ * stay in ALL_NAV_ITEMS (below) so tab titles, global search and Home's
+ * Quick Access keep working, and their routes are unchanged.
+ */
+export const MARKETING_ITEMS = [
+  { key: 'promotion', labelKey: 'nav.promotion', icon: CampaignOutlinedIcon, path: '/promotion', quickAccess: true, color: '#9D174D' },
+  { key: 'gift-voucher', labelKey: 'nav.giftVoucher', icon: CardGiftcardOutlinedIcon, path: '/gift-voucher', quickAccess: true, color: '#86198F' },
+  { key: 'loyalty', labelKey: 'nav.loyalty', icon: FavoriteBorderOutlinedIcon, path: '/loyalty', quickAccess: true, color: '#9F1239' },
+  { key: 'customer', labelKey: 'nav.customer', icon: PeopleAltOutlinedIcon, path: '/customer', quickAccess: true, color: '#0369A1' },
+];
+const MARKETING_PATHS = MARKETING_ITEMS.map((item) => item.path);
+
+/** Sub-modules under the sidebar's "Sales" menu (shown as tiles on /sales). */
+export const SALES_ITEMS = [
+  { key: 'line-sale', labelKey: 'nav.lineSale', icon: PointOfSaleOutlinedIcon, path: '/line-sale', quickAccess: true, color: '#C2410C' },
+  { key: 'sales-quotation', labelKey: 'nav.salesQuotation', icon: DescriptionOutlinedIcon, path: '/sales-quotation', quickAccess: true, color: '#115E59' },
+  { key: 'sales-order', labelKey: 'nav.salesOrder', icon: ReceiptLongOutlinedIcon, path: '/sales-order', quickAccess: true, color: '#065F46' },
+  { key: 'sales-return', labelKey: 'nav.salesReturn', icon: AssignmentReturnOutlinedIcon, path: '/sales-return', quickAccess: true, color: '#991B1B' },
+  { key: 'sales-invoice', labelKey: 'nav.salesInvoice', icon: ReceiptOutlinedIcon, path: '/sales-invoice', quickAccess: true, color: '#166534' },
+];
+const SALES_PATHS = SALES_ITEMS.map((item) => item.path);
+
+/** Sub-modules under the sidebar's "Inventory" menu (shown as tiles on /inventory). */
+export const INVENTORY_ITEMS = [
+  { key: 'barcode-label', labelKey: 'nav.barcodeLabel', icon: QrCode2OutlinedIcon, path: '/barcode-label', quickAccess: true, color: '#3F6212' },
+  { key: 'stock-indent', labelKey: 'nav.stockIndent', icon: PlaylistAddCheckOutlinedIcon, path: '/stock-indent', quickAccess: true, color: '#854D0E' },
+  { key: 'stock-transfer', labelKey: 'nav.stockTransfer', icon: LocalShippingOutlinedIcon, path: '/stock-transfer', quickAccess: true, color: '#92400E' },
+  { key: 'stock-receipt', labelKey: 'nav.stockReceipt', icon: MoveToInboxOutlinedIcon, path: '/stock-receipt', quickAccess: true, color: '#155E75' },
+  { key: 'stock-return', labelKey: 'nav.stockReturn', icon: KeyboardReturnOutlinedIcon, path: '/stock-return', quickAccess: true, color: '#6B21A8' },
+  { key: 'stock-wastage', labelKey: 'nav.stockWastage', icon: DeleteOutlineOutlinedIcon, path: '/stock-wastage', quickAccess: true, color: '#7F1D1D' },
+  { key: 'stock-count', labelKey: 'nav.stockCount', icon: FactCheckOutlinedIcon, path: '/stock-count', quickAccess: true, color: '#3730A3' },
+];
+const INVENTORY_PATHS = INVENTORY_ITEMS.map((item) => item.path);
+
 export const NAV_SECTIONS = [
   {
     key: 'main',
     items: [
       { key: 'home', labelKey: 'nav.home', icon: HomeOutlinedIcon, path: '/home', color: '#1E40AF' },
       { key: 'management-dashboard', labelKey: 'nav.dashboard', icon: SpaceDashboardOutlinedIcon, path: '/dashboard', color: '#5B21B6' },
-      { key: 'line-sale', labelKey: 'nav.lineSale', icon: PointOfSaleOutlinedIcon, path: '/line-sale', quickAccess: true, color: '#C2410C' },
-      { key: 'promotion', labelKey: 'nav.promotion', icon: CampaignOutlinedIcon, path: '/promotion', quickAccess: true, color: '#9D174D' },
-      { key: 'gift-voucher', labelKey: 'nav.giftVoucher', icon: CardGiftcardOutlinedIcon, path: '/gift-voucher', quickAccess: true, color: '#86198F' },
-      { key: 'loyalty', labelKey: 'nav.loyalty', icon: FavoriteBorderOutlinedIcon, path: '/loyalty', quickAccess: true, color: '#9F1239' },
-      { key: 'customer', labelKey: 'nav.customer', icon: PeopleAltOutlinedIcon, path: '/customer', quickAccess: true, color: '#0369A1' },
-      { key: 'sales-quotation', labelKey: 'nav.salesQuotation', icon: DescriptionOutlinedIcon, path: '/sales-quotation', quickAccess: true, color: '#115E59' },
-      { key: 'sales-order', labelKey: 'nav.salesOrder', icon: ReceiptLongOutlinedIcon, path: '/sales-order', quickAccess: true, color: '#065F46' },
-      { key: 'sales-return', labelKey: 'nav.salesReturn', icon: AssignmentReturnOutlinedIcon, path: '/sales-return', quickAccess: true, color: '#991B1B' },
-      { key: 'sales-invoice', labelKey: 'nav.salesInvoice', icon: ReceiptOutlinedIcon, path: '/sales-invoice', quickAccess: true, color: '#166534' },
-      { key: 'barcode-label', labelKey: 'nav.barcodeLabel', icon: QrCode2OutlinedIcon, path: '/barcode-label', quickAccess: true, color: '#3F6212' },
-      { key: 'stock-indent', labelKey: 'nav.stockIndent', icon: PlaylistAddCheckOutlinedIcon, path: '/stock-indent', quickAccess: true, color: '#854D0E' },
-      { key: 'stock-transfer', labelKey: 'nav.stockTransfer', icon: LocalShippingOutlinedIcon, path: '/stock-transfer', quickAccess: true, color: '#92400E' },
-      { key: 'stock-receipt', labelKey: 'nav.stockReceipt', icon: MoveToInboxOutlinedIcon, path: '/stock-receipt', quickAccess: true, color: '#155E75' },
-      { key: 'stock-return', labelKey: 'nav.stockReturn', icon: KeyboardReturnOutlinedIcon, path: '/stock-return', quickAccess: true, color: '#6B21A8' },
-      { key: 'stock-wastage', labelKey: 'nav.stockWastage', icon: DeleteOutlineOutlinedIcon, path: '/stock-wastage', quickAccess: true, color: '#7F1D1D' },
-      { key: 'stock-count', labelKey: 'nav.stockCount', icon: FactCheckOutlinedIcon, path: '/stock-count', quickAccess: true, color: '#3730A3' },
+      { key: 'sales', labelKey: 'nav.sales', icon: ShoppingCartOutlinedIcon, path: '/sales', color: '#C2410C', childPaths: SALES_PATHS },
+      { key: 'marketing', labelKey: 'nav.marketing', icon: StorefrontOutlinedIcon, path: '/marketing', color: '#9D174D', childPaths: MARKETING_PATHS },
+      { key: 'inventory', labelKey: 'nav.inventory', icon: Inventory2OutlinedIcon, path: '/inventory', color: '#854D0E', childPaths: INVENTORY_PATHS },
     ],
   },
   {
@@ -85,7 +111,7 @@ export const NAV_SECTIONS = [
   },
 ];
 
-export const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap((section) => section.items);
+export const ALL_NAV_ITEMS = [...NAV_SECTIONS.flatMap((section) => section.items), ...MARKETING_ITEMS, ...SALES_ITEMS, ...INVENTORY_ITEMS];
 
 // Modules with a Quick Access tile on the Home page, in reference order.
 export const QUICK_ACCESS_ITEMS = ALL_NAV_ITEMS.filter((item) => item.quickAccess);

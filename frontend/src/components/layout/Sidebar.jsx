@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Divider, Tooltip } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useNavSections } from './navConfig';
@@ -51,6 +51,7 @@ function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebar
   // Tamil or Hindi — see src/i18n) so the whole menu, including every
   // submenu section below, follows the Topbar language switcher.
   const navSections = useNavSections();
+  const { pathname } = useLocation();
   const itemColor = isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.82)';
   const hoverBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
   const dividerColor = isDark ? 'rgba(255,255,255,0.08)' : 'divider';
@@ -97,6 +98,8 @@ function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebar
                   key={item.key}
                   component={NavLink}
                   to={item.path}
+                  // Parent menus (Marketing) stay highlighted on their sub-module routes.
+                  className={item.childPaths?.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ? 'active' : undefined}
                   onClick={onNavigate}
                   sx={{
                     borderRadius: `${NAV_ITEM_RADIUS}px`,

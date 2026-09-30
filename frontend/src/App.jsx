@@ -4,6 +4,9 @@ import HomePage from './modules/dashboard/HomePage';
 import ManagementDashboardPage from './modules/dashboard/ManagementDashboardPage';
 import LineSalePage from './modules/line-sale/LineSalePage';
 import SalesReturnPage from './modules/sales-return/SalesReturnPage';
+import SalesPage from './modules/sales/SalesPage';
+import InventoryPage from './modules/inventory/InventoryPage';
+import MarketingPage from './modules/marketing/MarketingPage';
 import PromotionPage from './modules/promotion/PromotionPage';
 import GiftVoucherPage from './modules/gift-voucher/GiftVoucherPage';
 import LoyaltyPage from './modules/loyalty/LoyaltyPage';
@@ -82,6 +85,9 @@ export default function App() {
             <Route path="/dashboard" element={<ManagementDashboardPage />} />
             <Route path="/line-sale" element={<LineSalePage />} />
             <Route path="/sales-return" element={<SalesReturnPage />} />
+            <Route path="/sales" element={<SalesPage />} />
+            <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/marketing" element={<MarketingPage />} />
             <Route path="/promotion" element={<PromotionPage />} />
             <Route path="/gift-voucher" element={<GiftVoucherPage />} />
             <Route path="/loyalty" element={<LoyaltyPage />} />
