@@ -6,6 +6,7 @@ import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined';
 import AssignmentReturnOutlinedIcon from '@mui/icons-material/AssignmentReturnOutlined';
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import SyncOutlinedIcon from '@mui/icons-material/SyncOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
@@ -86,32 +87,33 @@ export const INVENTORY_ITEMS = [
 ];
 const INVENTORY_PATHS = INVENTORY_ITEMS.map((item) => item.path);
 
+/** Sub-modules under the sidebar's "Synchronization" menu (shown as tiles on /synchronization). */
+export const SYNC_ITEMS = [
+  { key: 'master-sync', labelKey: 'nav.masterSync', icon: CloudDoneOutlinedIcon, path: '/master-sync', quickAccess: true, color: '#0C4A6E' },
+  { key: 'stock-sync', labelKey: 'nav.stockSync', icon: CloudSyncOutlinedIcon, path: '/stock-sync', quickAccess: true, color: '#14532D' },
+  { key: 'sap-sync', labelKey: 'nav.sapSync', icon: CloudQueueOutlinedIcon, path: '/sap-sync', quickAccess: true, color: '#4C1D95' },
+];
+const SYNC_PATHS = SYNC_ITEMS.map((item) => item.path);
+
 export const NAV_SECTIONS = [
   {
     key: 'main',
     items: [
       { key: 'home', labelKey: 'nav.home', icon: HomeOutlinedIcon, path: '/home', color: '#1E40AF' },
       { key: 'management-dashboard', labelKey: 'nav.dashboard', icon: SpaceDashboardOutlinedIcon, path: '/dashboard', color: '#5B21B6' },
-      { key: 'sales', labelKey: 'nav.sales', icon: ShoppingCartOutlinedIcon, path: '/sales', color: '#C2410C', childPaths: SALES_PATHS },
+      { key: 'masters', labelKey: 'nav.masters', icon: SettingsOutlinedIcon, path: '/masters', color: '#1E293B' },
       { key: 'marketing', labelKey: 'nav.marketing', icon: StorefrontOutlinedIcon, path: '/marketing', color: '#9D174D', childPaths: MARKETING_PATHS },
+      { key: 'sales', labelKey: 'nav.sales', icon: ShoppingCartOutlinedIcon, path: '/sales', color: '#C2410C', childPaths: SALES_PATHS },
       { key: 'inventory', labelKey: 'nav.inventory', icon: Inventory2OutlinedIcon, path: '/inventory', color: '#854D0E', childPaths: INVENTORY_PATHS },
-    ],
-  },
-  {
-    key: 'operations',
-    items: [
+      { key: 'synchronization', labelKey: 'nav.synchronization', icon: SyncOutlinedIcon, path: '/synchronization', color: '#0C4A6E', childPaths: SYNC_PATHS },
       { key: 'cashier-panel', labelKey: 'nav.cashierPanel', icon: BadgeOutlinedIcon, path: '/cashier-panel', quickAccess: true, color: '#78350F' },
       { key: 'expenses-book', labelKey: 'nav.expensesBook', icon: MenuBookOutlinedIcon, path: '/expenses-book', quickAccess: true, color: '#451A03' },
       { key: 'reports', labelKey: 'nav.reports', icon: BarChartOutlinedIcon, path: '/reports', color: '#1E3A8A' },
-      { key: 'masters', labelKey: 'nav.masters', icon: SettingsOutlinedIcon, path: '/masters', color: '#1E293B' },
-      { key: 'master-sync', labelKey: 'nav.masterSync', icon: CloudDoneOutlinedIcon, path: '/master-sync', quickAccess: true, color: '#0C4A6E' },
-      { key: 'stock-sync', labelKey: 'nav.stockSync', icon: CloudSyncOutlinedIcon, path: '/stock-sync', quickAccess: true, color: '#14532D' },
-      { key: 'sap-sync', labelKey: 'nav.sapSync', icon: CloudQueueOutlinedIcon, path: '/sap-sync', quickAccess: true, color: '#4C1D95' },
     ],
   },
 ];
 
-export const ALL_NAV_ITEMS = [...NAV_SECTIONS.flatMap((section) => section.items), ...MARKETING_ITEMS, ...SALES_ITEMS, ...INVENTORY_ITEMS];
+export const ALL_NAV_ITEMS = [...NAV_SECTIONS.flatMap((section) => section.items), ...MARKETING_ITEMS, ...SALES_ITEMS, ...INVENTORY_ITEMS, ...SYNC_ITEMS];
 
 // Modules with a Quick Access tile on the Home page, in reference order.
 export const QUICK_ACCESS_ITEMS = ALL_NAV_ITEMS.filter((item) => item.quickAccess);

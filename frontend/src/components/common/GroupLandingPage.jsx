@@ -18,7 +18,7 @@ function GroupTile({ item, label, description, onOpen }) {
       <ButtonBase
         onClick={() => onOpen(item.path)}
         sx={{
-          width: '100%', height: '100%', p: 2.25, display: 'flex', alignItems: 'flex-start',
+          width: '100%', height: '100%', p: 3, minHeight: 130, display: 'flex', alignItems: 'flex-start',
           gap: 1.75, textAlign: 'left', borderRadius: 3,
           transition: 'transform 0.15s, box-shadow 0.15s',
           '&:hover': { transform: 'translateY(-2px)', boxShadow: 2 },
@@ -26,7 +26,7 @@ function GroupTile({ item, label, description, onOpen }) {
       >
         <Box
           sx={{
-            width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
+            width: 56, height: 56, borderRadius: '50%', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             bgcolor: `${item.color}1F`, color: item.color,
           }}
@@ -61,7 +61,7 @@ export default function GroupLandingPage({ titleKey, items, descPrefix }) {
 
       <Grid container spacing={2}>
         {items.map((item) => (
-          <Grid key={item.key} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+          <Grid key={item.key} size={{ xs: 12, sm: 4 }}>
             <GroupTile
               item={item}
               label={t(item.labelKey)}
