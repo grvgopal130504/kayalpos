@@ -6,6 +6,7 @@ import LineSalePage from './modules/line-sale/LineSalePage';
 import SalesReturnPage from './modules/sales-return/SalesReturnPage';
 import SalesPage from './modules/sales/SalesPage';
 import InventoryPage from './modules/inventory/InventoryPage';
+import SynchronizationPage from './modules/synchronization/SynchronizationPage';
 import MarketingPage from './modules/marketing/MarketingPage';
 import PromotionPage from './modules/promotion/PromotionPage';
 import GiftVoucherPage from './modules/gift-voucher/GiftVoucherPage';
@@ -87,6 +88,7 @@ export default function App() {
             <Route path="/sales-return" element={<SalesReturnPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/synchronization" element={<SynchronizationPage />} />
             <Route path="/marketing" element={<MarketingPage />} />
             <Route path="/promotion" element={<PromotionPage />} />
             <Route path="/gift-voucher" element={<GiftVoucherPage />} />

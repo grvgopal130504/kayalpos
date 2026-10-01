@@ -4,6 +4,7 @@
     "dashboard": "Dashboard",
     "sales": "Sales",
     "inventory": "Inventory",
+    "synchronization": "Synchronization",
     "lineSale": "Line Sale",
     "salesReturn": "Sales Return",
     "marketing": "Marketing",
@@ -50,6 +51,11 @@
     "stock-return": "Return stock to suppliers or warehouses.",
     "stock-wastage": "Record damaged or wasted stock.",
     "stock-count": "Run and reconcile stock counts."
+  },
+  "synchronization": {
+    "master-sync": "Sync master data with the server.",
+    "stock-sync": "Sync stock levels and movements.",
+    "sap-sync": "Sync transactions with SAP."
   },
   "masters": {
     "company": { "label": "Company", "description": "Manage company details and settings." },
