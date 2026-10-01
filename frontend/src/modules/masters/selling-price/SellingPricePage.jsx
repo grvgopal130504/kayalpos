@@ -9,7 +9,6 @@ import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -290,28 +289,7 @@ export default function SellingPricePage() {
       <Stack spacing={2}>
         <HeaderBar />
 
-        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'space-between' }}>
-          <Paper
-            variant="outlined"
-            sx={{
-              borderRadius: 3, p: { xs: 1.75, sm: 2 }, display: 'flex', alignItems: 'center', gap: 1.5, flex: 1,
-              bgcolor: 'rgba(37,99,235,0.06)', borderColor: 'rgba(37,99,235,0.25)',
-            }}
-          >
-            <Box
-              sx={{
-                width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                bgcolor: '#2563EB', color: '#fff',
-              }}
-            >
-              <InfoOutlinedIcon sx={{ fontSize: 18 }} />
-            </Box>
-            <Typography variant="body2">
-              Define and manage selling price for items. Choose pricing method and set margin to calculate selling price automatically.
-            </Typography>
-          </Paper>
-
+        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
             <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={openNewSellingPrice}>
               New Selling Price
