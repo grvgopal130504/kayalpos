@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { formatPickerDate, parsePickerDate } from '../../../components/form/FormDatePicker';
 
-export const TAX_TYPE_OPTIONS = ['GST', 'IGST', 'CESS', 'VAT'];
-export const TAX_CATEGORY_OPTIONS = ['GST', 'IGST', 'CESS', 'VAT'];
+export const TAX_TYPE_OPTIONS = ['GST', 'IGST'];
+export const TAX_CATEGORY_OPTIONS = ['Taxable', 'Exempt', 'Nil Rated', 'Zero Rated'];
 export const CALCULATION_TYPE_OPTIONS = ['On Gross', 'On Net'];
 export const APPLIES_TO_OPTIONS = ['Sales & Purchase', 'Sales Only', 'Purchase Only'];
 
@@ -19,11 +19,12 @@ export const APPLIES_TO_SELECT_OPTIONS = selectOptions(APPLIES_TO_OPTIONS);
 
 // Client-side validation mirrors the server's createTaxCodeSchema (see
 // backend/src/modules/tax-code/taxCode.schema.js). `code` is NOT part of
-// this schema on Add — it's server-generated (TAX001, ...); on Edit it's
-// rendered read-only so there's nothing to validate either way. `rate` is
+// this schema on Add — it's user-entered (e.g. GST5); on Edit it's
+// rendered read-only and never sent. `rate` is
 // kept as a form string (same convention as UOM's conversionFactor) and
 // converted with Number() in taxCodeFormValuesToPayload below.
 export const createTaxCodeSchema = z.object({
+  code: z.string().trim().min(1, 'Tax code is required').max(30, 'Tax code must be 30 characters or less'),
   name: z.string().trim().min(1, 'Tax name is required'),
   type: z.string().trim().min(1, 'Select a tax type'),
   category: z.string().trim().min(1, 'Select a tax category'),
@@ -36,6 +37,7 @@ export const createTaxCodeSchema = z.object({
 });
 
 export const createTaxCodeDefaultValues = {
+  code: '',
   name: '',
   type: TAX_TYPE_OPTIONS[0],
   category: TAX_CATEGORY_OPTIONS[0],
@@ -52,6 +54,7 @@ export const createTaxCodeDefaultValues = {
 export function taxCodeToFormValues(taxCode) {
   if (!taxCode) return createTaxCodeDefaultValues;
   return {
+    code: taxCode.code || '',
     name: taxCode.name || '',
     type: taxCode.type || TAX_TYPE_OPTIONS[0],
     category: taxCode.category || TAX_CATEGORY_OPTIONS[0],
@@ -67,6 +70,7 @@ export function taxCodeToFormValues(taxCode) {
 export function taxCodeFormValuesToPayload(values) {
   const parsedDate = parsePickerDate(values.effectiveFrom);
   return {
+    code: values.code.trim().toUpperCase(),
     name: values.name.trim(),
     type: values.type,
     category: values.category,

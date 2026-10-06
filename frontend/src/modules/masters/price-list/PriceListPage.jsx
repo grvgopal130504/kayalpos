@@ -170,8 +170,8 @@ export default function PriceListPage() {
       </Stack>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
-        <Grid container spacing={1.5} sx={{ alignItems: 'flex-end' }}>
-          <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+        <Grid container spacing={1.5} sx={{ alignItems: 'flex-end', flexWrap: { md: 'nowrap' } }}>
+          <Grid size={{ xs: 12, sm: 6, md: 'grow' }} sx={{ minWidth: { md: 190 } }}>
             <TextField
               label="Search Price List"
               placeholder="Search by price list name or code..."
@@ -182,26 +182,26 @@ export default function PriceListPage() {
               slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 'grow' }} sx={{ minWidth: { md: 130 } }}>
             <TextField select label="Price List Type" value={priceListType} onChange={(e) => setPriceListType(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               {PRICE_LIST_TYPE_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 'grow' }} sx={{ minWidth: { md: 130 } }}>
             <TextField select label="Applicable To" value={applicableTo} onChange={(e) => setApplicableTo(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               {APPLICABLE_TO_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.4 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 'grow' }} sx={{ minWidth: { md: 110 } }}>
             <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               <MenuItem value="Active">Active</MenuItem>
               <MenuItem value="Inactive">Inactive</MenuItem>
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.6 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 'grow' }} sx={{ minWidth: { md: 150 } }}>
             <TextField
               label="Effective Date"
               placeholder="dd-mm-yyyy"
@@ -232,7 +232,7 @@ export default function PriceListPage() {
               }}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.6 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 'grow' }} sx={{ minWidth: { md: 150 } }}>
             <TextField
               label="To"
               placeholder="dd-mm-yyyy"
@@ -263,12 +263,12 @@ export default function PriceListPage() {
               }}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 6, md: 1.2 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 'auto' }} sx={{ flexShrink: 0 }}>
             <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleSearch} fullWidth>
               Search
             </Button>
           </Grid>
-          <Grid size={{ xs: 6, sm: 6, md: 1.2 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 'auto' }} sx={{ flexShrink: 0 }}>
             <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleReset} fullWidth>
               Reset
             </Button>

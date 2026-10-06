@@ -4,7 +4,6 @@ import {
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useTranslation } from 'react-i18next';
 
 import { useAppDispatch } from '../../app/hooks';
@@ -119,30 +118,6 @@ export default function ReportsPage() {
           </MuiLink>
         </Stack>
       </Stack>
-
-      <Paper
-        variant="outlined"
-        sx={{
-          borderRadius: 3, p: { xs: 1.75, sm: 2 }, display: 'flex', alignItems: 'flex-start', gap: 1.5,
-          bgcolor: 'rgba(37,99,235,0.06)', borderColor: 'rgba(37,99,235,0.25)',
-        }}
-      >
-        <Box
-          sx={{
-            width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            bgcolor: '#2563EB', color: '#fff',
-          }}
-        >
-          <InfoOutlinedIcon sx={{ fontSize: 18 }} />
-        </Box>
-        <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#2563EB' }}>{t('common.viewReports')}</Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {t('common.viewReportsDesc')}
-          </Typography>
-        </Box>
-      </Paper>
 
       <Grid container spacing={2}>
         {reportItems.map((item) => (

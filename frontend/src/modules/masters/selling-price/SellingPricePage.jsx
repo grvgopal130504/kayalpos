@@ -30,6 +30,7 @@ import ItemCodeAutocomplete from '../../../components/form/ItemCodeAutocomplete'
 import { useGetProductsQuery } from '../../../api/productApi';
 import { useGetOutletsQuery } from '../../../api/outletApi';
 import { useGetTaxCodesQuery } from '../../../api/taxCodeApi';
+import { useGetUomsQuery, useGetUomGroupsQuery } from '../../../api/uomApi';
 import {
   useGetSellingPricesPageQuery, useCreateSellingPriceMutation, useUpdateSellingPriceMutation, useDeleteSellingPriceMutation,
 } from '../../../api/sellingPriceApi';
@@ -99,6 +100,43 @@ export default function SellingPricePage() {
   const { data: products = [] } = useGetProductsQuery({ status: 'ACTIVE' }, { skip: view !== 'detail' });
   const { data: outlets = [] } = useGetOutletsQuery({ isActive: 'true' }, { skip: view !== 'detail' });
   const { data: taxCodes = [] } = useGetTaxCodesQuery({ status: 'ACTIVE' }, { skip: view !== 'detail' });
+  const { data: uoms = [] } = useGetUomsQuery({ status: 'ACTIVE' }, { skip: view !== 'detail' });
+
+  const { data: uomGroups = [] } = useGetUomGroupsQuery({ status: 'ACTIVE' }, { skip: view !== 'detail' });
+
+  // UOM / UOM Group dropdowns — both fed by the UOM master. Picking a
+  // product pre-selects its UOM (and that UOM's group); the UOM list is
+  // narrowed to the chosen group. Not part of the saved SellingPrice payload
+  // (the price is per item, whose UOM is owned by the Product master).
+  const [uomGroupId, setUomGroupId] = useState('');
+  const [uomCode, setUomCode] = useState('');
+  useEffect(() => {
+    const code = selectedProduct?.uom || '';
+    setUomCode(code);
+    setUomGroupId(uoms.find((u) => u.code === code)?.groupId || '');
+  }, [selectedProduct, uoms]);
+
+  const uomGroupOptions = useMemo(() => [
+    { value: '', label: 'Select UOM Group', disabled: true },
+    ...uomGroups.map((g) => ({ value: g.id, label: g.name })),
+  ], [uomGroups]);
+  const uomOptions = useMemo(() => [
+    { value: '', label: 'Select UOM', disabled: true },
+    ...uoms
+      .filter((u) => !uomGroupId || u.groupId === uomGroupId)
+      .map((u) => ({ value: u.code, label: u.code })),
+  ], [uoms, uomGroupId]);
+
+  const handleUomGroupChange = (groupId) => {
+    setUomGroupId(groupId);
+    const current = uoms.find((u) => u.code === uomCode);
+    if (current && current.groupId !== groupId) setUomCode('');
+  };
+  const handleUomChange = (code) => {
+    setUomCode(code);
+    const matched = uoms.find((u) => u.code === code);
+    if (matched?.groupId) setUomGroupId(matched.groupId);
+  };
 
   const outletOptions = useMemo(() => [
     OUTLET_PLACEHOLDER_OPTION,
@@ -221,7 +259,7 @@ export default function SellingPricePage() {
   };
   const {
     data: listData, isFetching: isListFetching, isError: isListError,
-  } = useGetSellingPricesPageQuery(listQueryParams, { skip: view !== 'list' });
+  } = useGetSellingPricesPageQuery(listQueryParams);
   const rows = listData?.rows || [];
   const meta = listData?.meta || { total: 0, totalPages: 1 };
 
@@ -283,6 +321,56 @@ export default function SellingPricePage() {
     </Stack>
   );
 
+  // Selling Price List card — shared by the list view and, per the design,
+  // shown beneath the pricing calculator in the detail view too.
+  const listPanel = (
+    <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Selling Price List</Typography>
+        <Stack direction="row" spacing={1}>
+          <TextField
+            size="small"
+            placeholder="Search item or price list..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+          />
+          <Button variant="outlined" color="inherit" startIcon={<FilterListIcon fontSize="small" />} onClick={handleFilters}>
+            {listStatus === 'All' ? 'Filters' : `Status: ${listStatus}`}
+          </Button>
+        </Stack>
+      </Stack>
+
+      {isListError ? (
+        <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
+          Failed to load selling prices. Please try again.
+        </Typography>
+      ) : (
+        <SellingPriceListTable
+          rows={rows}
+          loading={isListFetching && rows.length === 0}
+          onViewRow={handleViewRow}
+          onEditRow={handleEditRow}
+          onDeleteRow={handleDeleteRow}
+        />
+      )}
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          Showing {rows.length ? (page - 1) * 10 + 1 : 0} to {(page - 1) * 10 + rows.length} of {meta.total} records
+        </Typography>
+        <Pagination
+          count={meta.totalPages}
+          page={page}
+          onChange={(_e, value) => setPage(value)}
+          color="primary"
+          shape="rounded"
+        />
+      </Stack>
+    </Paper>
+  );
+
   // ---- List view -----------------------------------------------------------
   if (view === 'list') {
     return (
@@ -303,51 +391,7 @@ export default function SellingPricePage() {
           </Stack>
         </Stack>
 
-        <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Selling Price List</Typography>
-            <Stack direction="row" spacing={1}>
-              <TextField
-                size="small"
-                placeholder="Search item or price list..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
-                slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-              />
-              <Button variant="outlined" color="inherit" startIcon={<FilterListIcon fontSize="small" />} onClick={handleFilters}>
-                {listStatus === 'All' ? 'Filters' : `Status: ${listStatus}`}
-              </Button>
-            </Stack>
-          </Stack>
-
-          {isListError ? (
-            <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
-              Failed to load selling prices. Please try again.
-            </Typography>
-          ) : (
-            <SellingPriceListTable
-              rows={rows}
-              loading={isListFetching && rows.length === 0}
-              onViewRow={handleViewRow}
-              onEditRow={handleEditRow}
-              onDeleteRow={handleDeleteRow}
-            />
-          )}
-
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Showing {rows.length ? (page - 1) * 10 + 1 : 0} to {(page - 1) * 10 + rows.length} of {meta.total} records
-            </Typography>
-            <Pagination
-              count={meta.totalPages}
-              page={page}
-              onChange={(_e, value) => setPage(value)}
-              color="primary"
-              shape="rounded"
-            />
-          </Stack>
-        </Paper>
+        {listPanel}
 
         <SellingPriceViewDialog
           open={Boolean(viewRow)}
@@ -387,13 +431,17 @@ export default function SellingPricePage() {
                       </IconButton>
                     </Stack>
 
-                    <TextField label="Item Code" value={selectedProduct?.code || ''} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
+                    <TextField label="Item Code / Barcode" value={selectedProduct?.code || ''} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
                     <TextField label="Item Group / Category" value={selectedProduct?.group || ''} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
                     <TextField label="Brand" value={selectedProduct?.brand || ''} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
 
                     <Stack direction="row" spacing={1.5}>
-                      <TextField label="UOM" value={selectedProduct?.uom || ''} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
-                      <TextField label="HSN/SAC" value={selectedProduct?.hsnSac || ''} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
+                      <TextField select label="UOM" value={uomCode} onChange={(e) => handleUomChange(e.target.value)} fullWidth>
+                        {uomOptions.map((opt) => <MenuItem key={opt.value} value={opt.value} disabled={opt.disabled}>{opt.label}</MenuItem>)}
+                      </TextField>
+                      <TextField select label="UOM Group" value={uomGroupId} onChange={(e) => handleUomGroupChange(e.target.value)} fullWidth>
+                        {uomGroupOptions.map((opt) => <MenuItem key={opt.value} value={opt.value} disabled={opt.disabled}>{opt.label}</MenuItem>)}
+                      </TextField>
                     </Stack>
 
                     <FormSelect name="priceList" label="Price List *" options={PRICE_LIST_OPTIONS} />
@@ -410,11 +458,14 @@ export default function SellingPricePage() {
                           {taxCodeOptions.map((opt) => <MenuItem key={opt.value} value={opt.value} disabled={opt.disabled}>{opt.label}</MenuItem>)}
                         </TextField>
                       </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <TextField label="HSN/SAC" value={selectedProduct?.hsnSac || ''} disabled fullWidth slotProps={{ input: { readOnly: true } }} />
+                      </Box>
                     </Stack>
                   </Stack>
                 </Paper>
 
-                <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
+                <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, bgcolor: 'rgba(37,99,235,0.05)', borderColor: 'rgba(37,99,235,0.18)' }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 2 }}>Price Effective Period &amp; Applicability</Typography>
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -428,46 +479,47 @@ export default function SellingPricePage() {
                     </Grid>
                   </Grid>
 
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mt: 2 }}>
-                    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>Status</Typography>
-                      <RadioGroup
-                        row
-                        value={liveValues.status || 'Active'}
-                        onChange={(e) => setValue('status', e.target.value, { shouldValidate: true })}
-                      >
-                        <FormControlLabel value="Active" control={<Radio size="small" />} label="Active" />
-                        <FormControlLabel value="Inactive" control={<Radio size="small" />} label="Inactive" />
-                      </RadioGroup>
-                    </Stack>
-                    <FormSwitch name="approvalRequired" label="Approval Required" labelPlacement="start" />
-                  </Stack>
-
-                  <Stack direction="row" spacing={1.5} sx={{ mt: 2.5, flexWrap: 'wrap' }} useFlexGap>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      color="primary"
-                      startIcon={isSubmitting ? <CircularProgress size={14} color="inherit" /> : <SaveOutlinedIcon fontSize="small" />}
-                      disabled={isSubmitting}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outlined"
-                      color="primary"
-                      startIcon={<SaveOutlinedIcon fontSize="small" />}
-                      onClick={handleSaveAndNew}
-                      disabled={isSubmitting}
-                    >
-                      Save &amp; New
-                    </Button>
-                    <Button type="button" variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleCancel}>
-                      Cancel
-                    </Button>
-                  </Stack>
                 </Paper>
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}>
+                <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Status</Typography>
+                  <RadioGroup
+                    row
+                    value={liveValues.status || 'Active'}
+                    onChange={(e) => setValue('status', e.target.value, { shouldValidate: true })}
+                  >
+                    <FormControlLabel value="Active" control={<Radio size="small" />} label="Active" />
+                    <FormControlLabel value="Inactive" control={<Radio size="small" />} label="Inactive" />
+                  </RadioGroup>
+                </Stack>
+                <FormSwitch name="approvalRequired" label="Approval Required" labelPlacement="start" />
+              </Stack>
+
+              <Stack direction="row" spacing={1.5} sx={{ mt: 2.5, flexWrap: 'wrap' }} useFlexGap>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  startIcon={isSubmitting ? <CircularProgress size={14} color="inherit" /> : <SaveOutlinedIcon fontSize="small" />}
+                  disabled={isSubmitting}
+                >
+                  Save
+                </Button>
+                <Button
+                  type="button"
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<SaveOutlinedIcon fontSize="small" />}
+                  onClick={handleSaveAndNew}
+                  disabled={isSubmitting}
+                >
+                  Save &amp; New
+                </Button>
+                <Button type="button" variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleCancel}>
+                  Cancel
+                </Button>
+              </Stack>
               </Stack>
             </Grid>
 
@@ -506,8 +558,11 @@ export default function SellingPricePage() {
                     </RadioGroup>
                   </Box>
 
-                  <Grid container spacing={2} sx={{ mt: 0.5, alignItems: 'center' }}>
-                    <Grid size={{ xs: 5, sm: 5 }}>
+                  {/* One 5 / 2 / 5 grid for every row below Pricing Method so the right-hand
+                      fields (Margin Amount, Selling Price Incl. Tax, Price Update Reason)
+                      all start at the same x, with even vertical spacing between rows. */}
+                  <Grid container spacing={2.5} sx={{ mt: 1, alignItems: 'flex-start' }}>
+                    <Grid size={{ xs: 5 }}>
                       <FormTextField
                         name="marginPercent"
                         label="Margin %"
@@ -515,10 +570,10 @@ export default function SellingPricePage() {
                         slotProps={{ input: { endAdornment: <InputAdornment position="end">%</InputAdornment> } }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 2, sm: 2 }} sx={{ textAlign: 'center', pt: 2 }}>
+                    <Grid size={{ xs: 2 }} sx={{ textAlign: 'center', pt: 2 }}>
                       <Typography variant="h6" sx={{ color: 'text.secondary' }}>→</Typography>
                     </Grid>
-                    <Grid size={{ xs: 5, sm: 5 }}>
+                    <Grid size={{ xs: 5 }}>
                       <TextField
                         label="Margin Amount"
                         value={preview.marginAmount.toFixed(2)}
@@ -527,10 +582,8 @@ export default function SellingPricePage() {
                         slotProps={{ input: { readOnly: true, startAdornment: <InputAdornment position="start">₹</InputAdornment> } }}
                       />
                     </Grid>
-                  </Grid>
 
-                  <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                    <Grid size={{ xs: 12, sm: 6 }}>
+                    <Grid size={{ xs: 5 }}>
                       {liveValues.pricingMethod === 'FIXED' ? (
                         <FormTextField
                           name="fixedSellingPrice"
@@ -547,7 +600,8 @@ export default function SellingPricePage() {
                         />
                       )}
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}>
+                    <Grid size={{ xs: 2 }} />
+                    <Grid size={{ xs: 5 }}>
                       <TextField
                         label="Selling Price (Incl. Tax)"
                         value={preview.sellingPriceInclTax.toFixed(2)}
@@ -559,13 +613,12 @@ export default function SellingPricePage() {
                         (Tax {taxRateNum}% = {formatCurrency(preview.taxAmount, { decimals: true })})
                       </Typography>
                     </Grid>
-                  </Grid>
 
-                  <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                    <Grid size={{ xs: 12, sm: 6 }}>
+                    <Grid size={{ xs: 5 }}>
                       <FormSelect name="rounding" label="Rounding" options={ROUNDING_OPTIONS} />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}>
+                    <Grid size={{ xs: 2 }} />
+                    <Grid size={{ xs: 5 }}>
                       <FormTextField name="priceUpdateReason" label="Price Update Reason" placeholder="e.g. Seasonal offer" />
                     </Grid>
                   </Grid>
@@ -586,6 +639,15 @@ export default function SellingPricePage() {
           </Grid>
         </form>
       </FormProvider>
+
+      {listPanel}
+
+      <SellingPriceViewDialog
+        open={Boolean(viewRow)}
+        row={viewRow}
+        onClose={() => setViewRow(null)}
+        onEdit={() => handleEditRow(viewRow)}
+      />
     </Stack>
   );
 }

@@ -14,12 +14,13 @@ import CloseIcon from '@mui/icons-material/Close';
 import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
 import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
-import { formatNumber } from '../../../utils/format';
+import { formatNumber, formatCurrency } from '../../../utils/format';
 
 import SupplierTable from './components/SupplierTable';
 import SupplierFormDialog from './components/SupplierFormDialog';
@@ -44,6 +45,9 @@ function toViewRow(row) {
     gstNo: row.gstNo || '',
     paymentTerms: row.paymentTerms || '',
     status: row.status === 'ACTIVE' ? 'Active' : 'Inactive',
+    // Amount owed to this supplier. No payables ledger exists in the backend
+    // yet, so this is 0 until the API starts returning `totalPayable`.
+    totalPayable: Number(row.totalPayable) || 0,
   };
 }
 
@@ -132,6 +136,7 @@ export default function SupplierPage() {
     activeSuppliers: viewRows.filter((r) => r.status === 'Active').length,
     inactiveSuppliers: viewRows.filter((r) => r.status === 'Inactive').length,
     gstRegistered: viewRows.filter((r) => Boolean(r.gstNo)).length,
+    totalPayable: viewRows.reduce((sum, r) => sum + r.totalPayable, 0),
   }), [viewRows]);
 
   return (
@@ -259,17 +264,20 @@ export default function SupplierPage() {
       </Paper>
 
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
           <StatCard icon={PeopleAltOutlinedIcon} iconColor="#7C3AED" iconShape="circle" label="Total Suppliers" value={formatNumber(stats.totalSuppliers)} />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
           <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Suppliers" value={formatNumber(stats.activeSuppliers)} />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
           <StatCard icon={CloseIcon} iconColor="error" iconShape="circle" label="Inactive Suppliers" value={formatNumber(stats.inactiveSuppliers)} />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
           <StatCard icon={StorefrontIcon} iconColor="#2563EB" iconShape="circle" label="GST Registered" value={formatNumber(stats.gstRegistered)} />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
+          <StatCard icon={AccountBalanceWalletOutlinedIcon} iconColor="warning" iconShape="circle" label="Total Payable" value={formatCurrency(stats.totalPayable, { decimals: true })} />
         </Grid>
       </Grid>
 
