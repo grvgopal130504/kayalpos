@@ -13,7 +13,7 @@ import { showToast } from '../../../../features/ui/uiSlice';
 import FormTextField from '../../../../components/form/FormTextField';
 import FormSelect from '../../../../components/form/FormSelect';
 import FormDatePicker from '../../../../components/form/FormDatePicker';
-import { useCreateTaxCodeMutation, useUpdateTaxCodeMutation, useNextTaxCodeCode } from '../../../../api/taxCodeApi';
+import { useCreateTaxCodeMutation, useUpdateTaxCodeMutation } from '../../../../api/taxCodeApi';
 import {
   createTaxCodeSchema, createTaxCodeDefaultValues, taxCodeToFormValues, taxCodeFormValuesToPayload,
   STATUS_OPTIONS, TAX_TYPE_SELECT_OPTIONS, TAX_CATEGORY_SELECT_OPTIONS,
@@ -23,8 +23,7 @@ import {
 /**
  * Add/Edit dialog for the Tax Code master, backed by the real Tax Code API
  * (see api/taxCodeApi.js) — react-hook-form + zod, same shape as
- * Brand/UOM's form dialogs. `code` is server-generated (TAX001, ...): shown
- * as a live preview via useNextTaxCodeCode on Add, and read-only on Edit.
+ * Brand/UOM's form dialogs. `code` is user-entered on Add and read-only on Edit.
  */
 export default function TaxCodeFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
@@ -32,7 +31,6 @@ export default function TaxCodeFormDialog({ open, mode = 'add', initialValues, o
 
   const [createTaxCode] = useCreateTaxCodeMutation();
   const [updateTaxCode] = useUpdateTaxCodeMutation();
-  const nextCode = useNextTaxCodeCode(open && !isEdit);
 
   const methods = useForm({
     resolver: zodResolver(createTaxCodeSchema),
@@ -47,7 +45,8 @@ export default function TaxCodeFormDialog({ open, mode = 'add', initialValues, o
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      const payload = taxCodeFormValuesToPayload(values);
+      const { code, ...rest } = taxCodeFormValuesToPayload(values);
+      const payload = isEdit ? rest : { code, ...rest };
       if (isEdit) {
         await updateTaxCode({ id: initialValues.id, ...payload }).unwrap();
         dispatch(showToast('Tax Code updated successfully', 'success'));
@@ -57,7 +56,12 @@ export default function TaxCodeFormDialog({ open, mode = 'add', initialValues, o
       }
       onClose?.();
     } catch (err) {
-      dispatch(showToast(err?.data?.message || 'Failed to save Tax Code', 'error'));
+      const details = err?.data?.details;
+      const detailText = details && typeof details === 'object'
+        ? Object.entries(details).map(([field, msgs]) => `${field}: ${[].concat(msgs).join(', ')}`).join(' | ')
+        : '';
+      const message = err?.data?.message || 'Failed to save Tax Code';
+      dispatch(showToast(detailText ? `${message} — ${detailText}` : message, 'error'));
     }
   });
 
@@ -75,13 +79,17 @@ export default function TaxCodeFormDialog({ open, mode = 'add', initialValues, o
           <DialogContent dividers>
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  label="Tax Code *"
-                  value={isEdit ? (initialValues?.code || '') : (nextCode || 'Auto generated')}
-                  disabled
-                  fullWidth
-                  slotProps={{ input: { readOnly: true } }}
-                />
+                {isEdit ? (
+                  <TextField
+                    label="Tax Code *"
+                    value={initialValues?.code || ''}
+                    disabled
+                    fullWidth
+                    slotProps={{ input: { readOnly: true } }}
+                  />
+                ) : (
+                  <FormTextField name="code" label="Tax Code *" placeholder="e.g. GST5" />
+                )}
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <FormTextField name="name" label="Tax Name *" placeholder="e.g. GST 5%" />

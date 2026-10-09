@@ -1,10 +1,8 @@
 import { z } from 'zod';
 
-// `code` is intentionally NOT required here — the CRUD factory
-// auto-generates it (TAX001, TAX002, ...) on create, same convention as
-// Brand/UomGroup. If the client sends one anyway it's respected as-is.
+// `code` is user-entered and required on create (no auto-generation).
 export const createTaxCodeSchema = z.object({
-  code: z.string().trim().min(1).optional(),
+  code: z.string().trim().min(1, 'Tax code is required').max(30),
   name: z.string().trim().min(1, 'Tax name is required'),
   type: z.string().trim().min(1, 'Tax type is required'),
   category: z.string().trim().min(1, 'Tax category is required'),

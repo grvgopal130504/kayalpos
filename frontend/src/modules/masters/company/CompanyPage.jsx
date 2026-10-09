@@ -3,7 +3,7 @@ import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Tabs, Tab,
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper,
   Button, Menu, MenuItem, CircularProgress,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -34,15 +34,13 @@ import {
   COMPANY_TYPE_OPTIONS, COUNTRY_OPTIONS, STATE_OPTIONS, CURRENCY_OPTIONS,
 } from './createCompanySchema';
 
-const TABS = ['Company Details', 'Additional Information', 'Financial Information', 'Settings', 'Document', 'Activity Log'];
+const TABS = ['Company Details'];
 
 /**
  * Company — the Company master's detail/edit screen, reached from the
- * Masters page's "Company" card. Only the "Company Details" tab has real
- * content matching the reference (Basic Information + Contact Person on
- * the left, Company Logo + Registered Address on the right); the other
- * five tabs are placeholders — there's no Additional/Financial/Settings/
- * Document/Activity Log data modeled yet.
+ * Masters page's "Company" card. It has a single "Company Details" tab
+ * (Basic Information + Contact Person on the left, Company Logo +
+ * Registered Address on the right).
  *
  * Company is a SINGLETON per tenant (see backend/prisma/schema.prisma's
  * Company model — tenantId is @unique), not a list like Brand/Supplier, so
@@ -65,7 +63,6 @@ const TABS = ['Company Details', 'Additional Information', 'Financial Informatio
 export default function CompanyPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [moreAnchor, setMoreAnchor] = useState(null);
@@ -190,17 +187,9 @@ export default function CompanyPage() {
           spacing={1.5}
           sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'space-between', py: { xs: 1, lg: 0 } }}
         >
-          <Tabs
-            value={activeTab}
-            onChange={(_e, value) => setActiveTab(value)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ minHeight: 48 }}
-          >
-            {TABS.map((label) => (
-              <Tab key={label} label={label} sx={{ fontWeight: 700, textTransform: 'none', minHeight: 48 }} />
-            ))}
-          </Tabs>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', px: 1.5, py: { xs: 0.5, lg: 1.5 } }}>
+            {TABS[0]}
+          </Typography>
 
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', py: { xs: 1, lg: 1.5 }, justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
             <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={handleNewCompany}>
@@ -230,114 +219,105 @@ export default function CompanyPage() {
         </Stack>
       </Paper>
 
-      {activeTab === 0 ? (
-        isLoading ? (
-          <Paper variant="outlined" sx={{ borderRadius: 3, p: 4, display: 'flex', justifyContent: 'center' }}>
-            <CircularProgress size={28} />
-          </Paper>
-        ) : (
-          <FormProvider {...methods}>
-            <Stack spacing={2} component="form" noValidate>
-              <Grid container spacing={2} sx={{ alignItems: 'flex-start' }}>
-                <Grid size={{ xs: 12, lg: 8 }}>
-                  <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 2 }}>Basic Information</Typography>
-                    <Grid container spacing={2}>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="companyCode" label="Company Code *" {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormSelect name="companyType" label="Company Type" options={COMPANY_TYPE_OPTIONS} {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="companyName" label="Company Name *" {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormDatePicker
-                          name="financialYearStart"
-                          label="Financial Year Start *"
-                          {...disabledProps}
-                        />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="displayName" label="Display Name" {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormSelect name="country" label="Country *" options={COUNTRY_OPTIONS} {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="registrationNo" label="Registration No." {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormSelect name="state" label="State *" options={STATE_OPTIONS} {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="gstin" label="GSTIN *" {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormSelect name="currency" label="Currency *" options={CURRENCY_OPTIONS} {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="panNo" label="PAN No." {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="phone" label="Phone" {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="email" label="Email" {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="mobile" label="Mobile" {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="website" label="Website" {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="fax" label="Fax" {...disabledProps} />
-                      </Grid>
+      {isLoading ? (
+        <Paper variant="outlined" sx={{ borderRadius: 3, p: 4, display: 'flex', justifyContent: 'center' }}>
+          <CircularProgress size={28} />
+        </Paper>
+      ) : (
+        <FormProvider {...methods}>
+          <Stack spacing={2} component="form" noValidate>
+            <Grid container spacing={2} sx={{ alignItems: 'flex-start' }}>
+              <Grid size={{ xs: 12, lg: 8 }}>
+                <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 2 }}>Basic Information</Typography>
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="companyCode" label="Company Code *" {...disabledProps} />
                     </Grid>
-                  </Paper>
-                </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormSelect name="companyType" label="Company Type" options={COMPANY_TYPE_OPTIONS} {...disabledProps} />
+                    </Grid>
 
-                <Grid size={{ xs: 12, lg: 4 }}>
-                  <Stack spacing={2}>
-                    <CompanyLogoCard
-                      companyName={profile?.displayName || profile?.companyName}
-                      logoName={logoName}
-                      onUpload={handleLogoUpload}
-                      onRemove={handleLogoRemove}
-                    />
-                    <RegisteredAddressCard disabledProps={disabledProps} />
-                  </Stack>
-                </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="companyName" label="Company Name *" {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormDatePicker
+                        name="financialYearStart"
+                        label="Financial Year Start *"
+                        {...disabledProps}
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="displayName" label="Display Name" {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormSelect name="country" label="Country *" options={COUNTRY_OPTIONS} {...disabledProps} />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="registrationNo" label="Registration No." {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormSelect name="state" label="State *" options={STATE_OPTIONS} {...disabledProps} />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="gstin" label="GSTIN *" {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormSelect name="currency" label="Currency *" options={CURRENCY_OPTIONS} {...disabledProps} />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="panNo" label="PAN No." {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="phone" label="Phone" {...disabledProps} />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="email" label="Email" {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="mobile" label="Mobile" {...disabledProps} />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="website" label="Website" {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="fax" label="Fax" {...disabledProps} />
+                    </Grid>
+                  </Grid>
+                </Paper>
               </Grid>
 
-              <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 2 }}>Contact Person</Typography>
-                <ContactPersonTable
-                  rows={contacts}
-                  onAdd={handleAddContact}
-                  onEditRow={handleEditContact}
-                  onDeleteRow={handleDeleteContact}
-                />
-              </Paper>
-            </Stack>
-          </FormProvider>
-        )
-      ) : (
-        <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 3, sm: 4 }, textAlign: 'center' }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{TABS[activeTab]}</Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            This section is coming soon.
-          </Typography>
-        </Paper>
+              <Grid size={{ xs: 12, lg: 4 }}>
+                <Stack spacing={2}>
+                  <CompanyLogoCard
+                    companyName={profile?.displayName || profile?.companyName}
+                    logoName={logoName}
+                    onUpload={handleLogoUpload}
+                    onRemove={handleLogoRemove}
+                  />
+                  <RegisteredAddressCard disabledProps={disabledProps} onEdit={handleEdit} isEditing={isEditing} />
+                </Stack>
+              </Grid>
+            </Grid>
+
+            <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 2 }}>Contact Person</Typography>
+              <ContactPersonTable
+                rows={contacts}
+                onAdd={handleAddContact}
+                onEditRow={handleEditContact}
+                onDeleteRow={handleDeleteContact}
+              />
+            </Paper>
+          </Stack>
+        </FormProvider>
       )}
 
       <ContactPersonFormDialog

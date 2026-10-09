@@ -13,11 +13,12 @@ import { showToast } from '../../../../features/ui/uiSlice';
 import FormTextField from '../../../../components/form/FormTextField';
 import FormSelect from '../../../../components/form/FormSelect';
 import { useGetBrandsQuery } from '../../../../api/brandApi';
+import { useGetTaxCodesQuery } from '../../../../api/taxCodeApi';
 import { useCreateProductMutation, useUpdateProductMutation, useNextProductCode } from '../../../../api/productApi';
 import {
   createProductSchema, createProductDefaultValues, productToFormValues, productFormValuesToPayload,
   PRODUCT_GROUP_SELECT_OPTIONS, PRODUCT_TYPE_SELECT_OPTIONS, UOM_SELECT_OPTIONS, STATUS_OPTIONS,
-  BRAND_PLACEHOLDER_OPTION,
+  BRAND_PLACEHOLDER_OPTION, TAX_CODE_PLACEHOLDER_OPTION,
 } from '../createProductSchema';
 
 /**
@@ -57,6 +58,19 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
     }
     return options;
   }, [brands, isEdit, initialValues]);
+
+  const { data: taxCodes = [] } = useGetTaxCodesQuery(open ? { status: 'ACTIVE' } : undefined, { skip: !open });
+
+  const taxCodeOptions = useMemo(() => {
+    const options = [TAX_CODE_PLACEHOLDER_OPTION, ...taxCodes.map((t) => ({ value: t.name, label: t.name }))];
+    // Editing a product whose saved tax code isn't in the active Tax Code
+    // list (renamed/deactivated, or bulk-imported text) — keep it selectable.
+    const existingTaxCode = isEdit ? initialValues?.taxCode : '';
+    if (existingTaxCode && !options.some((o) => o.value === existingTaxCode)) {
+      options.push({ value: existingTaxCode, label: existingTaxCode });
+    }
+    return options;
+  }, [taxCodes, isEdit, initialValues]);
 
   const methods = useForm({
     resolver: zodResolver(createProductSchema),
@@ -126,7 +140,7 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
                 <FormTextField name="hsnSac" label="HSN / SAC" placeholder="Enter HSN/SAC code" />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
-                <FormTextField name="taxCode" label="Tax Code" placeholder="e.g. GST 5%" />
+                <FormSelect name="taxCode" label="Tax Code" options={taxCodeOptions} />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <FormTextField name="salePrice" label="Sale Price (₹) *" placeholder="0.00" />

@@ -8,9 +8,12 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
-import CloseIcon from '@mui/icons-material/Close';
-import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
-import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
+import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
+import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
+import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
+import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
+import ViewInArOutlinedIcon from '@mui/icons-material/ViewInArOutlined';
 import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
@@ -19,7 +22,9 @@ import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
 import { useGetBrandsQuery, useDeleteBrandMutation } from '../../../api/brandApi';
+import { useGetProductsQuery } from '../../../api/productApi';
 import { CASHIER } from '../mastersMockData';
+import { CATEGORY_OPTIONS } from './brandMockData';
 
 import BrandTable from './components/BrandTable';
 import BrandFormDialog from './components/BrandFormDialog';
@@ -36,7 +41,19 @@ function toViewRow(row) {
     category: row.category,
     description: row.description || '',
     status: row.status === 'ACTIVE' ? 'Active' : 'Inactive',
+    createdAt: row.createdAt,
   };
+}
+
+// Label above the control (instead of a floating label), as in the
+// reference filter bar.
+function FilterField({ label, children }) {
+  return (
+    <Box>
+      <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.75 }}>{label}</Typography>
+      {children}
+    </Box>
+  );
 }
 
 /**
@@ -57,7 +74,12 @@ export default function BrandPage() {
 
   const [searchInput, setSearchInput] = useState('');
   const [status, setStatus] = useState('All');
-  const [appliedSearch, setAppliedSearch] = useState('');
+  const [category, setCategory] = useState('All');
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
+  // Search text, category and the created-date range are applied when the
+  // Search button is clicked (status filters immediately, as before).
+  const [applied, setApplied] = useState({ search: '', category: 'All', createdFrom: '', createdTo: '' });
   const [formDialog, setFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewRow, setViewRow] = useState(null);
 
@@ -66,10 +88,13 @@ export default function BrandPage() {
     isLoading,
     isError,
   } = useGetBrandsQuery({
-    search: appliedSearch || undefined,
+    search: applied.search || undefined,
     status: status !== 'All' ? status.toUpperCase() : undefined,
   });
   const [deleteBrand] = useDeleteBrandMutation();
+  // Product.brand stores the brand's name, so "items under brands" is the
+  // number of products whose brand matches a listed brand.
+  const { data: productRows = [] } = useGetProductsQuery();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -77,11 +102,16 @@ export default function BrandPage() {
   };
 
   const handleNewBrand = () => setFormDialog({ open: true, mode: 'add', row: null });
-  const handleSearch = () => setAppliedSearch(searchInput.trim());
+  const handleImport = () => dispatch(showToast('Import Brands is coming soon', 'info'));
+  const handleExport = () => dispatch(showToast('Export Brands is coming soon', 'info'));
+  const handleSearch = () => setApplied({ search: searchInput.trim(), category, createdFrom, createdTo });
   const handleReset = () => {
     setSearchInput('');
     setStatus('All');
-    setAppliedSearch('');
+    setCategory('All');
+    setCreatedFrom('');
+    setCreatedTo('');
+    setApplied({ search: '', category: 'All', createdFrom: '', createdTo: '' });
   };
   const handleOpenBrand = (row) => setViewRow(row);
   const handleEditRow = (row) => setFormDialog({ open: true, mode: 'edit', row });
@@ -96,13 +126,40 @@ export default function BrandPage() {
     }
   };
 
-  const viewRows = useMemo(() => brandRows.map(toViewRow), [brandRows]);
+  // Category and created-date filters run client-side on the fetched rows.
+  const viewRows = useMemo(() => {
+    const from = applied.createdFrom ? new Date(`${applied.createdFrom}T00:00:00`) : null;
+    const to = applied.createdTo ? new Date(`${applied.createdTo}T23:59:59.999`) : null;
+    return brandRows.map(toViewRow).filter((r) => {
+      if (applied.category !== 'All' && r.category !== applied.category) return false;
+      if (from || to) {
+        const created = r.createdAt ? new Date(r.createdAt) : null;
+        if (!created) return false;
+        if (from && created < from) return false;
+        if (to && created > to) return false;
+      }
+      return true;
+    });
+  }, [brandRows, applied]);
+
+  // Products per brand name (lower-cased) — drives the table's Total Items
+  // column and the "Total Items Under Brands" card.
+  const itemCounts = useMemo(() => {
+    const counts = {};
+    productRows.forEach((p) => {
+      if (!p.brand) return;
+      const key = String(p.brand).trim().toLowerCase();
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  }, [productRows]);
 
   const stats = useMemo(() => ({
     total: viewRows.length,
     active: viewRows.filter((r) => r.status === 'Active').length,
     inactive: viewRows.filter((r) => r.status === 'Inactive').length,
-  }), [viewRows]);
+    items: viewRows.reduce((sum, r) => sum + (itemCounts[r.name.trim().toLowerCase()] || 0), 0),
+  }), [viewRows, itemCounts]);
 
   return (
     <Stack spacing={2}>
@@ -132,51 +189,67 @@ export default function BrandPage() {
         </Stack>
       </Stack>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <StatCard icon={CardGiftcardOutlinedIcon} iconColor="#E5484D" iconShape="circle" label="Total Brands" value={formatNumber(stats.total)} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <StatCard icon={FactCheckOutlinedIcon} iconColor="success" iconShape="circle" label="Active Brands" value={formatNumber(stats.active)} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <StatCard icon={HighlightOffOutlinedIcon} iconColor="error" iconShape="circle" label="Inactive Brands" value={formatNumber(stats.inactive)} />
-        </Grid>
-      </Grid>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={handleNewBrand}>
+          New Brand
+        </Button>
+        <Button variant="outlined" color="primary" startIcon={<MoveToInboxOutlinedIcon fontSize="small" />} onClick={handleImport}>
+          Import
+        </Button>
+        <Button variant="outlined" color="primary" startIcon={<FileUploadOutlinedIcon fontSize="small" />} onClick={handleExport}>
+          Export
+        </Button>
+      </Stack>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Grid container spacing={1.5} sx={{ alignItems: 'flex-end' }}>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <TextField
-              label="Search Brand"
-              placeholder="Search by brand name or code..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
-              fullWidth
-              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-            />
-          </Grid>
-          <Grid size={{ xs: 6, sm: 3, md: 2 }}>
-            <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} fullWidth>
-              <MenuItem value="All">All</MenuItem>
-              <MenuItem value="Active">Active</MenuItem>
-              <MenuItem value="Inactive">Inactive</MenuItem>
-            </TextField>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <FilterField label="Search Brand">
+              <TextField
+                placeholder="Search by brand name or code..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+                fullWidth
+                slotProps={{ input: { endAdornment: <InputAdornment position="end"><SearchIcon fontSize="small" /></InputAdornment> } }}
+              />
+            </FilterField>
           </Grid>
           <Grid size={{ xs: 6, sm: 3, md: 1.5 }}>
+            <FilterField label="Status">
+              <TextField select value={status} onChange={(e) => setStatus(e.target.value)} fullWidth>
+                <MenuItem value="All">All</MenuItem>
+                <MenuItem value="Active">Active</MenuItem>
+                <MenuItem value="Inactive">Inactive</MenuItem>
+              </TextField>
+            </FilterField>
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3, md: 2 }}>
+            <FilterField label="Item Group / Category">
+              <TextField select value={category} onChange={(e) => setCategory(e.target.value)} fullWidth>
+                <MenuItem value="All">All</MenuItem>
+                {CATEGORY_OPTIONS.map((option) => (
+                  <MenuItem key={option} value={option}>{option}</MenuItem>
+                ))}
+              </TextField>
+            </FilterField>
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3, md: 1.75 }}>
+            <FilterField label="Created From">
+              <TextField type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} fullWidth slotProps={{ htmlInput: { max: createdTo || undefined } }} />
+            </FilterField>
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3, md: 1.75 }}>
+            <FilterField label="Created To">
+              <TextField type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} fullWidth slotProps={{ htmlInput: { min: createdFrom || undefined } }} />
+            </FilterField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2 }} sx={{ display: 'flex', gap: 1 }}>
             <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleSearch} fullWidth>
               Search
             </Button>
-          </Grid>
-          <Grid size={{ xs: 6, sm: 3, md: 1.5 }}>
-            <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleReset} fullWidth>
+            <Button variant="outlined" color="primary" startIcon={<RefreshOutlinedIcon fontSize="small" />} onClick={handleReset} fullWidth>
               Reset
-            </Button>
-          </Grid>
-          <Grid size={{ xs: 6, sm: 3, md: 3 }} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
-            <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={handleNewBrand} fullWidth>
-              New Brand
             </Button>
           </Grid>
         </Grid>
@@ -190,7 +263,7 @@ export default function BrandPage() {
           </Typography>
         ) : (
           <Box sx={{ opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
-            <BrandTable rows={viewRows} onOpenBrand={handleOpenBrand} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
+            <BrandTable rows={viewRows} itemCounts={itemCounts} onOpenBrand={handleOpenBrand} onEditRow={handleEditRow} onDeleteRow={handleDeleteRow} />
           </Box>
         )}
 
@@ -198,6 +271,21 @@ export default function BrandPage() {
           Showing {viewRows.length} of {viewRows.length} records
         </Typography>
       </Paper>
+
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard icon={LocalOfferOutlinedIcon} iconColor="#2563EB" iconShape="circle" label="Total Brands" value={formatNumber(stats.total)} />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard icon={CheckCircleOutlineIcon} iconColor="success" iconShape="circle" label="Active Brands" value={formatNumber(stats.active)} />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard icon={HighlightOffOutlinedIcon} iconColor="error" iconShape="circle" label="Inactive Brands" value={formatNumber(stats.inactive)} />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard icon={ViewInArOutlinedIcon} iconColor="#F26B21" iconShape="circle" label="Total Items Under Brands" value={formatNumber(stats.items)} />
+        </Grid>
+      </Grid>
 
       <BrandFormDialog open={formDialog.open} mode={formDialog.mode} initialValues={formDialog.row} onClose={closeFormDialog} />
       <BrandViewDialog
