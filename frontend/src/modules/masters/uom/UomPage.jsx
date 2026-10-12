@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
-  TextField, MenuItem, InputAdornment,
+  TextField, MenuItem,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
@@ -34,8 +34,8 @@ import UomViewDialog from './components/UomViewDialog';
 
 /**
  * UOM / UOM Group — reached from the Masters page's "UOM" card. Two panels
- * side by side: UOM Group List (its own search box + table) and the larger
- * UOM List (a fuller filter bar + table), wired to the real UOM/UOM Group
+ * stacked one below the other: UOM Group List (search + status filter + table) on top and the
+ * UOM List (a fuller filter bar + table) below, wired to the real UOM/UOM Group
  * API (see api/uomApi.js) — list/search/status run server-side; UOM Group
  * and Base UOM filters run client-side over whatever the current
  * search/status filter returned (no backend aggregation endpoint for
@@ -47,7 +47,9 @@ export default function UomPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  const [groupSearch, setGroupSearch] = useState('');
+  const [groupSearchInput, setGroupSearchInput] = useState('');
+  const [groupAppliedSearch, setGroupAppliedSearch] = useState('');
+  const [groupStatus, setGroupStatus] = useState('All');
   const [groupFormDialog, setGroupFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewGroupRow, setViewGroupRow] = useState(null);
 
@@ -63,7 +65,10 @@ export default function UomPage() {
     data: groupRows = [],
     isLoading: isGroupLoading,
     isError: isGroupError,
-  } = useGetUomGroupsQuery({ search: groupSearch.trim() || undefined });
+  } = useGetUomGroupsQuery({
+    search: groupAppliedSearch || undefined,
+    status: groupStatus !== 'All' ? groupStatus.toUpperCase() : undefined,
+  });
   const [deleteUomGroup] = useDeleteUomGroupMutation();
 
   const {
@@ -111,6 +116,12 @@ export default function UomPage() {
     }
   };
   const closeUomFormDialog = () => setUomFormDialog((prev) => ({ ...prev, open: false }));
+  const handleGroupSearch = () => setGroupAppliedSearch(groupSearchInput.trim());
+  const handleGroupReset = () => {
+    setGroupSearchInput('');
+    setGroupStatus('All');
+    setGroupAppliedSearch('');
+  };
   const handleUomSearch = () => setUomAppliedSearch(uomSearchInput.trim());
   const handleUomReset = () => {
     setUomSearchInput('');
@@ -210,19 +221,40 @@ export default function UomPage() {
       </Stack>
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
-        <Grid size={{ xs: 12, lg: 4 }}>
+        <Grid size={12}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>UOM Group List</Typography>
-              <TextField
-                size="small"
-                placeholder="Search UOM Group..."
-                value={groupSearch}
-                onChange={(e) => setGroupSearch(e.target.value)}
-                slotProps={{ input: { endAdornment: <InputAdornment position="end"><SearchIcon fontSize="small" /></InputAdornment> } }}
-                sx={{ width: { xs: '100%', sm: 220 } }}
-              />
-            </Stack>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>UOM Group List</Typography>
+
+            <Grid container spacing={1.5} sx={{ alignItems: 'flex-end', mb: 2 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <TextField
+                  label="Search UOM Group"
+                  placeholder="Search by group code or name..."
+                  value={groupSearchInput}
+                  onChange={(e) => setGroupSearchInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleGroupSearch(); }}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+                <TextField select label="Status" value={groupStatus} onChange={(e) => setGroupStatus(e.target.value)} fullWidth size="small">
+                  <MenuItem value="All">All</MenuItem>
+                  <MenuItem value="Active">Active</MenuItem>
+                  <MenuItem value="Inactive">Inactive</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3, md: 3 }}>
+                <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleGroupSearch} fullWidth>
+                  Search
+                </Button>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3, md: 3 }}>
+                <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleGroupReset} fullWidth>
+                  Reset
+                </Button>
+              </Grid>
+            </Grid>
 
             {isGroupError ? (
               <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
@@ -240,7 +272,7 @@ export default function UomPage() {
           </Paper>
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 8 }}>
+        <Grid size={12}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>UOM List</Typography>
 

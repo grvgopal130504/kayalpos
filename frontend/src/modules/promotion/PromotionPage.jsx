@@ -355,7 +355,7 @@ export default function PromotionPage() {
           title="Promotion History"
           columns={[
             { key: 'date', label: 'Date' },
-            { key: 'action', label: 'Action' },
+            { key: 'action', label: 'Action', sticky: false },
             { key: 'user', label: 'User' },
           ]}
           rows={buildPromotionHistory(selectedPromotion)}

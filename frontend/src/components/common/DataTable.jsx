@@ -60,6 +60,7 @@ export default function DataTable({
               <TableCell
                 key={col.key}
                 align={col.align || 'left'}
+                className={!fitContainer && col.key === 'action' && col.sticky !== false ? 'sticky-action' : undefined}
                 sx={{
                   color: 'text.secondary', fontWeight: 600, fontSize: 12.5, borderBottomColor: 'divider',
                   whiteSpace: 'nowrap',
@@ -83,6 +84,7 @@ export default function DataTable({
                 <TableCell
                   key={col.key}
                   align={col.align || 'left'}
+                  className={!fitContainer && col.key === 'action' && col.sticky !== false ? 'sticky-action' : undefined}
                   sx={{ fontSize: 13.5, borderBottomColor: 'divider', ...cellFitSx(col) }}
                   onClick={col.stopRowClick ? (e) => e.stopPropagation() : undefined}
                 >
