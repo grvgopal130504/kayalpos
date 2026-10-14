@@ -338,7 +338,7 @@ export default function OutletPage() {
                 <TableHead>
                   <TableRow>
                     {LIST_COLUMNS.map((col) => (
-                      <TableCell key={col} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
+                      <TableCell key={col} className={col === 'Action' ? 'sticky-action' : undefined} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
                         {col}
                       </TableCell>
                     ))}
@@ -373,7 +373,7 @@ export default function OutletPage() {
                           }}
                         />
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="sticky-action" onClick={(e) => e.stopPropagation()}>
                         <Stack direction="row" spacing={0.5}>
                           <IconButton size="small" color="primary" onClick={() => openOutlet(row)} aria-label={`Open ${row.name}`}>
                             <VisibilityOutlinedIcon fontSize="small" />

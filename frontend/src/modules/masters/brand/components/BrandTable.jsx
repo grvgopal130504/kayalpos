@@ -67,7 +67,7 @@ function BrandRow({ row, totalItems, onOpenBrand, onEditRow, onDeleteRow }) {
         />
       </TableCell>
       <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>{formatCreatedOn(row.createdAt)}</TableCell>
-      <TableCell align="center">
+      <TableCell align="center" className="sticky-action">
         <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'center' }}>
           <IconButton size="small" color="primary" onClick={() => onEditRow?.(row)} aria-label={`Edit ${row.name}`}>
             <EditOutlinedIcon fontSize="small" />
@@ -110,6 +110,7 @@ export default function BrandTable({ rows, itemCounts = {}, onOpenBrand, onEditR
               <TableCell
                 key={col.key}
                 align={col.align}
+                className={col.key === 'action' ? 'sticky-action' : undefined}
                 sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}
               >
                 {col.label}

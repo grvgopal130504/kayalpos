@@ -81,7 +81,7 @@ function ProductRow({ row, onOpenProduct, onEditRow, onDeleteRow, style }) {
           }}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className="sticky-action">
         <Stack direction="row" spacing={0.5}>
           <IconButton size="small" color="primary" onClick={() => onEditRow?.(row)} aria-label={`Edit ${row.code}`}>
             <EditOutlinedIcon fontSize="small" />
@@ -100,7 +100,7 @@ function Header() {
     <TableHead>
       <TableRow>
         {COLUMNS.map((col) => (
-          <TableCell key={col.key} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
+          <TableCell key={col.key} className={col.key === 'action' ? 'sticky-action' : undefined} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
             {col.label}
           </TableCell>
         ))}

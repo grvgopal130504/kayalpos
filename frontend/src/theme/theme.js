@@ -1,4 +1,4 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme, lighten, darken } from '@mui/material/styles';
 import { getAccentTheme, DEFAULT_ACCENT_KEY } from './accentThemes';
 
 // Palette sampled from the Nexora POS reference screens: orange brand
@@ -108,6 +108,27 @@ export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY, bodyFon
           root: { backgroundImage: 'none' },
         },
       },
+      // App-wide data-table header: an opaque tint of the selected accent
+      // color (opaque so a sticky header / sticky column never shows rows
+      // scrolling underneath). The nested selector out-specifies the
+      // per-table `sx` overrides (color: 'text.secondary', ...) so every
+      // table picks it up without editing each one.
+      MuiTableHead: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            '& .MuiTableCell-head': {
+              backgroundColor: theme.palette.mode === 'dark'
+                ? darken(theme.palette.primary.main, 0.65)
+                : lighten(theme.palette.primary.main, 0.88),
+              color: theme.palette.mode === 'dark'
+                ? lighten(theme.palette.primary.main, 0.7)
+                : darken(theme.palette.primary.main, 0.45),
+              fontWeight: 700,
+              borderBottom: `2px solid ${theme.palette.primary.main}`,
+            },
+          }),
+        },
+      },
       // App-wide thin scrollbar — covers every scrollable table container,
       // the dashboard panels, etc. (the sidebar keeps its own copy of this
       // since it needs a fixed light-on-dark thumb regardless of mode).
@@ -122,6 +143,22 @@ export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY, bodyFon
           '*::-webkit-scrollbar-button': { display: 'none', height: 0, width: 0 },
           '*::-webkit-scrollbar-thumb': { backgroundColor: scrollbarThumb, borderRadius: 4 },
           '*::-webkit-scrollbar-thumb:hover': { backgroundColor: scrollbarThumbHover },
+          // Frozen "Action" column — tag the header + body cell of a table's
+          // action column with className="sticky-action" and it stays
+          // pinned to the right edge while the rest scrolls horizontally.
+          // Opaque backgrounds (paper / hover) so scrolled cells never show
+          // through; the header variant is tinted by MuiTableHead above.
+          '.sticky-action': {
+            position: 'sticky',
+            right: 0,
+            zIndex: 1,
+            backgroundColor: isDark ? '#1A1F2B' : '#FFFFFF',
+            boxShadow: `-6px 0 6px -6px ${isDark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.18)'}`,
+          },
+          'thead .sticky-action': { zIndex: 3 },
+          'tr.MuiTableRow-hover:hover > .sticky-action': {
+            backgroundColor: isDark ? '#242B3A' : '#F5F6F8',
+          },
         },
       },
     },

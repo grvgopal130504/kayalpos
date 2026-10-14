@@ -582,6 +582,7 @@ export default function WarehousePage() {
                     {LIST_COLUMNS.map((col) => (
                       <TableCell
                         key={col}
+                        className={col === "Action" ? "sticky-action" : undefined}
                         sx={{
                           color: "text.secondary",
                           fontWeight: 600,
@@ -650,7 +651,10 @@ export default function WarehousePage() {
                           }}
                         />
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell
+                        className="sticky-action"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Stack direction="row" spacing={0.5}>
                           <IconButton
                             size="small"

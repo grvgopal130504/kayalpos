@@ -49,7 +49,7 @@ export default function SellingPriceListTable({
         <TableHead>
           <TableRow>
             {COLUMNS.map((col) => (
-              <TableCell key={col.key} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
+              <TableCell key={col.key} className={col.key === 'action' ? 'sticky-action' : undefined} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
                 {col.label}
               </TableCell>
             ))}
@@ -86,7 +86,7 @@ export default function SellingPriceListTable({
                   }}
                 />
               </TableCell>
-              <TableCell>
+              <TableCell className="sticky-action">
                 <Stack direction="row" spacing={0.5}>
                   <IconButton size="small" onClick={() => onViewRow?.(row)} aria-label={`View ${row.product?.name}`}>
                     <VisibilityOutlinedIcon fontSize="small" />
