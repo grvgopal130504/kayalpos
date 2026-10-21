@@ -15,6 +15,7 @@ import CustomerPage from './modules/customer/CustomerPage';
 import SalesQuotationPage from './modules/sales-quotation/SalesQuotationPage';
 import SalesOrderPage from './modules/sales-order/SalesOrderPage';
 import SalesInvoicePage from './modules/sales-invoice/SalesInvoicePage';
+import DayClosePage from './modules/day-close/DayClosePage';
 import BarcodeLabelPage from './modules/barcode-label/BarcodeLabelPage';
 import StockIndentPage from './modules/stock-indent/StockIndentPage';
 import StockTransferPage from './modules/stock-transfer/StockTransferPage';
@@ -43,6 +44,7 @@ import SalesReportsPage from './modules/reports/sales/SalesReportsPage';
 import InventoryReportsPage from './modules/reports/inventory/InventoryReportsPage';
 import PurchaseReportsPage from './modules/reports/purchase/PurchaseReportsPage';
 import CashierReportsPage from './modules/reports/cashier/CashierReportsPage';
+import ShiftVarianceReportPage from './modules/reports/cashier/ShiftVarianceReportPage';
 import FinancialReportsPage from './modules/reports/financial/FinancialReportsPage';
 import SapReportsPage from './modules/reports/sap/SapReportsPage';
 import MasterSyncPage from './modules/master-sync/MasterSyncPage';
@@ -97,6 +99,7 @@ export default function App() {
             <Route path="/sales-quotation" element={<SalesQuotationPage />} />
             <Route path="/sales-order" element={<SalesOrderPage />} />
             <Route path="/sales-invoice" element={<SalesInvoicePage />} />
+            <Route path="/day-close" element={<DayClosePage />} />
             <Route path="/barcode-label" element={<BarcodeLabelPage />} />
             <Route path="/stock-indent" element={<StockIndentPage />} />
             <Route path="/stock-transfer" element={<StockTransferPage />} />
@@ -110,6 +113,7 @@ export default function App() {
             <Route path="/reports/inventory" element={<InventoryReportsPage />} />
             <Route path="/reports/purchase" element={<PurchaseReportsPage />} />
             <Route path="/reports/cashier" element={<CashierReportsPage />} />
+            <Route path="/reports/cashier/shift-variance" element={<ShiftVarianceReportPage />} />
             <Route path="/reports/financial" element={<FinancialReportsPage />} />
             <Route path="/reports/sap" element={<SapReportsPage />} />
             <Route path="/master-sync" element={<MasterSyncPage />} />

@@ -36,8 +36,8 @@ import UomViewDialog from './components/UomViewDialog';
  * UOM / UOM Group — reached from the Masters page's "UOM" card. Two panels
  * stacked one below the other: UOM Group List (search + status filter + table) on top and the
  * UOM List (a fuller filter bar + table) below, wired to the real UOM/UOM Group
- * API (see api/uomApi.js) — list/search/status run server-side; UOM Group
- * and Base UOM filters run client-side over whatever the current
+ * API (see api/uomApi.js) — list/search/status run server-side; the UOM Group
+ * filter (UOM list) and Base UOM filter (UOM Group list) run client-side over whatever the current
  * search/status filter returned (no backend aggregation endpoint for
  * those), same convention as ProductPage's Brand/Product Type filters.
  * "Total UOMs" per group is likewise computed client-side by counting UOMs
@@ -55,7 +55,7 @@ export default function UomPage() {
 
   const [uomGroupFilter, setUomGroupFilter] = useState('All');
   const [uomStatus, setUomStatus] = useState('All');
-  const [baseUomFilter, setBaseUomFilter] = useState('All');
+  const [groupBaseUomFilter, setGroupBaseUomFilter] = useState('All');
   const [uomSearchInput, setUomSearchInput] = useState('');
   const [uomAppliedSearch, setUomAppliedSearch] = useState('');
   const [uomFormDialog, setUomFormDialog] = useState({ open: false, mode: 'add', row: null });
@@ -120,6 +120,7 @@ export default function UomPage() {
   const handleGroupReset = () => {
     setGroupSearchInput('');
     setGroupStatus('All');
+    setGroupBaseUomFilter('All');
     setGroupAppliedSearch('');
   };
   const handleUomSearch = () => setUomAppliedSearch(uomSearchInput.trim());
@@ -127,7 +128,6 @@ export default function UomPage() {
     setUomSearchInput('');
     setUomGroupFilter('All');
     setUomStatus('All');
-    setBaseUomFilter('All');
     setUomAppliedSearch('');
   };
 
@@ -139,6 +139,7 @@ export default function UomPage() {
     code: g.code,
     name: g.name,
     description: g.description || '',
+    baseUom: g.baseUom || '',
     totalUoms: uomRows.filter((u) => (u.groupId || u.group?.id) === g.id).length,
     status: g.status === 'ACTIVE' ? 'Active' : 'Inactive',
   })), [groupRows, uomRows]);
@@ -152,20 +153,23 @@ export default function UomPage() {
     name: u.name,
     groupId: u.groupId || u.group?.id || '',
     group: u.group?.name || '',
-    baseUom: u.baseUom || '',
     conversionFactor: u.conversionFactor != null ? Number(u.conversionFactor) : null,
     status: u.status === 'ACTIVE' ? 'Active' : 'Inactive',
   })), [uomRows]);
 
   const filteredUomRows = useMemo(() => uomViewRows.filter((row) => {
     if (uomGroupFilter !== 'All' && row.groupId !== uomGroupFilter) return false;
-    if (baseUomFilter !== 'All' && row.baseUom !== baseUomFilter) return false;
     return true;
-  }), [uomViewRows, uomGroupFilter, baseUomFilter]);
+  }), [uomViewRows, uomGroupFilter]);
 
-  const baseUomFilterOptions = useMemo(
-    () => Array.from(new Set(uomViewRows.map((r) => r.baseUom).filter(Boolean))).sort(),
-    [uomViewRows],
+  const filteredGroupRows = useMemo(
+    () => groupViewRows.filter((row) => groupBaseUomFilter === 'All' || row.baseUom === groupBaseUomFilter),
+    [groupViewRows, groupBaseUomFilter],
+  );
+
+  const groupBaseUomFilterOptions = useMemo(
+    () => Array.from(new Set(groupViewRows.map((r) => r.baseUom).filter(Boolean))).sort(),
+    [groupViewRows],
   );
 
   const stats = useMemo(() => ({
@@ -226,7 +230,7 @@ export default function UomPage() {
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>UOM Group List</Typography>
 
             <Grid container spacing={1.5} sx={{ alignItems: 'flex-end', mb: 2 }}>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <TextField
                   label="Search UOM Group"
                   placeholder="Search by group code or name..."
@@ -244,12 +248,18 @@ export default function UomPage() {
                   <MenuItem value="Inactive">Inactive</MenuItem>
                 </TextField>
               </Grid>
-              <Grid size={{ xs: 6, sm: 3, md: 3 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+                <TextField select label="Base UOM" value={groupBaseUomFilter} onChange={(e) => setGroupBaseUomFilter(e.target.value)} fullWidth size="small">
+                  <MenuItem value="All">All</MenuItem>
+                  {groupBaseUomFilterOptions.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3, md: 1.5 }}>
                 <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleGroupSearch} fullWidth>
                   Search
                 </Button>
               </Grid>
-              <Grid size={{ xs: 6, sm: 3, md: 3 }}>
+              <Grid size={{ xs: 6, sm: 3, md: 1.5 }}>
                 <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleGroupReset} fullWidth>
                   Reset
                 </Button>
@@ -262,12 +272,12 @@ export default function UomPage() {
               </Typography>
             ) : (
               <Box sx={{ opacity: isGroupLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
-                <UomGroupTable rows={groupViewRows} onViewRow={handleViewGroupRow} onEditRow={handleEditGroupRow} onDeleteRow={handleDeleteGroupRow} />
+                <UomGroupTable rows={filteredGroupRows} onViewRow={handleViewGroupRow} onEditRow={handleEditGroupRow} onDeleteRow={handleDeleteGroupRow} />
               </Box>
             )}
 
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
-              Showing {groupViewRows.length} of {groupViewRows.length} records
+              Showing {filteredGroupRows.length} of {groupViewRows.length} records
             </Typography>
           </Paper>
         </Grid>
@@ -301,18 +311,12 @@ export default function UomPage() {
                   <MenuItem value="Inactive">Inactive</MenuItem>
                 </TextField>
               </Grid>
-              <Grid size={{ xs: 12, sm: 4, md: 2 }}>
-                <TextField select label="Base UOM" value={baseUomFilter} onChange={(e) => setBaseUomFilter(e.target.value)} fullWidth size="small">
-                  <MenuItem value="All">All</MenuItem>
-                  {baseUomFilterOptions.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-                </TextField>
-              </Grid>
-              <Grid size={{ xs: 6, sm: 6, md: 1.2 }}>
+              <Grid size={{ xs: 6, sm: 6, md: 2 }}>
                 <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleUomSearch} fullWidth>
                   Search
                 </Button>
               </Grid>
-              <Grid size={{ xs: 6, sm: 6, md: 1.3 }}>
+              <Grid size={{ xs: 6, sm: 6, md: 2 }}>
                 <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleUomReset} fullWidth>
                   Reset
                 </Button>

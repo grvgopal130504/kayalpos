@@ -1,10 +1,8 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../middleware/errorHandler.js';
 
-// Flat GST rate applied to every line for now — matches the frontend's
-// lineSaleMockData.TAX_RATE (0.05) until Product's taxCode resolves to a
-// real per-product rate via the Tax Code master.
-const TAX_RATE = 0.05;
+import { TAX_RATE } from './saleConstants.js';
+import { completeHeldBill } from '../held-bill/heldBill.service.js';
 
 /**
  * Preview of the bill number the NEXT sale will get (e.g. "LS-00001"),
@@ -29,6 +27,10 @@ export async function createSale({
   tenantId, outletId, cashierName, customerId, customerName, lines,
   discountType, discountValue, paymentMethod, receivedAmount,
   cardType, cardLast4, cardBank, upiApp, upiTxnId, paymentReference,
+  // Set when the cart being paid was resumed from a held bill: `actor` is the
+  // authenticated user (req.user) and the held bill is closed out inside this
+  // same transaction — see heldBill.service.js's completeHeldBill.
+  heldBillId, actor,
 }) {
   return prisma.$transaction(async (tx) => {
     if (customerId) {
@@ -108,6 +110,10 @@ export async function createSale({
       },
       include: { lines: true },
     });
+
+    // Throws (rolling back this whole sale, stock deduction included) if the
+    // held bill was already paid/discarded — one held bill, one sale.
+    if (heldBillId) await completeHeldBill(tx, { user: actor, heldBillId, saleId: sale.id });
 
     await Promise.all(lineData.map((line) => tx.product.update({
       where: { id: line.productId },

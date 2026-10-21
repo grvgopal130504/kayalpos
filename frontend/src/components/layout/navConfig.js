@@ -15,6 +15,7 @@ import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import ReceiptOutlinedIcon from '@mui/icons-material/ReceiptOutlined';
+import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined';
 import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
@@ -72,6 +73,7 @@ export const SALES_ITEMS = [
   { key: 'sales-order', labelKey: 'nav.salesOrder', icon: ReceiptLongOutlinedIcon, path: '/sales-order', quickAccess: true, color: '#065F46' },
   { key: 'sales-return', labelKey: 'nav.salesReturn', icon: AssignmentReturnOutlinedIcon, path: '/sales-return', quickAccess: true, color: '#991B1B' },
   { key: 'sales-invoice', labelKey: 'nav.salesInvoice', icon: ReceiptOutlinedIcon, path: '/sales-invoice', quickAccess: true, color: '#166534' },
+  { key: 'day-close', labelKey: 'nav.dayClose', icon: EventAvailableOutlinedIcon, path: '/day-close', quickAccess: true, color: '#1D4ED8' },
 ];
 const SALES_PATHS = SALES_ITEMS.map((item) => item.path);
 

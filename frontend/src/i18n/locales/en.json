@@ -15,6 +15,7 @@
     "salesQuotation": "Sales Quotation",
     "salesOrder": "Sales Order",
     "salesInvoice": "Sales Invoice",
+    "dayClose": "Day Close",
     "barcodeLabel": "Barcode & Label",
     "stockIndent": "Stock Indent",
     "stockTransfer": "Stock Transfer",
@@ -41,7 +42,8 @@
     "sales-quotation": "Create and track customer quotations.",
     "sales-order": "Manage customer sales orders.",
     "sales-return": "Process and track sales returns.",
-    "sales-invoice": "Create and manage sales invoices."
+    "sales-invoice": "Create and manage sales invoices.",
+    "day-close": "Review the day's sales and close the shift."
   },
   "inventory": {
     "barcode-label": "Generate and print barcode labels.",

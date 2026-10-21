@@ -198,7 +198,6 @@ export default function SalesReturnPage() {
     }
   };
   const handlePrintReturn = () => dispatch(showToast('Print Return is coming soon', 'info'));
-  const handleEmailOrWhatsapp = () => dispatch(showToast('Email / WhatsApp is coming soon', 'info'));
 
   return (
     <Stack spacing={2}>
@@ -312,7 +311,6 @@ export default function SalesReturnPage() {
           <ReturnActionsCard
             onProcessReturn={handleProcessReturn}
             onPrintReturn={handlePrintReturn}
-            onEmailOrWhatsapp={handleEmailOrWhatsapp}
             printSettingsEnabled={printSettingsEnabled}
             onTogglePrintSettings={setPrintSettingsEnabled}
             disabled={cart.length === 0 || !originalInvoice || isProcessing}

@@ -14,12 +14,13 @@ export default function GlobalToast() {
   return (
     <Snackbar
       open={Boolean(toast)}
-      autoHideDuration={4000}
+      key={toast?.id}
+      autoHideDuration={toast?.duration ?? 4000}
       onClose={() => dispatch(clearToast())}
       anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
     >
       {toast ? (
-        <Alert onClose={() => dispatch(clearToast())} severity={toast.severity} variant="filled" sx={{ width: '100%' }}>
+        <Alert onClose={toast.closable === false ? undefined : () => dispatch(clearToast())} severity={toast.severity} variant="filled" sx={{ width: '100%' }}>
           {toast.message}
         </Alert>
       ) : undefined}

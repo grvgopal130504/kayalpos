@@ -45,6 +45,7 @@ model Tenant {
   customers Customer[]
   suppliers Supplier[]
   sales     Sale[]
+  heldBills HeldBill[]
   promotions Promotion[]
   giftVouchers GiftVoucher[]
   loyaltyPrograms LoyaltyProgram[]
@@ -119,6 +120,7 @@ model Outlet {
   addressLandmark String?
 
   sales Sale[]
+  heldBills HeldBill[]
   shiftSessions ShiftSession[]
   cashWithdrawals CashWithdrawal[]
   cashDeposits CashDeposit[]
@@ -276,6 +278,7 @@ model UomGroup {
   code        String
   name        String
   description String?
+  baseUom     String?
   status      RecordStatus @default(ACTIVE)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -288,7 +291,7 @@ model UomGroup {
 
 // Unit of Measure. Unlike Brand/UomGroup, `code` here is user-entered (e.g.
 // "KG", "PC") rather than auto-generated — UOM codes are short, meaningful
-// abbreviations the user picks, not a sequential number. `baseUom` is kept as
+// abbreviations the user picks, not a sequential number. (The base UOM now lives on UomGroup.) `baseUom` is kept as
 // a plain string (the base unit's own code, e.g. "KG") rather than a
 // self-referencing foreign key, same "free text over premature FK" choice
 // already made for Product.brand — nothing else needs to join on it yet, and
@@ -301,7 +304,6 @@ model Uom {
   name             String
   groupId          String?
   group            UomGroup?    @relation(fields: [groupId], references: [id])
-  baseUom          String?
   conversionFactor Decimal?     @db.Decimal(14, 6)
   status           RecordStatus @default(ACTIVE)
   createdAt        DateTime     @default(now())
@@ -408,6 +410,7 @@ model Product {
   @@index([tenantId, name])
 
   saleLines SaleLine[]
+  heldBillLines HeldBillLine[]
   returnItems SalesReturnItem[]
   sellingPrices SellingPrice[]
   batchSerials BatchSerial[]
@@ -628,6 +631,7 @@ model Customer {
   @@index([tenantId, mobile])
 
   sales Sale[]
+  heldBills HeldBill[]
   salesQuotations SalesQuotation[]
   salesReturns SalesReturn[]
   salesOrders SalesOrder[]
@@ -767,6 +771,7 @@ model Sale {
 
   lines SaleLine[]
   returns SalesReturn[]
+  heldBill HeldBill?
 
   @@unique([tenantId, billNo])
   @@index([tenantId, status])
@@ -794,6 +799,92 @@ model SaleLine {
   returnItems SalesReturnItem[]
 
   @@index([saleId])
+  @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// Held ("parked") bills. A held bill is a cart a cashier set aside to serve
+// the next customer — it is NOT a sale: no payment, no invoice, no stock
+// movement. It deliberately lives in its own tables rather than as
+// Sale.status = HELD, because every Sale report in the app (cashier panel,
+// customer totals, discount summary, tender reports) counts Sale rows
+// without a status filter and would otherwise count parked carts as revenue.
+//
+// Lifecycle: HELD -> RESUMED (cashier picked it back up; no longer offered
+// to anyone else) -> HELD again (re-parked, same row, lines replaced) or
+// COMPLETED (paid — stamped inside the same transaction as the Sale, with
+// saleId pointing at it, so the same held bill can never settle twice).
+// CANCELLED = discarded by the cashier. Rows are never deleted.
+enum HeldBillStatus {
+  HELD
+  RESUMED
+  COMPLETED
+  CANCELLED
+}
+
+model HeldBill {
+  id             String         @id @default(cuid())
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+  outletId       String?
+  outlet         Outlet?        @relation(fields: [outletId], references: [id])
+  // Per-tenant temporary reference ("HB-00001"). The real bill number
+  // (LS-xxxxx) is only issued when the sale is paid.
+  reference      String
+  // The cashier who parked it (JWT user id + display name at the time).
+  userId         String
+  cashierName    String
+  customerId     String?
+  customer       Customer?      @relation(fields: [customerId], references: [id])
+  customerName   String         @default("Walk-in Customer")
+  discountType   String         @default("amount")
+  discountValue  Decimal        @default(0) @db.Decimal(12, 2)
+  discountAmount Decimal        @default(0) @db.Decimal(12, 2)
+  subTotal       Decimal        @default(0) @db.Decimal(12, 2)
+  taxAmount      Decimal        @default(0) @db.Decimal(12, 2)
+  grandTotal     Decimal        @default(0) @db.Decimal(12, 2)
+  itemCount      Int            @default(0)
+  status         HeldBillStatus @default(HELD)
+  // When it was (last) parked — reset every time the bill is held again.
+  heldAt         DateTime       @default(now())
+  // Client-generated idempotency token for the "hold" request: a retry of
+  // the same request (timeout, double tap) returns the existing row instead
+  // of creating a duplicate held bill.
+  clientToken    String?
+  // Who has it open right now / when (set by resume, cleared by re-hold).
+  resumedById    String?
+  resumedAt      DateTime?
+  completedAt    DateTime?
+  // The Sale this bill became when paid. @unique = one held bill can only
+  // ever produce one sale.
+  saleId         String?        @unique
+  sale           Sale?          @relation(fields: [saleId], references: [id])
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  lines HeldBillLine[]
+
+  @@unique([tenantId, reference])
+  @@unique([tenantId, clientToken])
+  @@index([tenantId, outletId, status])
+  @@index([tenantId, userId, status])
+}
+
+model HeldBillLine {
+  id         String   @id @default(cuid())
+  heldBillId String
+  heldBill   HeldBill @relation(fields: [heldBillId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  code       String
+  name       String
+  uom        String
+  qty        Int
+  price      Decimal  @db.Decimal(12, 2)
+  taxRate    Decimal  @db.Decimal(5, 4)
+  amount     Decimal  @db.Decimal(12, 2)
+
+  @@index([heldBillId])
   @@index([productId])
 }
 

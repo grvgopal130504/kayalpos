@@ -21,6 +21,8 @@ import {
   selectLanguage, setLanguage,
   selectSidebarIconColorsEnabled, setSidebarIconColorsEnabled,
   selectSidebarAnimationsEnabled, setSidebarAnimationsEnabled,
+  selectEmailButtonEnabled, setEmailButtonEnabled,
+  selectWhatsappButtonEnabled, setWhatsappButtonEnabled,
   FONT_OPTIONS, LANGUAGE_OPTIONS,
 } from '../../features/ui/uiSlice';
 import { ACCENT_THEMES, accentCssBackground } from '../../theme/accentThemes';
@@ -87,7 +89,7 @@ function FontRow({ label, fontValue, onFontChange, styleValue, onStyleToggle }) 
 /**
  * Account/appearance preferences — Profile, Theme (accent color + light/dark
  * mode), Fonts (sidebar + body, each with a family picker and B/I/U style
- * toggles), Language, and Tabs (a 1-10 "max open tabs" slider + a bulk close
+ * toggles), Language, Email & WhatsApp (button toggles), and Tabs (a 1-10 "max open tabs" slider + a bulk close
  * action). Theme mode/accent, the fonts, and the tab limit all drive the
  * live app (see main.jsx/theme.js, Sidebar.jsx, and AppShell.jsx) via
  * uiSlice, so changes here apply immediately app-wide — lowering the tab
@@ -107,6 +109,8 @@ export default function SettingsPage() {
   const language = useAppSelector(selectLanguage);
   const sidebarIconColorsEnabled = useAppSelector(selectSidebarIconColorsEnabled);
   const sidebarAnimationsEnabled = useAppSelector(selectSidebarAnimationsEnabled);
+  const emailButtonEnabled = useAppSelector(selectEmailButtonEnabled);
+  const whatsappButtonEnabled = useAppSelector(selectWhatsappButtonEnabled);
 
   const handleManageProfile = () => navigate('/settings/profile');
 
@@ -214,6 +218,34 @@ export default function SettingsPage() {
                 styleValue={bodyFontStyle}
                 onStyleToggle={(key) => dispatch(toggleBodyFontStyle(key))}
               />
+            </Stack>
+          </InfoCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+          <InfoCard title="Email & WhatsApp">
+            <Stack spacing={1} sx={{ height: '100%', justifyContent: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={emailButtonEnabled}
+                    onChange={(_, checked) => dispatch(setEmailButtonEnabled(checked))}
+                  />
+                }
+                label="Enable Email"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={whatsappButtonEnabled}
+                    onChange={(_, checked) => dispatch(setWhatsappButtonEnabled(checked))}
+                  />
+                }
+                label="Enable WhatsApp"
+              />
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Show the Email and WhatsApp buttons on all pages that have them (Line Sale, Sales Return, ...). They stay hidden until enabled here.
+              </Typography>
             </Stack>
           </InfoCard>
         </Grid>

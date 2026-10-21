@@ -9,6 +9,7 @@ const COLUMNS = [
   { key: 'code', label: 'UOM Group Code' },
   { key: 'name', label: 'UOM Group Name' },
   { key: 'description', label: 'Description' },
+  { key: 'baseUom', label: 'Base UOM' },
   { key: 'totalUoms', label: 'Total UOMs' },
   { key: 'status', label: 'Status' },
   { key: 'action', label: 'Action' },
@@ -38,6 +39,7 @@ export default function UomGroupTable({ rows, onViewRow, onEditRow, onDeleteRow 
               <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.description}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.baseUom}</TableCell>
               <TableCell>{row.totalUoms}</TableCell>
               <TableCell>
                 <Chip

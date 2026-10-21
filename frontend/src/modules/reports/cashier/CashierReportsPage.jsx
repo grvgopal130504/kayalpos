@@ -103,7 +103,10 @@ export default function CashierReportsPage() {
     setOutlet('All Outlets');
     setCashier('All Cashiers');
   };
-  const handleOpenReport = (item) => dispatch(showToast(`${item.label} report is coming soon`, 'info'));
+  const handleOpenReport = (item) => {
+    if (item.path) navigate(item.path);
+    else dispatch(showToast(`${item.label} report is coming soon`, 'info'));
+  };
 
   return (
     <Stack spacing={2}>

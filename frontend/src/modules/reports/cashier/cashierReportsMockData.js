@@ -4,6 +4,7 @@ import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import BalanceOutlinedIcon from '@mui/icons-material/BalanceOutlined';
 import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
+import CompareArrowsOutlinedIcon from '@mui/icons-material/CompareArrowsOutlined';
 
 /**
  * TEMPORARY mock data for the Cashier Reports screen. There's no Reports
@@ -29,4 +30,5 @@ export const CASHIER_REPORT_ITEMS = [
   { key: 'cash-shortage-excess', label: 'Cash Shortage / Excess', description: 'View shortage or excess amount recorded in cash handling.', icon: BalanceOutlinedIcon, color: '#E5484D' },
   { key: 'cash-drawer-report', label: 'Cash Drawer Report', description: 'View cash drawer opening, closing and transaction summary.', icon: PointOfSaleOutlinedIcon, color: '#7C3AED' },
   { key: 'payment-reconciliation', label: 'Payment Reconciliation', description: 'Reconcile payments received with sales transactions.', icon: FactCheckOutlinedIcon, color: '#0EA5A4' },
+  { key: 'shift-variance', label: 'Shift-to-Shift Variance', description: 'Compare consecutive shifts: closing cash variance, handover differences and pending handovers.', icon: CompareArrowsOutlinedIcon, color: '#B45309', path: '/reports/cashier/shift-variance' },
 ];

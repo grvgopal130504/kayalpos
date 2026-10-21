@@ -1,8 +1,7 @@
-import { Paper, Stack, Button, FormControlLabel, Checkbox, Typography, IconButton } from '@mui/material';
+import { Paper, Stack, Button, FormControlLabel, Checkbox, Typography } from '@mui/material';
 import AutorenewOutlinedIcon from '@mui/icons-material/AutorenewOutlined';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
-import WhatsAppIcon from '@mui/icons-material/WhatsApp';
-import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import EmailWhatsappButtons from '../../../components/common/EmailWhatsappButtons';
 
 /**
  * Sits alongside OriginalInvoiceSummaryCard / RefundSummaryCard /
@@ -11,7 +10,7 @@ import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
  * padding and visibly doesn't line up with its siblings.
  */
 export default function ReturnActionsCard({
-  onProcessReturn, onPrintReturn, onEmailOrWhatsapp,
+  onProcessReturn, onPrintReturn,
   printSettingsEnabled, onTogglePrintSettings, disabled,
 }) {
   return (
@@ -39,16 +38,7 @@ export default function ReturnActionsCard({
           Print Return (F10)
         </Button>
 
-        <Button
-          variant="outlined"
-          size="large"
-          fullWidth
-          color="success"
-          startIcon={<WhatsAppIcon />}
-          onClick={onEmailOrWhatsapp}
-        >
-          Email / WhatsApp
-        </Button>
+        <EmailWhatsappButtons />
 
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', pt: 0.5 }}>
           <FormControlLabel
@@ -62,9 +52,6 @@ export default function ReturnActionsCard({
             }
             label={<Typography variant="body2">Print settings</Typography>}
           />
-          <IconButton size="small">
-            <SettingsOutlinedIcon fontSize="small" />
-          </IconButton>
         </Stack>
       </Stack>
     </Paper>
