@@ -58,6 +58,7 @@ const OVERRIDES = {
   '/reports/inventory': { label: 'Inventory Reports', icon: BarChartOutlinedIcon },
   '/reports/purchase': { label: 'Purchase Reports', icon: BarChartOutlinedIcon },
   '/reports/cashier': { label: 'Cashier Reports', icon: BarChartOutlinedIcon },
+  '/reports/cashier/shift-variance': { label: 'Shift-to-Shift Variance', icon: BarChartOutlinedIcon },
   '/reports/financial': { label: 'Financial Reports', icon: BarChartOutlinedIcon },
   '/reports/sap': { label: 'SAP Reports', icon: BarChartOutlinedIcon },
 

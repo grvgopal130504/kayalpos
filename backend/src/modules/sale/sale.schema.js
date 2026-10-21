@@ -42,6 +42,10 @@ export const createSaleSchema = z.object({
   // accepted regardless of tender. Same "checkout doesn't send this yet"
   // optionality; the Other Payments report shows "—" when unset.
   paymentReference: z.string().trim().min(1).max(120, 'Reference cannot exceed 120 characters').optional().nullable(),
+  // Present only when this cart was resumed from a held bill (see
+  // modules/held-bill). The held bill is marked COMPLETED in the same
+  // transaction as the sale, which also prevents it ever being paid twice.
+  heldBillId: z.string().trim().min(1).optional().nullable(),
 });
 
 // Query params for the Cash Sales report (GET /sales/cash-summary). `date`

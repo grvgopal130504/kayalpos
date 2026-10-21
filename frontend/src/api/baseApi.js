@@ -20,6 +20,6 @@ export const baseApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'Brand', 'Outlet', 'Warehouse', 'Product', 'Customer', 'Supplier', 'Sale', 'Promotion', 'GiftVoucher', 'LoyaltyProgram', 'SalesQuotation', 'SalesReturn', 'SalesOrder', 'SalesInvoice', 'BarcodeLabel', 'StockIndent', 'StockTransfer', 'StockReceipt', 'StockReturn', 'StockWastage', 'StockCount', 'ShiftSession', 'CashWithdrawal', 'CashDeposit', 'CashTransfer', 'CashDrawerOpening', 'ShiftClosing', 'CashReconciliation', 'ShortageExcess', 'CashierWiseSales', 'CashierPanel', 'Expense', 'Company', 'UomGroup', 'Uom', 'TaxCode', 'HsnSac'],
+  tagTypes: ['Auth', 'Brand', 'Outlet', 'Warehouse', 'Product', 'Customer', 'Supplier', 'Sale', 'Promotion', 'GiftVoucher', 'LoyaltyProgram', 'SalesQuotation', 'SalesReturn', 'SalesOrder', 'SalesInvoice', 'BarcodeLabel', 'StockIndent', 'StockTransfer', 'StockReceipt', 'StockReturn', 'StockWastage', 'StockCount', 'ShiftSession', 'CashWithdrawal', 'CashDeposit', 'CashTransfer', 'CashDrawerOpening', 'ShiftClosing', 'CashReconciliation', 'ShortageExcess', 'CashierWiseSales', 'CashierPanel', 'Expense', 'Company', 'UomGroup', 'Uom', 'TaxCode', 'HsnSac', 'HeldBill'],
   endpoints: () => ({}),
 });

@@ -134,7 +134,9 @@ router.get('/other-summary', validateRequest(otherPaymentsQuerySchema, 'query'),
 // they logged into), never from the request body, so it can't be spoofed.
 router.post('/', validateRequest(createSaleSchema), async (req, res, next) => {
   try {
-    const sale = await createSale({ tenantId: req.user.tenantId, outletId: req.user.outletId, ...req.body });
+    const sale = await createSale({
+      tenantId: req.user.tenantId, outletId: req.user.outletId, ...req.body, actor: req.user,
+    });
     res.status(201).json({ success: true, data: sale });
   } catch (err) {
     next(err);

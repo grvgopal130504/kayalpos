@@ -16,7 +16,6 @@ const router = createCrudRouter({
     id: true,
     code: true,
     name: true,
-    baseUom: true,
     conversionFactor: true,
     status: true,
     createdAt: true,

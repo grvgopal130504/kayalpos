@@ -1,16 +1,16 @@
-import { Stack, Button, FormControlLabel, Checkbox, Typography, IconButton } from '@mui/material';
+import { Stack, Button, FormControlLabel, Checkbox, Typography } from '@mui/material';
 import LocalPrintshopOutlinedIcon from '@mui/icons-material/LocalPrintshopOutlined';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
-import WhatsAppIcon from '@mui/icons-material/WhatsApp';
-import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import EmailWhatsappButtons from '../../../components/common/EmailWhatsappButtons';
 
 /**
  * Right-most column of the bottom row: the final "settle the sale" actions.
+ * The Email / WhatsApp buttons (shared component) only render when enabled in Settings.
  * Kept as its own component (rather than folded into PaymentMethodsCard) so
  * it can sit in its own Grid slot, matching the reference's 3-column split.
  */
 export default function PaymentActionsCard({
-  onPayAndPrint, onPrintInvoice, onEmailOrWhatsapp,
+  onPayAndPrint, onPrintInvoice,
   printSettingsEnabled, onTogglePrintSettings, disabled,
 }) {
   return (
@@ -37,16 +37,7 @@ export default function PaymentActionsCard({
         Print Invoice (F10)
       </Button>
 
-      <Button
-        variant="outlined"
-        size="large"
-        fullWidth
-        color="success"
-        startIcon={<WhatsAppIcon />}
-        onClick={onEmailOrWhatsapp}
-      >
-        Email / WhatsApp
-      </Button>
+      <EmailWhatsappButtons />
 
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', pt: 0.5 }}>
         <FormControlLabel
@@ -60,9 +51,6 @@ export default function PaymentActionsCard({
           }
           label={<Typography variant="body2">Print settings</Typography>}
         />
-        <IconButton size="small">
-          <SettingsOutlinedIcon fontSize="small" />
-        </IconButton>
       </Stack>
     </Stack>
   );

@@ -11,7 +11,9 @@
     "prisma:migrate": "prisma migrate dev",
     "db:seed": "node prisma/seed.js",
     "db:reset-connections": "node scripts/reset-db-connections.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:held-bills": "node test/heldBill.integration.mjs",
+    "test:shift-variance": "node test/shiftVariance.integration.mjs"
   },
   "keywords": [],
   "author": "",

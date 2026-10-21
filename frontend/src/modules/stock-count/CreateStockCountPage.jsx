@@ -12,7 +12,6 @@ import AddIcon from '@mui/icons-material/Add';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
-import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 
@@ -20,6 +19,7 @@ import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
+import FormTimePicker from '../../components/form/FormTimePicker';
 import FormSelect from '../../components/form/FormSelect';
 import { useGetProductsQuery } from '../../api/productApi';
 import {
@@ -311,18 +311,8 @@ export default function CreateStockCountPage({ id: propId, onBack }) {
                     </RadioGroup>
                   </Box>
                   <FormTextField name="binRack" label="Bin / Rack (if any)" placeholder="Enter Bin / Rack" />
-                  <FormTextField
-                    name="startCountTime"
-                    label="Start Count Time"
-                    placeholder="Select Time"
-                    slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                  />
-                  <FormTextField
-                    name="endCountTime"
-                    label="End Count Time"
-                    placeholder="Select Time"
-                    slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarTodayOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                  />
+                  <FormTimePicker name="startCountTime" label="Start Count Time" placeholder="Select Time" />
+                  <FormTimePicker name="endCountTime" label="End Count Time" placeholder="Select Time" />
                 </Stack>
               </Paper>
             </Grid>

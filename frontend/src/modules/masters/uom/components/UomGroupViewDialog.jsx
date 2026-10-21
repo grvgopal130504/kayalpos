@@ -31,6 +31,7 @@ export default function UomGroupViewDialog({ open, row, onClose, onEdit }) {
           <Field label="Group Code" value={row.code} />
           <Field label="Group Name" value={row.name} />
           <Field label="Description" value={row.description} />
+          <Field label="Base UOM" value={row.baseUom} />
           <Field label="Total UOMs" value={row.totalUoms} />
           <Grid size={12}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>Status</Typography>

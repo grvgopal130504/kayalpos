@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Box, IconButton, Tooltip, Popover, Typography } from '@mui/material';
+import { Box, IconButton, Tooltip } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
@@ -11,7 +11,6 @@ import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { selectOpenTabPaths, closeTab, closeAllTabs } from '../../features/tabs/tabsSlice';
 import { getPageMeta, HOME_TAB_PATH } from './pageMeta';
-import TabsSettingsCard from '../../modules/settings/TabsSettingsCard';
 
 const SCROLL_STEP = 240;
 
@@ -31,7 +30,6 @@ export default function TabBar() {
   const location = useLocation();
   const openPaths = useAppSelector(selectOpenTabPaths);
   const scrollerRef = useRef(null);
-  const [tabsPopoverAnchor, setTabsPopoverAnchor] = useState(null);
 
   const handleScroll = (dir) => {
     scrollerRef.current?.scrollBy({ left: dir * SCROLL_STEP, behavior: 'smooth' });
@@ -138,24 +136,12 @@ export default function TabBar() {
         </IconButton>
       </Tooltip>
 
-      <Tooltip title="Tab settings">
-        <IconButton size="small" onClick={(e) => setTabsPopoverAnchor(e.currentTarget)}>
+      <Tooltip title="Settings">
+        <IconButton size="small" onClick={() => navigate('/settings')} aria-label="Open Settings">
           <SettingsOutlinedIcon fontSize="small" />
         </IconButton>
       </Tooltip>
 
-      <Popover
-        open={Boolean(tabsPopoverAnchor)}
-        anchorEl={tabsPopoverAnchor}
-        onClose={() => setTabsPopoverAnchor(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <Box sx={{ width: 320, p: 2.5 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>Tabs</Typography>
-          <TabsSettingsCard />
-        </Box>
-      </Popover>
     </Box>
   );
 }

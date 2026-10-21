@@ -299,17 +299,12 @@ export default function CreateSalesOrderPage({ id: propId, onBack }) {
             </Grid>
           </Grid>
 
-          <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
-            <Grid size={{ xs: 12, lg: 8 }}>
-              <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
-                <OrderItemsTable onAddItem={handleAddItem} products={products} />
-              </Paper>
-            </Grid>
-            <Grid size={{ xs: 12, lg: 4 }}>
-              <OrderTotalsCard />
-            </Grid>
-          </Grid>
+          {/* Full-width items grid; Terms & Conditions, Notes and Summary
+              share the one row below it. */}
+          <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
+            <OrderItemsTable onAddItem={handleAddItem} products={products} />
+          </Paper>
 
           <TermsAndNotesField />
         </Stack>
@@ -323,5 +318,5 @@ export default function CreateSalesOrderPage({ id: propId, onBack }) {
 function TermsAndNotesField() {
   const { watch, setValue } = useFormContext();
   const notes = watch('notes');
-  return <OrderTermsAndNotes notes={notes} onNotesChange={(value) => setValue('notes', value)} />;
+  return <OrderTermsAndNotes notes={notes} onNotesChange={(value) => setValue('notes', value)} summary={<OrderTotalsCard />} />;
 }

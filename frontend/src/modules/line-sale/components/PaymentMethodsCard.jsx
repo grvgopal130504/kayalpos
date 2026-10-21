@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Box, Stack, Typography, ButtonBase, TextField, InputAdornment, Paper } from '@mui/material';
 import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined';
@@ -19,6 +20,28 @@ export default function PaymentMethodsCard({
   methods, selectedMethod, onSelectMethod,
   receivedAmount, onReceivedAmountChange, quickAmounts, changeAmount,
 }) {
+  // The field keeps its own text so typing behaves like a normal amount box:
+  // empty when zero (no leading "0" in front of what you type), and "84."
+  // survives mid-typing. The parent still receives a clean number, and the
+  // text re-syncs whenever the amount changes from outside (quick-amount
+  // chips, clearing the bill).
+  const [amountText, setAmountText] = useState(receivedAmount ? String(receivedAmount) : '');
+  useEffect(() => {
+    setAmountText((current) => (Number(current) === Number(receivedAmount)
+      ? current
+      : (receivedAmount ? String(receivedAmount) : '')));
+  }, [receivedAmount]);
+
+  const handleAmountChange = (e) => {
+    // digits and at most one decimal point, max 2 decimal places
+    let text = e.target.value.replace(/[^\d.]/g, '');
+    const firstDot = text.indexOf('.');
+    if (firstDot !== -1) text = text.slice(0, firstDot + 1) + text.slice(firstDot + 1).replace(/\./g, '').slice(0, 2);
+    text = text.replace(/^0+(?=\d)/, ''); // "084" -> "84"
+    setAmountText(text);
+    onReceivedAmountChange(Number(text) || 0);
+  };
+
   return (
     <InfoCard title="Payment Methods" dense sx={{ height: '100%' }}>
       <Stack spacing={2}>
@@ -59,11 +82,14 @@ export default function PaymentMethodsCard({
             <TextField
               label="Received Amount (₹)"
               size="small"
-              type="number"
               fullWidth
-              value={receivedAmount}
-              onChange={(e) => onReceivedAmountChange(Math.max(0, Number(e.target.value) || 0))}
-              slotProps={{ input: { startAdornment: <InputAdornment position="start">₹</InputAdornment> } }}
+              value={amountText}
+              onChange={handleAmountChange}
+              placeholder="0"
+              slotProps={{
+                input: { startAdornment: <InputAdornment position="start">₹</InputAdornment> },
+                htmlInput: { inputMode: 'decimal' },
+              }}
             />
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, mb: 0.5 }}>
               Quick Amount

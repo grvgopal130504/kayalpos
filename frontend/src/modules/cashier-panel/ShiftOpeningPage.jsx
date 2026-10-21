@@ -15,6 +15,7 @@ import { logout, selectCurrentUser, selectActiveOutletId } from '../../features/
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
+import FormTimePicker from '../../components/form/FormTimePicker';
 import FormCheckbox from '../../components/form/FormCheckbox';
 import { useGetOutletQuery } from '../../api/outletApi';
 import { useShiftSessionStatusQuery, useOpenShiftMutation } from '../../api/shiftSessionApi';
@@ -252,18 +253,8 @@ export default function ShiftOpeningPage() {
                     <FormDatePicker name="shiftDate" label="Shift Date *" />
                     <FormTextField name="shiftNo" label="Shift No *" disabled slotProps={{ input: { readOnly: true } }} />
                     <FormTextField name="shiftName" label="Shift Name" />
-                    <FormTextField
-                      name="startTime"
-                      label="Shift Start Time *"
-                      type="time"
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    />
-                    <FormTextField
-                      name="endTime"
-                      label="Expected End Time"
-                      type="time"
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    />
+                    <FormTimePicker name="startTime" label="Shift Start Time *" valueFormat="24h" />
+                    <FormTimePicker name="endTime" label="Expected End Time" valueFormat="24h" />
                     <FormTextField name="description" label="Shift Description" multiline minRows={3} placeholder="Enter description (optional)" />
                   </Stack>
                 </Paper>

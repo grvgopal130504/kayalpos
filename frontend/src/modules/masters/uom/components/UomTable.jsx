@@ -9,7 +9,6 @@ const COLUMNS = [
   { key: 'code', label: 'UOM Code' },
   { key: 'name', label: 'UOM Name' },
   { key: 'group', label: 'UOM Group' },
-  { key: 'baseUom', label: 'Base UOM' },
   { key: 'conversionFactor', label: 'Conversion Factor' },
   { key: 'status', label: 'Status' },
   { key: 'action', label: 'Action' },
@@ -39,7 +38,6 @@ export default function UomTable({ rows, onViewRow, onEditRow, onDeleteRow }) {
               <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.group}</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.baseUom}</TableCell>
               <TableCell>{row.conversionFactor}</TableCell>
               <TableCell>
                 <Chip
