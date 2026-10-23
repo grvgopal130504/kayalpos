@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Box, Stack, Typography, ButtonBase, TextField, InputAdornment, Paper } from '@mui/material';
+import { Box, Stack, Typography, ButtonBase, InputBase, Paper } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined';
 import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined';
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import CreditScoreOutlinedIcon from '@mui/icons-material/CreditScoreOutlined';
-import InfoCard from '../../../components/common/InfoCard';
+import CheckIcon from '@mui/icons-material/Check';
 import { formatCurrency } from '../../../utils/format';
 
 const METHOD_ICONS = {
@@ -16,14 +17,19 @@ const METHOD_ICONS = {
   credit: CreditScoreOutlinedIcon,
 };
 
+/**
+ * Step 2 "Payment Method" card: method tiles, the received amount with the
+ * change to return, and one-tap "quick cash" chips. `exactAmount` is the
+ * amount payable, so "Exact" fills the received amount with the bill total.
+ */
 export default function PaymentMethodsCard({
   methods, selectedMethod, onSelectMethod,
-  receivedAmount, onReceivedAmountChange, quickAmounts, changeAmount,
+  receivedAmount, onReceivedAmountChange, quickAmounts, exactAmount, changeAmount,
 }) {
   // The field keeps its own text so typing behaves like a normal amount box:
   // empty when zero (no leading "0" in front of what you type), and "84."
   // survives mid-typing. The parent still receives a clean number, and the
-  // text re-syncs whenever the amount changes from outside (quick-amount
+  // text re-syncs whenever the amount changes from outside (quick-cash
   // chips, clearing the bill).
   const [amountText, setAmountText] = useState(receivedAmount ? String(receivedAmount) : '');
   useEffect(() => {
@@ -42,98 +48,119 @@ export default function PaymentMethodsCard({
     onReceivedAmountChange(Number(text) || 0);
   };
 
+  const selected = methods.find((m) => m.key === selectedMethod);
+  const short = changeAmount < 0;
+  const exact = Number(exactAmount.toFixed(2));
+  const chips = [{ label: 'Exact', value: exact }, ...quickAmounts.map((a) => ({ label: formatCurrency(a), value: a }))];
+
   return (
-    <InfoCard title="Payment Methods" dense sx={{ height: '100%' }}>
-      <Stack spacing={2}>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          {methods.map((m) => {
-            const Icon = METHOD_ICONS[m.key];
-            const active = m.key === selectedMethod;
+    <Paper variant="outlined" sx={{ borderRadius: 3, p: 2.5 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Payment Method</Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          Paying by <b style={{ fontWeight: 800 }}>{selected?.label}</b>
+        </Typography>
+      </Stack>
+
+      <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(5, 1fr)' } }}>
+        {methods.map((m) => {
+          const Icon = METHOD_ICONS[m.key];
+          const active = m.key === selectedMethod;
+          return (
+            <ButtonBase
+              key={m.key}
+              onClick={() => onSelectMethod(m.key)}
+              aria-pressed={active}
+              sx={{
+                position: 'relative', py: 2, px: 1, borderRadius: 3, gap: 1,
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                border: '2px solid', borderColor: active ? 'primary.main' : 'divider',
+                bgcolor: active ? (t) => alpha(t.palette.primary.main, 0.08) : 'background.paper',
+                transition: 'border-color .15s, background-color .15s, box-shadow .15s',
+                boxShadow: active ? (t) => `0 6px 16px ${alpha(t.palette.primary.main, 0.18)}` : 'none',
+                '&:hover': { borderColor: active ? 'primary.main' : 'text.disabled' },
+              }}
+            >
+              {active && (
+                <Box sx={{
+                  position: 'absolute', top: -8, right: -8, width: 22, height: 22, borderRadius: '50%',
+                  bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center',
+                }}
+                >
+                  <CheckIcon sx={{ fontSize: 14 }} />
+                </Box>
+              )}
+              <Box sx={{ width: 44, height: 44, borderRadius: 2.5, display: 'grid', placeItems: 'center', bgcolor: `${m.color}1F` }}>
+                <Icon sx={{ color: m.color, fontSize: 22 }} />
+              </Box>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>{m.label}</Typography>
+            </ButtonBase>
+          );
+        })}
+      </Box>
+
+      <Box sx={{ mt: 2.5, p: 2, borderRadius: 3, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>Received Amount (₹)</Typography>
+            <Stack
+              direction="row"
+              sx={{
+                mt: 0.5, px: 1.5, height: 56, alignItems: 'center', gap: 1, borderRadius: 2,
+                bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
+                '&:focus-within': { borderColor: 'primary.main', boxShadow: (t) => `0 0 0 3px ${alpha(t.palette.primary.main, 0.15)}` },
+              }}
+            >
+              <Typography sx={{ color: 'text.secondary', fontSize: 20, fontWeight: 700 }}>₹</Typography>
+              <InputBase
+                fullWidth
+                value={amountText}
+                onChange={handleAmountChange}
+                placeholder="0"
+                inputProps={{ inputMode: 'decimal', 'aria-label': 'Received amount' }}
+                sx={{ fontSize: 24, fontWeight: 800 }}
+              />
+            </Stack>
+          </Box>
+
+          <Box
+            sx={{
+              flex: 1, minWidth: 0, px: 2, py: 1, borderRadius: 2, border: '1px solid',
+              display: 'flex', flexDirection: 'column', justifyContent: 'center',
+              borderColor: (t) => alpha(short ? t.palette.error.main : t.palette.success.main, 0.35),
+              bgcolor: (t) => alpha(short ? t.palette.error.main : t.palette.success.main, 0.1),
+            }}
+          >
+            <Typography variant="caption" sx={{ color: short ? 'error.main' : 'success.main', fontWeight: 600 }}>
+              {short ? 'Amount short' : 'Change to return'}
+            </Typography>
+            <Typography sx={{ fontSize: 24, fontWeight: 800, color: short ? 'error.main' : 'success.main', lineHeight: 1.3 }}>
+              {formatCurrency(Math.abs(changeAmount), { decimals: true })}
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>Quick cash</Typography>
+          {chips.map((chip) => {
+            const active = Number(receivedAmount) === chip.value && chip.value > 0;
             return (
               <ButtonBase
-                key={m.key}
-                onClick={() => onSelectMethod(m.key)}
+                key={chip.label}
+                onClick={() => onReceivedAmountChange(chip.value)}
                 sx={{
-                  flex: '1 1 90px',
-                  minWidth: 90,
-                  py: 1,
-                  px: 1,
-                  borderRadius: 2,
-                  border: '1.5px solid',
-                  borderColor: active ? m.color : 'divider',
-                  bgcolor: active ? `${m.color}14` : 'transparent',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 0.5,
+                  px: 1.75, py: 0.5, borderRadius: 5, fontSize: 12.5, fontWeight: 700,
+                  border: '1px solid', borderColor: active ? 'primary.main' : 'divider',
+                  bgcolor: active ? (t) => alpha(t.palette.primary.main, 0.1) : 'background.paper',
+                  color: active ? 'primary.main' : 'text.primary',
                 }}
               >
-                <Icon fontSize="small" sx={{ color: m.color }} />
-                <Typography variant="caption" sx={{ fontWeight: 700, color: active ? m.color : 'text.primary' }}>
-                  {m.label}
-                </Typography>
+                {chip.label}
               </ButtonBase>
             );
           })}
         </Stack>
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <TextField
-              label="Received Amount (₹)"
-              size="small"
-              fullWidth
-              value={amountText}
-              onChange={handleAmountChange}
-              placeholder="0"
-              slotProps={{
-                input: { startAdornment: <InputAdornment position="start">₹</InputAdornment> },
-                htmlInput: { inputMode: 'decimal' },
-              }}
-            />
-            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, mb: 0.5 }}>
-              Quick Amount
-            </Typography>
-            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-              {quickAmounts.map((amt) => {
-                const active = Number(receivedAmount) === amt;
-                return (
-                  <ButtonBase
-                    key={amt}
-                    onClick={() => onReceivedAmountChange(amt)}
-                    sx={{
-                      px: 1.5, py: 0.5, borderRadius: 1.5,
-                      border: '1px solid', borderColor: active ? 'success.main' : 'divider',
-                      bgcolor: active ? 'rgba(34,160,107,0.1)' : 'transparent',
-                      color: active ? 'success.main' : 'text.primary',
-                      fontSize: 12.5, fontWeight: 700,
-                    }}
-                  >
-                    {formatCurrency(amt)}
-                  </ButtonBase>
-                );
-              })}
-            </Stack>
-          </Box>
-
-          <Paper
-            variant="outlined"
-            sx={{
-              flex: '0 0 auto', minWidth: { sm: 150 }, borderRadius: 2, p: 1.5,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              bgcolor: 'background.default',
-            }}
-          >
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Change Amount</Typography>
-            <Typography
-              variant="subtitle1"
-              sx={{ fontWeight: 800, color: changeAmount < 0 ? 'error.main' : 'text.primary' }}
-            >
-              {formatCurrency(Math.abs(changeAmount), { decimals: true })}
-            </Typography>
-          </Paper>
-        </Stack>
-      </Stack>
-    </InfoCard>
+      </Box>
+    </Paper>
   );
 }
