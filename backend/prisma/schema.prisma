@@ -46,6 +46,7 @@ model Tenant {
   suppliers Supplier[]
   sales     Sale[]
   heldBills HeldBill[]
+  tczBills TczOpos[]
   promotions Promotion[]
   giftVouchers GiftVoucher[]
   loyaltyPrograms LoyaltyProgram[]
@@ -121,6 +122,7 @@ model Outlet {
 
   sales Sale[]
   heldBills HeldBill[]
+  tczBills TczOpos[]
   shiftSessions ShiftSession[]
   cashWithdrawals CashWithdrawal[]
   cashDeposits CashDeposit[]
@@ -411,6 +413,7 @@ model Product {
 
   saleLines SaleLine[]
   heldBillLines HeldBillLine[]
+  tczLines TczPos1[]
   returnItems SalesReturnItem[]
   sellingPrices SellingPrice[]
   batchSerials BatchSerial[]
@@ -772,6 +775,7 @@ model Sale {
   lines SaleLine[]
   returns SalesReturn[]
   heldBill HeldBill?
+  tczBill TczOpos?
 
   @@unique([tenantId, billNo])
   @@index([tenantId, status])
@@ -2349,4 +2353,141 @@ model CompanyContact {
   updatedAt DateTime @updatedAt
 
   @@index([companyId])
+}
+
+// ---------------------------------------------------------------------------
+// TCZ billing tables (Line Sale / Billing). Written IN ADDITION to Sale /
+// SaleLine, inside the same transaction (see sale.service.js createSale and
+// tczBilling.service.js) — Sale and its readers (cashier panel, returns, held
+// bills, reports) are unchanged. Column names follow the source SQL Server
+// script. Columns NOT in that script: TenantId, OutletId, SaleId, ClientToken
+// (header) and ProductId (lines). Intentional type changes vs. the script:
+// RoundOff int -> Decimal, InvEntry int -> BigInt, child DocEntry int -> BigInt,
+// and DocNum is unique per tenant rather than globally.
+//
+// Columns whose meaning is not defined anywhere in this repo (DiscountType,
+// DiscountAmount, TaxableValue, TaxableValueTotal, TotalRevenue, SalesType,
+// Canceled, Hold, DocStatus, Return, Free, Batch, ChangeLog; lines: Tax,
+// TaxCode) are deliberately left NULL by the app until their meaning is
+// confirmed — see tczBilling.service.js.
+model TczOpos {
+  docEntry             BigInt    @id @default(autoincrement()) @map("DocEntry")
+  tenantId             String    @map("TenantId")
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outletId             String?   @map("OutletId")
+  outlet               Outlet?   @relation(fields: [outletId], references: [id], onDelete: SetNull)
+  saleId               String?   @unique @map("SaleId")
+  sale                 Sale?     @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  // Client-generated idempotency token: a retry of the same checkout returns
+  // the bill already saved instead of creating a duplicate.
+  clientToken          String?   @map("ClientToken")
+  docNum               String?   @map("DocNum") @db.VarChar(255)
+  createDate           DateTime? @map("CreateDate") @db.Timestamptz(6)
+  createTime           DateTime? @map("CreateTime") @db.Time(6)
+  updateDate           DateTime? @map("UpdateDate") @db.Timestamptz(6)
+  updateTime           DateTime? @map("UpdateTime") @db.Time(6)
+  createdBy            String?   @map("CreatedBy") @db.VarChar(500)
+  updatedBy            String?   @map("UpdatedBy") @db.VarChar(500)
+  changeLog            String?   @map("ChangeLog") @db.VarChar(50)
+  canceled             String?   @map("Canceled") @db.VarChar(5)
+  object               String?   @default("TCZ_OPOS") @map("Object") @db.VarChar(20)
+  salesType            String?   @map("SalesType") @db.VarChar(5)
+  hold                 String?   @map("Hold") @db.VarChar(5)
+  customerMobileNumber String?   @map("CustomerMobileNumber") @db.VarChar(20)
+  customerName         String?   @map("CustomerName") @db.VarChar(255)
+  bpName               String?   @map("BPName") @db.VarChar(255)
+  bpCode               String?   @map("BPCode") @db.VarChar(255)
+  redeemValue          Decimal?  @default(0) @map("RedeemValue") @db.Decimal(19, 6)
+  roundOff             Decimal?  @default(0) @map("RoundOff") @db.Decimal(19, 6)
+  headDiscTyp          String?   @map("HeadDiscTyp") @db.VarChar(30)
+  headerDiscount       Decimal?  @default(0) @map("HeaderDiscount") @db.Decimal(19, 6)
+  discountType         String?   @map("DiscountType") @db.VarChar(30)
+  discountAmount       Decimal?  @default(0) @map("DiscountAmount") @db.Decimal(19, 6)
+  taxableValue         Decimal?  @map("TaxableValue") @db.Decimal(19, 6)
+  taxableValueTotal    Decimal?  @default(0) @map("TaxableValueTotal") @db.Decimal(19, 6)
+  grandTotal           Decimal?  @default(0) @map("GrandTotal") @db.Decimal(19, 6)
+  slpCode1             String?   @map("SlpCode1") @db.VarChar(255)
+  slpCode2             String?   @map("SlpCode2") @db.VarChar(255)
+  slpName1             String?   @map("SlpName1") @db.VarChar(255)
+  slpName2             String?   @map("SlpName2") @db.VarChar(255)
+  points               Int?      @default(0) @map("Points")
+  earnedPoints         Int?      @default(0) @map("EarnedPoints")
+  totalRevenue         Decimal?  @default(0) @map("TotalRevenue") @db.Decimal(19, 6)
+  docStatus            String?   @map("DocStatus") @db.VarChar(10)
+  cash                 Decimal?  @default(0) @map("Cash") @db.Decimal(19, 6)
+  card                 Decimal?  @default(0) @map("Card") @db.Decimal(19, 6)
+  upi                  Decimal?  @default(0) @map("UPI") @db.Decimal(19, 6)
+  wallet               Decimal?  @default(0) @map("Wallet") @db.Decimal(19, 6)
+  creditCard           Decimal?  @default(0) @map("CreditCard") @db.Decimal(19, 6)
+  balance              Decimal?  @default(0) @map("Balance") @db.Decimal(19, 6)
+  paid                 Decimal?  @default(0) @map("Paid") @db.Decimal(19, 6)
+  batch                String?   @map("Batch") @db.VarChar(10)
+  return               String?   @map("Return") @db.VarChar(10)
+  free                 String?   @map("Free") @db.VarChar(10)
+  invNum               Int?      @default(0) @map("InvNum")
+  invEntry             BigInt?   @default(0) @map("InvEntry")
+  invRemarks           String?   @map("InvRemarks") @db.VarChar(255)
+
+  lines  TczPos1[]
+  offers TczPos2[]
+
+  @@unique([tenantId, docNum])
+  @@unique([tenantId, clientToken])
+  @@index([tenantId, createDate])
+  @@index([tenantId, outletId])
+  @@index([tenantId, customerMobileNumber])
+  @@map("TCZ_OPOS")
+}
+
+// Billing line items. LineId is the 1-based position of the cart line within
+// the bill (PK = DocEntry + LineId).
+model TczPos1 {
+  docEntry      BigInt   @map("DocEntry")
+  header        TczOpos  @relation(fields: [docEntry], references: [docEntry], onDelete: Cascade)
+  lineId        Int      @map("LineId")
+  productId     String?  @map("ProductId")
+  product       Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  object        String?  @default("TCZ_OPOS") @map("Object") @db.VarChar(10)
+  itemCode      String?  @map("ItemCode") @db.VarChar(255)
+  itemName      String?  @map("ItemName") @db.VarChar(255)
+  price         Decimal? @default(0) @map("Price") @db.Decimal(19, 6)
+  quantity      Decimal? @default(0) @map("Quantity") @db.Decimal(19, 6)
+  disCount      Decimal? @default(0) @map("DisCount") @db.Decimal(19, 6)
+  disCountValue Decimal? @default(0) @map("DisCountValue") @db.Decimal(19, 6)
+  lineTotal     Decimal? @default(0) @map("LineTotal") @db.Decimal(19, 6)
+  barCode       String?  @map("BarCode") @db.VarChar(255)
+  inStock       Decimal? @default(0) @map("InStock") @db.Decimal(19, 6)
+  taxableValue  Decimal? @default(0) @map("TaxableValue") @db.Decimal(19, 6)
+  taxCode       String?  @map("TaxCode") @db.VarChar(100)
+  tax           Decimal? @default(0) @map("Tax") @db.Decimal(19, 6)
+  taxValue      Decimal? @default(0) @map("TaxValue") @db.Decimal(19, 6)
+  discountName  String?  @map("DiscountName") @db.VarChar(255)
+  offerQty      Decimal? @default(0) @map("OfferQty") @db.Decimal(19, 6)
+  salesQty      Decimal? @default(0) @map("SalesQty") @db.Decimal(19, 6)
+  returnBill    String?  @map("ReturnBill") @db.VarChar(255)
+
+  @@id([docEntry, lineId])
+  @@index([productId])
+  @@index([itemCode])
+  @@map("TCZ_POS1")
+}
+
+// Offer / discount details. Not written by the app yet (promotions are not
+// applied at checkout). TODO: confirm whether LineId is an offer row number
+// within the bill or a pointer at a TCZ_POS1 line before writing any rows.
+model TczPos2 {
+  docEntry      BigInt    @map("DocEntry")
+  header        TczOpos   @relation(fields: [docEntry], references: [docEntry], onDelete: Cascade)
+  lineId        Int       @map("LineId")
+  object        String?   @default("TCZ_OPOS") @map("Object") @db.VarChar(10)
+  discountName  String?   @map("DiscountName") @db.VarChar(255)
+  priority      Int?      @map("Priority")
+  effectiveFrom DateTime? @map("EffectiveFrom") @db.Timestamptz(6)
+  effectiveTo   DateTime? @map("EffectiveTo") @db.Timestamptz(6)
+  freeQty       Decimal?  @default(0) @map("FreeQty") @db.Decimal(19, 6)
+  scanQty       Decimal?  @default(0) @map("ScanQty") @db.Decimal(19, 6)
+  discType      String?   @map("DiscType") @db.VarChar(20)
+
+  @@id([docEntry, lineId])
+  @@map("TCZ_POS2")
 }

@@ -22,11 +22,21 @@ import { env } from './env.js';
 // single request's own queries can be satisfied without the pool needing
 // to queue, while still leaving headroom on a small Postgres instance for
 // Prisma Studio, psql, or another app talking to the same database.
+//
+// `options: '-c timezone=UTC'` pins EVERY pooled connection's session time zone
+// to UTC at connect time (a startup parameter, so it beats any server, database
+// or role default). The Prisma pg adapter sends Date values to Postgres as
+// zone-less UTC strings ("2026-10-27 14:11:21.300") and reads timestamptz back
+// by relabelling the offset as +00:00. That is exactly right when the session
+// is UTC; in any other zone a timestamptz column (the TCZ_OPOS CreateDate) is
+// stored shifted by the zone's offset. `timestamp` columns are unaffected either
+// way. Do not remove this without re-running test/tczTimezone.integration.mjs.
 const adapter = new PrismaPg({
   connectionString: env.DATABASE_URL,
   max: 5,
   connectionTimeoutMillis: 15_000,
   idleTimeoutMillis: 10_000,
+  options: '-c timezone=UTC',
 });
 
 // Single shared PrismaClient instance for the whole process. Node's ESM

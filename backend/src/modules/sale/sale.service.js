@@ -3,6 +3,7 @@ import { ApiError } from '../../middleware/errorHandler.js';
 
 import { TAX_RATE } from './saleConstants.js';
 import { completeHeldBill } from '../held-bill/heldBill.service.js';
+import { writeTczBill } from './tczBilling.service.js';
 
 /**
  * Preview of the bill number the NEXT sale will get (e.g. "LS-00001"),
@@ -19,9 +20,21 @@ export async function nextBillNo(tenantId) {
  * Creates a sale: re-reads every Product fresh inside one transaction
  * (never trusts the client's cached price/name/stock), verifies stock,
  * computes subtotal/discount/tax/grand total server-side, writes the Sale +
- * SaleLine rows, and decrements each Product's availableQty — all atomic, so
- * a mid-way failure (insufficient stock on line 3 of 5) leaves nothing
- * half-written.
+ * SaleLine rows (and the matching TCZ_OPOS/TCZ_POS1 rows — see
+ * tczBilling.service.js), and decrements each Product's availableQty — all
+ * atomic, so a mid-way failure (insufficient stock on line 3 of 5) leaves
+ * nothing half-written.
+ *
+ * Concurrency / duplicate protection (all inside the one transaction):
+ *  - A per-tenant advisory lock is taken first, so two bills for the same
+ *    tenant are numbered one after the other instead of both reading the
+ *    same row count and colliding on the (tenantId, billNo) unique index.
+ *  - `clientToken` makes the request idempotent: a retry of a checkout that
+ *    already committed (lost response, double click) returns the bill that was
+ *    saved instead of creating a second one or deducting stock twice.
+ *  - Stock is checked against each product's TOTAL quantity across all cart
+ *    lines, and decremented with a conditional update so concurrent sales can
+ *    never take a product below zero.
  */
 export async function createSale({
   tenantId, outletId, cashierName, customerId, customerName, lines,
@@ -31,10 +44,28 @@ export async function createSale({
   // authenticated user (req.user) and the held bill is closed out inside this
   // same transaction — see heldBill.service.js's completeHeldBill.
   heldBillId, actor,
+  // Client-generated idempotency token for this checkout attempt.
+  clientToken,
 }) {
   return prisma.$transaction(async (tx) => {
+    // Held until this transaction commits/rolls back. Serialises bill creation
+    // per tenant (numbering + idempotency check + stock check below).
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sale-bill:${tenantId}`}))`;
+
+    if (clientToken) {
+      const prior = await tx.tczOpos.findFirst({ where: { tenantId, clientToken }, select: { saleId: true } });
+      if (prior) {
+        const existing = prior.saleId
+          ? await tx.sale.findFirst({ where: { id: prior.saleId, tenantId }, include: { lines: true } })
+          : null;
+        if (!existing) throw new ApiError(409, 'This bill was already submitted but can no longer be loaded — check Sales before retrying');
+        return existing;
+      }
+    }
+
+    let customer = null;
     if (customerId) {
-      const customer = await tx.customer.findFirst({ where: { id: customerId, tenantId } });
+      customer = await tx.customer.findFirst({ where: { id: customerId, tenantId } });
       if (!customer) throw new ApiError(400, 'Selected customer was not found');
     }
 
@@ -42,12 +73,17 @@ export async function createSale({
     const products = await tx.product.findMany({ where: { id: { in: productIds }, tenantId } });
     const productById = new Map(products.map((p) => [p.id, p]));
 
+    // Total quantity wanted per product across ALL cart lines — the same
+    // product can legitimately appear on more than one line.
+    const wantedQty = new Map();
+    lines.forEach((line) => wantedQty.set(line.productId, (wantedQty.get(line.productId) || 0) + line.qty));
+
     let subTotal = 0;
     const lineData = lines.map((line) => {
       const product = productById.get(line.productId);
       if (!product) throw new ApiError(400, 'One of the items in this sale no longer exists');
       if (product.status !== 'ACTIVE') throw new ApiError(400, `${product.name} is inactive and cannot be sold`);
-      if (product.availableQty < line.qty) {
+      if (product.availableQty < wantedQty.get(line.productId)) {
         throw new ApiError(400, `Insufficient stock for ${product.name} — only ${product.availableQty} ${product.uom} available`);
       }
 
@@ -115,13 +151,31 @@ export async function createSale({
     // held bill was already paid/discarded — one held bill, one sale.
     if (heldBillId) await completeHeldBill(tx, { user: actor, heldBillId, saleId: sale.id });
 
-    await Promise.all(lineData.map((line) => tx.product.update({
-      where: { id: line.productId },
-      data: { availableQty: { decrement: line.qty } },
-    })));
+    // Stock on hand as it was when this bill was priced (recorded on the TCZ lines).
+    const stockBefore = new Map(products.map((p) => [p.id, p.availableQty]));
+
+    // Conditional decrement: only succeeds while enough stock is still there at
+    // write time. Products are updated in a fixed order so two concurrent bills
+    // touching the same products can't deadlock each other.
+    const decrements = [...wantedQty.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    for (const [productId, qty] of decrements) {
+      const result = await tx.product.updateMany({
+        where: { id: productId, tenantId, availableQty: { gte: qty } },
+        data: { availableQty: { decrement: qty } },
+      });
+      if (result.count !== 1) {
+        const name = productById.get(productId)?.name || 'An item';
+        throw new ApiError(409, `Stock for ${name} changed while this bill was being saved — nothing was charged. Review the cart and try again.`);
+      }
+    }
+
+    await writeTczBill(tx, {
+      sale, customer, productById, lineData, subTotal, taxable,
+      discountType, discountValue, clientToken, stockBefore,
+    });
 
     return sale;
-  });
+  }, { maxWait: 10_000, timeout: 20_000 });
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

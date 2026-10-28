@@ -220,6 +220,11 @@ export default function LineSalePage() {
   // Idempotency token for one "hold new bill" attempt: reused if the request
   // is retried after a network failure so the server can't create two bills.
   const holdTokenRef = useRef(null);
+  // Idempotency token for one "Pay & Print" attempt. It is reused when the
+  // exact same bill is submitted again (lost response, double tap) so the
+  // server returns the bill it already saved instead of billing twice, and is
+  // replaced as soon as anything being paid changes (see handlePayAndPrint).
+  const payAttemptRef = useRef({ signature: null, token: null });
 
   // Full-screen mode: the browser goes full screen (Fullscreen API) and this
   // page is lifted into a fixed overlay covering the viewport, so the app
@@ -403,6 +408,7 @@ export default function LineSalePage() {
     setCustomer(WALK_IN_CUSTOMER);
     setActiveHeldBill(null);
     holdTokenRef.current = null;
+    payAttemptRef.current = { signature: null, token: null };
   };
   const handleClear = () => {
     const parked = activeHeldBill;
@@ -641,22 +647,33 @@ export default function LineSalePage() {
       return;
     }
 
+    const payload = {
+      customerId:
+        customer.id && customer.id !== WALK_IN_CUSTOMER.id
+          ? customer.id
+          : undefined,
+      customerName: customer.name,
+      cashierName,
+      lines: cart.map((line) => ({ productId: line.id, qty: line.qty })),
+      discountType,
+      discountValue: discount,
+      paymentMethod,
+      receivedAmount,
+      // Present only for a resumed bill: closes the held bill out in the
+      // same server transaction as the sale (so it can't be paid twice).
+      heldBillId: activeHeldBill?.id,
+    };
+    // Same bill as the previous attempt -> same token (a retry can't create a
+    // second bill); anything changed -> a fresh token.
+    const signature = JSON.stringify(payload);
+    if (payAttemptRef.current.signature !== signature) {
+      payAttemptRef.current = { signature, token: newHoldToken() };
+    }
+
     try {
       const sale = await createSale({
-        customerId:
-          customer.id && customer.id !== WALK_IN_CUSTOMER.id
-            ? customer.id
-            : undefined,
-        customerName: customer.name,
-        cashierName,
-        lines: cart.map((line) => ({ productId: line.id, qty: line.qty })),
-        discountType,
-        discountValue: discount,
-        paymentMethod,
-        receivedAmount,
-        // Present only for a resumed bill: closes the held bill out in the
-        // same server transaction as the sale (so it can't be paid twice).
-        heldBillId: activeHeldBill?.id,
+        ...payload,
+        clientToken: payAttemptRef.current.token,
       }).unwrap();
 
       dispatch(

@@ -46,6 +46,10 @@ export const createSaleSchema = z.object({
   // modules/held-bill). The held bill is marked COMPLETED in the same
   // transaction as the sale, which also prevents it ever being paid twice.
   heldBillId: z.string().trim().min(1).optional().nullable(),
+  // Client-generated idempotency token for this checkout attempt. A retry of
+  // a request that already committed (lost response, double click) returns the
+  // bill that was saved instead of creating a duplicate — see createSale.
+  clientToken: z.string().trim().min(8, 'clientToken is too short').max(100, 'clientToken is too long').optional().nullable(),
 });
 
 // Query params for the Cash Sales report (GET /sales/cash-summary). `date`
