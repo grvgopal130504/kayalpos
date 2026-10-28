@@ -54,12 +54,17 @@ export default function PaymentMethodsCard({
   const chips = [{ label: 'Exact', value: exact }, ...quickAmounts.map((a) => ({ label: formatCurrency(a), value: a }))];
 
   return (
-    <Paper variant="outlined" sx={{ borderRadius: 3, p: 2.5 }}>
+    <Paper variant="outlined" sx={{ borderRadius: 4, p: { xs: 2, sm: 3 }, boxShadow: '0 8px 24px rgba(15, 23, 42, 0.06)' }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Payment Method</Typography>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          Paying by <b style={{ fontWeight: 800 }}>{selected?.label}</b>
-        </Typography>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25 }}>
+          <Box sx={{ width: 5, height: 22, borderRadius: 1, bgcolor: 'primary.main' }} />
+          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Payment Method</Typography>
+        </Stack>
+        <Box sx={{ px: 1.5, py: 0.4, borderRadius: 5, bgcolor: (t) => alpha(t.palette.primary.main, 0.1) }}>
+          <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 700 }}>
+            Paying by {selected?.label}
+          </Typography>
+        </Box>
       </Stack>
 
       <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(5, 1fr)' } }}>
@@ -72,13 +77,13 @@ export default function PaymentMethodsCard({
               onClick={() => onSelectMethod(m.key)}
               aria-pressed={active}
               sx={{
-                position: 'relative', py: 2, px: 1, borderRadius: 3, gap: 1,
+                position: 'relative', py: 2.25, px: 1, borderRadius: 3.5, gap: 1.25,
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
                 border: '2px solid', borderColor: active ? 'primary.main' : 'divider',
                 bgcolor: active ? (t) => alpha(t.palette.primary.main, 0.08) : 'background.paper',
-                transition: 'border-color .15s, background-color .15s, box-shadow .15s',
+                transition: 'border-color .15s, background-color .15s, box-shadow .15s, transform .15s',
                 boxShadow: active ? (t) => `0 6px 16px ${alpha(t.palette.primary.main, 0.18)}` : 'none',
-                '&:hover': { borderColor: active ? 'primary.main' : 'text.disabled' },
+                '&:hover': { borderColor: active ? 'primary.main' : 'text.disabled', transform: 'translateY(-2px)' },
               }}
             >
               {active && (
@@ -90,23 +95,23 @@ export default function PaymentMethodsCard({
                   <CheckIcon sx={{ fontSize: 14 }} />
                 </Box>
               )}
-              <Box sx={{ width: 44, height: 44, borderRadius: 2.5, display: 'grid', placeItems: 'center', bgcolor: `${m.color}1F` }}>
-                <Icon sx={{ color: m.color, fontSize: 22 }} />
+              <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: `${m.color}1F` }}>
+                <Icon sx={{ color: m.color, fontSize: 26 }} />
               </Box>
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>{m.label}</Typography>
+              <Typography variant="body2" sx={{ fontWeight: active ? 800 : 700, color: active ? 'primary.main' : 'text.primary' }}>{m.label}</Typography>
             </ButtonBase>
           );
         })}
       </Box>
 
-      <Box sx={{ mt: 2.5, p: 2, borderRadius: 3, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+      <Box sx={{ mt: 3, p: { xs: 2, sm: 2.5 }, borderRadius: 3.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>Received Amount (₹)</Typography>
             <Stack
               direction="row"
               sx={{
-                mt: 0.5, px: 1.5, height: 56, alignItems: 'center', gap: 1, borderRadius: 2,
+                mt: 0.5, px: 1.5, height: 64, alignItems: 'center', gap: 1, borderRadius: 2.5,
                 bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
                 '&:focus-within': { borderColor: 'primary.main', boxShadow: (t) => `0 0 0 3px ${alpha(t.palette.primary.main, 0.15)}` },
               }}
@@ -118,14 +123,14 @@ export default function PaymentMethodsCard({
                 onChange={handleAmountChange}
                 placeholder="0"
                 inputProps={{ inputMode: 'decimal', 'aria-label': 'Received amount' }}
-                sx={{ fontSize: 24, fontWeight: 800 }}
+                sx={{ fontSize: 28, fontWeight: 800 }}
               />
             </Stack>
           </Box>
 
           <Box
             sx={{
-              flex: 1, minWidth: 0, px: 2, py: 1, borderRadius: 2, border: '1px solid',
+              flex: 1, minWidth: 0, px: 2.5, py: 1, borderRadius: 2.5, border: '1px solid',
               display: 'flex', flexDirection: 'column', justifyContent: 'center',
               borderColor: (t) => alpha(short ? t.palette.error.main : t.palette.success.main, 0.35),
               bgcolor: (t) => alpha(short ? t.palette.error.main : t.palette.success.main, 0.1),
@@ -134,7 +139,7 @@ export default function PaymentMethodsCard({
             <Typography variant="caption" sx={{ color: short ? 'error.main' : 'success.main', fontWeight: 600 }}>
               {short ? 'Amount short' : 'Change to return'}
             </Typography>
-            <Typography sx={{ fontSize: 24, fontWeight: 800, color: short ? 'error.main' : 'success.main', lineHeight: 1.3 }}>
+            <Typography sx={{ fontSize: 28, fontWeight: 800, color: short ? 'error.main' : 'success.main', lineHeight: 1.3 }}>
               {formatCurrency(Math.abs(changeAmount), { decimals: true })}
             </Typography>
           </Box>
@@ -149,10 +154,11 @@ export default function PaymentMethodsCard({
                 key={chip.label}
                 onClick={() => onReceivedAmountChange(chip.value)}
                 sx={{
-                  px: 1.75, py: 0.5, borderRadius: 5, fontSize: 12.5, fontWeight: 700,
+                  px: 2, py: 0.75, borderRadius: 5, fontSize: 13, fontWeight: 700, transition: 'background-color .15s, border-color .15s',
                   border: '1px solid', borderColor: active ? 'primary.main' : 'divider',
                   bgcolor: active ? (t) => alpha(t.palette.primary.main, 0.1) : 'background.paper',
                   color: active ? 'primary.main' : 'text.primary',
+                  '&:hover': { borderColor: 'primary.main' },
                 }}
               >
                 {chip.label}
