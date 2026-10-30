@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, Menu, MenuItem,
   TextField, InputAdornment, Pagination,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -18,7 +17,6 @@ import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatCurrency, formatNumber } from '../../../utils/format';
@@ -27,7 +25,6 @@ import ProductTable from './components/ProductTable';
 import ProductFormDialog from './components/ProductFormDialog';
 import ProductViewDialog from './components/ProductViewDialog';
 import ProductBulkImportDialog from './components/ProductBulkImportDialog';
-import { CASHIER } from '../mastersMockData';
 import { PRODUCT_GROUP_OPTIONS, UOM_OPTIONS } from './productMockData';
 import { useGetProductsQuery, useDeleteProductMutation, useInfiniteProducts } from '../../../api/productApi';
 import { useOfflineListSnapshot, buildListCacheKey } from '../../../api/offlineCache';
@@ -68,7 +65,6 @@ function toViewRow(row) {
  */
 export default function ProductPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [moreAnchor, setMoreAnchor] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [productGroup, setProductGroup] = useState('All');
@@ -115,10 +111,6 @@ export default function ProductPage() {
 
   const [deleteProduct] = useDeleteProductMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewProduct = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => setImportDialogOpen(true);
@@ -202,21 +194,6 @@ export default function ProductPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Product</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>

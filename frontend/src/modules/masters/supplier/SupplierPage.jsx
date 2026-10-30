@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
   TextField, MenuItem, InputAdornment, Pagination,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -17,7 +16,6 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber, formatCurrency } from '../../../utils/format';
@@ -25,7 +23,6 @@ import { formatNumber, formatCurrency } from '../../../utils/format';
 import SupplierTable from './components/SupplierTable';
 import SupplierFormDialog from './components/SupplierFormDialog';
 import SupplierViewDialog from './components/SupplierViewDialog';
-import { CASHIER } from '../mastersMockData';
 import { SUPPLIER_GROUP_OPTIONS, CITY_OPTIONS, STATE_OPTIONS } from './supplierMockData';
 import { useGetSuppliersQuery, useDeleteSupplierMutation } from '../../../api/supplierApi';
 
@@ -62,7 +59,6 @@ function toViewRow(row) {
  */
 export default function SupplierPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState('');
   const [group, setGroup] = useState('All');
   const [status, setStatus] = useState('All');
@@ -81,10 +77,6 @@ export default function SupplierPage() {
   const { data: supplierRows = [], isLoading, isError } = useGetSuppliersQuery(queryParams);
   const [deleteSupplier] = useDeleteSupplierMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewSupplier = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Suppliers is coming soon', 'info'));
@@ -150,21 +142,6 @@ export default function SupplierPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Supplier</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>

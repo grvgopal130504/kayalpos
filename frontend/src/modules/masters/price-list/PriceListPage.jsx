@@ -1,11 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
   TextField, MenuItem, InputAdornment, IconButton, Pagination,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -17,7 +16,6 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
@@ -25,7 +23,6 @@ import { formatNumber } from '../../../utils/format';
 import PriceListTable from './components/PriceListTable';
 import PriceListFormDialog from './components/PriceListFormDialog';
 import PriceListViewDialog from './components/PriceListViewDialog';
-import { CASHIER } from '../mastersMockData';
 import { PRICE_LIST_TYPE_OPTIONS, APPLICABLE_TO_OPTIONS } from './priceListMockData';
 import { useGetPriceListsPageQuery, useDeletePriceListMutation } from '../../../api/priceListApi';
 
@@ -57,7 +54,6 @@ function formatDdMmYyyy(isoValue) {
  */
 export default function PriceListPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState('');
   const [priceListType, setPriceListType] = useState('All');
   const [applicableTo, setApplicableTo] = useState('All');
@@ -87,10 +83,6 @@ export default function PriceListPage() {
     totalPriceLists: 0, activePriceLists: 0, inactivePriceLists: 0, totalItemsInPriceLists: 0,
   };
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewPriceList = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Price Lists is coming soon', 'info'));
@@ -138,21 +130,6 @@ export default function PriceListPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Price List</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>

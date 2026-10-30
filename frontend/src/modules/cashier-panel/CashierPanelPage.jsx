@@ -4,10 +4,8 @@ import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, TextField, Skeleton, Alert,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { logout, selectCurrentUser } from '../../features/auth/authSlice';
+import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import { useCashierPanelSummaryQuery } from '../../api/cashierPanelApi';
 
@@ -45,14 +43,12 @@ const QUICK_INFO = [
 export default function CashierPanelPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const user = useAppSelector(selectCurrentUser);
   const [notes, setNotes] = useState('');
 
   const {
     data: summary, isLoading, isError, refetch,
   } = useCashierPanelSummaryQuery();
 
-  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
 
   const handleAction = (label, path) => {
     if (path) {
@@ -62,10 +58,6 @@ export default function CashierPanelPage() {
     dispatch(showToast(`${label} is coming soon`, 'info'));
   };
   const handleViewAllTransactions = () => dispatch(showToast('Full transaction list is coming soon', 'info'));
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   if (isError) {
     return (
@@ -94,21 +86,6 @@ export default function CashierPanelPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Cashier Panel</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {cashierLabel}
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       {isLoading || !summary ? (

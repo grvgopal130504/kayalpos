@@ -46,10 +46,12 @@ const api = async (path, token = admin) => {
 
 const D = (day, h, m = 0) => new Date(2026, 2, day, h, m); // local time, March 2026
 let billSeq = 0;
-const sale = (outletId, at, paymentMethod, grandTotal, receivedAmount, extra = {}) => prisma.sale.create({
+// Sales live in Linesales now. `extra.status` ('HELD') maps to DocStatus.
+const sale = (outletId, at, paymentMethod, grandTotal, receivedAmount, extra = {}) => prisma.tczOpos.create({
   data: {
-    tenantId: tenant.id, outletId, billNo: `B-${suffix}-${++billSeq}`, cashierName: 'x', paymentMethod,
-    grandTotal, subTotal: grandTotal, receivedAmount, changeAmount: receivedAmount - grandTotal, createdAt: at, ...extra,
+    tenantId: tenant.id, outletId, docNum: `B-${suffix}-${++billSeq}`, createdBy: 'x', payMode: paymentMethod,
+    grandTotal, subTotal: grandTotal, received: receivedAmount, changeAmount: receivedAmount - grandTotal, createDate: at,
+    docStatus: extra.status ?? 'COMPLETED',
   },
 });
 let shiftSeq = 0;
@@ -74,8 +76,8 @@ await sale(outletA.id, D(10, 11), 'cash', 200, 200);
 await sale(outletA.id, D(10, 12), 'card', 300, 300);
 await sale(outletA.id, D(10, 13), 'upi', 150, 150);
 await sale(outletA.id, D(10, 14), 'cash', 999, 999, { status: 'HELD' }); // must be ignored
-await prisma.salesReturn.create({ data: { tenantId: tenant.id, returnNo: `RT-${suffix}-1`, saleId: cs1.id, cashierName: 'x', reason: 'r', refundMode: 'refund', refundTo: 'cash', grandTotal: 50, createdAt: D(10, 15) } });
-await prisma.salesReturn.create({ data: { tenantId: tenant.id, returnNo: `RT-${suffix}-2`, saleId: cs1.id, cashierName: 'x', reason: 'r', refundMode: 'credit-note', grandTotal: 40, createdAt: D(10, 15, 30) } }); // credit note: no cash
+await prisma.salesReturn.create({ data: { tenantId: tenant.id, returnNo: `RT-${suffix}-1`, docEntry: cs1.docEntry, cashierName: 'x', reason: 'r', refundMode: 'refund', refundTo: 'cash', grandTotal: 50, createdAt: D(10, 15) } });
+await prisma.salesReturn.create({ data: { tenantId: tenant.id, returnNo: `RT-${suffix}-2`, docEntry: cs1.docEntry, cashierName: 'x', reason: 'r', refundMode: 'credit-note', grandTotal: 40, createdAt: D(10, 15, 30) } }); // credit note: no cash
 await move('cashWithdrawal', s1, 100, D(10, 11, 30));
 await move('cashDeposit', s1, 200, D(10, 12, 30));
 await move('cashTransfer', s1, 50, D(10, 13, 30), { toLocation: 'Petty Cash Box' });
@@ -205,9 +207,9 @@ await test('9. totals reconcile with the underlying database rows (independent r
   for (const r of rows) {
     const sh = await prisma.shiftSession.findUnique({ where: { id: r.id } });
     const end = sh.closedAt || new Date();
-    const sales = await prisma.sale.findMany({ where: { tenantId: tenant.id, outletId: sh.outletId, status: 'COMPLETED', createdAt: { gte: sh.openedAt, lte: end } } });
-    const cash = sales.filter((x) => x.paymentMethod === 'cash').reduce((a, x) => a + Number(x.receivedAmount) - Math.max(Number(x.changeAmount), 0), 0);
-    const refunds = (await prisma.salesReturn.findMany({ where: { tenantId: tenant.id, refundMode: 'refund', refundTo: 'cash', createdAt: { gte: sh.openedAt, lte: end }, sale: { outletId: sh.outletId } } }))
+    const sales = await prisma.tczOpos.findMany({ where: { tenantId: tenant.id, outletId: sh.outletId, docStatus: 'COMPLETED', createDate: { gte: sh.openedAt, lte: end } } });
+    const cash = sales.filter((x) => x.payMode === 'cash').reduce((a, x) => a + Number(x.received) - Math.max(Number(x.changeAmount), 0), 0);
+    const refunds = (await prisma.salesReturn.findMany({ where: { tenantId: tenant.id, refundMode: 'refund', refundTo: 'cash', createdAt: { gte: sh.openedAt, lte: end }, tczBill: { outletId: sh.outletId } } }))
       .reduce((a, x) => a + Number(x.grandTotal), 0);
     const sum = async (m) => (await prisma[m].aggregate({ where: { shiftSessionId: sh.id }, _sum: { amount: true } }))._sum.amount || 0;
     const expected = Number(sh.openingCash) + cash - refunds - Number(await sum('cashWithdrawal')) - Number(await sum('cashDeposit')) - Number(await sum('cashTransfer'));
@@ -244,10 +246,10 @@ await test('11. isolation: other tenant sees nothing; non-admin pinned to own ou
 });
 
 await test('12. nothing was modified: sales/payments untouched by reading the report', async () => {
-  const before = await prisma.sale.aggregate({ where: { tenantId: tenant.id }, _sum: { grandTotal: true, receivedAmount: true }, _count: true });
+  const before = await prisma.tczOpos.aggregate({ where: { tenantId: tenant.id }, _sum: { grandTotal: true, received: true }, _count: true });
   await api(q('&outletId=all'));
   await api(`/shift-variance/${s1.id}/transactions`);
-  const after = await prisma.sale.aggregate({ where: { tenantId: tenant.id }, _sum: { grandTotal: true, receivedAmount: true }, _count: true });
+  const after = await prisma.tczOpos.aggregate({ where: { tenantId: tenant.id }, _sum: { grandTotal: true, received: true }, _count: true });
   assert.deepEqual(after, before);
 });
 

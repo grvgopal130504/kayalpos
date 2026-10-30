@@ -28,7 +28,7 @@ import { env } from './env.js';
 // or role default). The Prisma pg adapter sends Date values to Postgres as
 // zone-less UTC strings ("2026-10-27 14:11:21.300") and reads timestamptz back
 // by relabelling the offset as +00:00. That is exactly right when the session
-// is UTC; in any other zone a timestamptz column (the TCZ_OPOS CreateDate) is
+// is UTC; in any other zone a timestamptz column (the Linesales CreateDate) is
 // stored shifted by the zone's offset. `timestamp` columns are unaffected either
 // way. Do not remove this without re-running test/tczTimezone.integration.mjs.
 const adapter = new PrismaPg({

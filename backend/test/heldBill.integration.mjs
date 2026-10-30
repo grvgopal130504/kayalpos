@@ -1,6 +1,6 @@
 // Integration test for Hold / Resume bill — runs the REAL express app against
 // a real Postgres. It creates its own throwaway tenant/outlets/products and
-// writes real Sale rows, so it REFUSES to run unless DATABASE_URL points at a
+// writes real TCZ bills, so it REFUSES to run unless DATABASE_URL points at a
 // local database (never run it against the shared Azure dev/prod database).
 //
 //   1. Start a local Postgres and apply the migrations to an empty database
@@ -70,8 +70,8 @@ async function api(method, path, tok, body) {
 }
 
 const counts = async () => ({
-  sales: await prisma.sale.count({ where: { tenantId: tenant.id } }),
-  saleLines: await prisma.saleLine.count({ where: { sale: { tenantId: tenant.id } } }),
+  sales: await prisma.tczOpos.count({ where: { tenantId: tenant.id } }),
+  saleLines: await prisma.tczPos1.count({ where: { header: { tenantId: tenant.id } } }),
   invoices: await prisma.salesInvoice.count({ where: { tenantId: tenant.id } }),
   held: await prisma.heldBill.count({ where: { tenantId: tenant.id } }),
 });
@@ -230,7 +230,7 @@ await test('13. paying a resumed bill: one Sale, stock deducted once, held bill 
   assert.equal(after.sales, before.sales + 1); assert.equal(after.saleLines, before.saleLines + 2);
   assert.equal(await stock(p1.id), s1 - 2); assert.equal(await stock(p2.id), s2 - 1);
   const hb = await prisma.heldBill.findUnique({ where: { id: billA.id } });
-  assert.equal(hb.status, 'COMPLETED'); assert.equal(hb.saleId, r.data.id); assert.ok(hb.completedAt);
+  assert.equal(hb.status, 'COMPLETED'); assert.equal(String(hb.tczDocEntry), r.data.id); assert.ok(hb.completedAt);
   assert.ok(!(await api('GET', '/held-bills', T.a1)).data.some((b) => b.id === billA.id));
 });
 
@@ -293,7 +293,7 @@ await test('19. a normal sale (no heldBillId) is unaffected and held bills never
   const r = await pay(T.a1);
   assert.equal(r.status, 201);
   assert.equal((await counts()).sales, before.sales + 1);
-  assert.equal(await prisma.sale.count({ where: { tenantId: tenant.id, status: 'HELD' } }), 0);
+  assert.equal(await prisma.tczOpos.count({ where: { tenantId: tenant.id, docStatus: 'HELD' } }), 0);
 });
 
 await test('20. references are unique and sequential under concurrent holds', async () => {

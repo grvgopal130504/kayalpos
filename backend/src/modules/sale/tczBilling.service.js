@@ -1,26 +1,26 @@
 import { ApiError } from '../../middleware/errorHandler.js';
+import { billIdOf, lineIdOf } from './tczIds.js';
 
-// Writes the TCZ_OPOS (header) / TCZ_POS1 (lines) records for one Line Sale
-// bill. It is only ever called from createSale (sale.service.js) with that
-// function's own transaction client, AFTER the Sale/SaleLine rows exist, so the
-// Sale, its lines, the held-bill close-out, the stock decrement and these rows
-// commit or roll back as one unit. Nothing in here reads or changes Sale logic.
+// Writes the Linesales (header) / LinesaleItemDetails (lines) records for one Line Sale
+// bill — TCZ is the only sales store. It is only ever called from createSale
+// (sale.service.js) with that function's own transaction client, so the bill, its
+// lines, the held-bill close-out and the stock decrement commit or roll back as one
+// unit.
 //
-// TCZ_POS2 (offer / discount details) is intentionally never written: the app
+// LinesaleOfferDetails (offer / discount details) is intentionally never written: the app
 // does not apply promotions at checkout yet.
 
-const OBJECT = 'TCZ_OPOS';
+const OBJECT = 'Linesales';
 
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const round6 = (value) => Math.round((Number(value) || 0) * 1e6) / 1e6;
 
 // Business time zone for TCZ bill times: Tamil Nadu, India (IST, UTC+05:30, no
-// daylight saving). TCZ_OPOS.CreateDate keeps the exact instant (timestamptz);
-// TCZ_OPOS.CreateTime is the wall-clock time of day in THIS zone (TIME, no zone),
+// daylight saving). Linesales.CreateDate keeps the exact instant (timestamptz);
+// Linesales.CreateTime is the wall-clock time of day in THIS zone (TIME, no zone),
 // so a bill printed at 11:50 in Tamil Nadu reads 11:50 whatever time zone the
 // server or the database session runs in. The business date of a bill is
-// (CreateDate AT TIME ZONE 'Asia/Kolkata')::date. The backfill SQL and the verify
-// script use the same zone name; keep the three in step.
+// (CreateDate AT TIME ZONE 'Asia/Kolkata')::date.
 export const TCZ_TIME_ZONE = 'Asia/Kolkata';
 const istClock = new Intl.DateTimeFormat('en-GB', {
   timeZone: TCZ_TIME_ZONE, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit',
@@ -41,80 +41,86 @@ export function istTimeOfDay(date) {
   return new Date(Date.UTC(1970, 0, 1, Number(part.hour) % 24, Number(part.minute), Number(part.second), milli));
 }
 
-// Tenders whose meaning matches a TCZ_OPOS payment column one-to-one. Every
-// other tender the app accepts (credit, store-credit, gift-card, cheque,
-// bank-transfer) has NO TCZ column: those amounts stay on the Sale row
-// (paymentMethod / receivedAmount) and are NOT put in any TCZ tender column.
-// For them Cash/Card/UPI/Wallet are all 0 while Paid/Balance still reflect what
-// was received, so Paid - (Cash+Card+UPI+Wallet) is the amount tendered by a
-// method TCZ has no column for; Sale.paymentMethod (via SaleId) says which.
+// Tenders that also fill the matching TCZ payment column (Cash/Card/UPI/Wallet).
+// Every tender (including credit, store-credit, gift-card, cheque, bank-transfer)
+// is recorded in PayMode; Paid/Balance/Received/ChangeAmount reflect the money.
 const TENDER_COLUMN = { cash: 'cash', card: 'card', upi: 'upi', wallet: 'wallet' };
 
 /**
- * Fields deliberately NOT written (left NULL, never a guessed value) because
- * nothing in the schema or app defines their meaning:
- *  - header: DiscountType, DiscountAmount, TaxableValue, TaxableValueTotal,
- *    TotalRevenue, SalesType, Canceled, Hold, DocStatus, Return, Free, Batch,
- *    ChangeLog, SlpCode1/2 and SlpName1/2 (no salesperson on a Line Sale)
- *  - lines: Tax, TaxCode (the app applies one flat rate to every line, which
- *    does not necessarily match Product.taxCode, and the unit of Tax is unknown)
- * Loyalty (Points/EarnedPoints/RedeemValue) and RoundOff are left at their
- * column default of 0, which is accurate: Line Sale has no loyalty or rounding.
- *
- * `sale` is the just-created Sale row, so header money is mirrored from the
- * exact (2dp) values that were stored, never recomputed.
+ * Creates the bill header + lines and returns the API shape (see toSaleDto).
+ * All money is stored at 2 decimals, the same precision the old Sale row had.
+ * Still left NULL (meaning not defined anywhere): TotalRevenue, DiscountType,
+ * SalesType, Return, Free, Batch, ChangeLog, SlpCode1/2, SlpName1/2, line TaxCode.
  */
 export async function writeTczBill(tx, {
-  sale, customer, productById, lineData, subTotal, taxable,
-  discountType, discountValue, clientToken, stockBefore,
+  tenantId, outletId, billNo, cashierName, customer, customerId, customerName,
+  productById, lineData, subTotal, discountAmount, taxable, taxAmount, grandTotal,
+  discountType, discountValue, paymentMethod, receivedAmount, changeAmount,
+  cardType, cardLast4, cardBank, upiApp, upiTxnId, paymentReference,
+  clientToken, stockBefore,
 }) {
   const now = new Date();
-  const grand = round2(sale.grandTotal);
-  const received = round2(sale.receivedAmount);
+  const grand = round2(grandTotal);
+  const received = round2(receivedAmount);
   const paid = Math.min(received, grand);
   const balance = Math.max(round2(grand - received), 0);
 
   const tender = { cash: 0, card: 0, upi: 0, wallet: 0 };
-  const column = TENDER_COLUMN[sale.paymentMethod];
+  const column = TENDER_COLUMN[paymentMethod];
   if (column) tender[column] = paid;
+
+  if (lineData.length === 0) throw new ApiError(500, 'A bill cannot be saved without lines');
 
   const header = await tx.tczOpos.create({
     data: {
-      tenantId: sale.tenantId,
-      outletId: sale.outletId || null,
-      saleId: sale.id,
+      tenantId,
+      outletId: outletId || null,
+      customerId: customerId || null,
       clientToken: clientToken || null,
-      docNum: sale.billNo,
+      docNum: billNo,
       createDate: now,
       // IST (Asia/Kolkata) wall-clock time of the SAME instant as createDate.
       createTime: istTimeOfDay(now),
-      createdBy: sale.cashierName,
+      createdBy: cashierName,
       object: OBJECT,
+      docStatus: 'COMPLETED',
+      canceled: 'N',
+      hold: 'N',
       customerMobileNumber: customer?.mobile || null,
-      customerName: sale.customerName,
+      customerName,
       bpName: customer?.name || null,
       bpCode: customer?.code || null,
       headDiscTyp: discountType,
       headerDiscount: discountValue,
+      discountAmount: round2(discountAmount),
+      subTotal: round2(subTotal),
+      taxableValue: round2(taxable),
+      taxableValueTotal: round2(taxable),
+      taxAmount: round2(taxAmount),
       grandTotal: grand,
+      payMode: paymentMethod,
+      received,
+      changeAmount: round2(changeAmount),
       cash: tender.cash,
       card: tender.card,
       upi: tender.upi,
       wallet: tender.wallet,
       paid,
       balance,
-      // Explicit NULLs (not the column defaults of 0): meaning undefined, see above.
-      discountType: null,
-      discountAmount: null,
-      taxableValue: null,
-      taxableValueTotal: null,
+      cardType: paymentMethod === 'card' ? (cardType || null) : null,
+      cardLast4: paymentMethod === 'card' ? (cardLast4 || null) : null,
+      cardBank: paymentMethod === 'card' ? (cardBank || null) : null,
+      upiApp: paymentMethod === 'upi' ? (upiApp || null) : null,
+      upiTxnId: paymentMethod === 'upi' ? (upiTxnId || null) : null,
+      payRef: paymentReference || null,
+      // Explicit NULL (not the column default of 0): meaning undefined.
       totalRevenue: null,
     },
   });
 
   const lines = lineData.map((line, index) => {
     const product = productById.get(line.productId);
-    // Same apportioning createSale uses for Sale.taxAmount.
+    // Same apportioning createSale uses for the bill's tax amount.
     const lineTaxable = subTotal > 0 ? (line.amount / subTotal) * taxable : 0;
     return {
       docEntry: header.docEntry,
@@ -124,21 +130,75 @@ export async function writeTczBill(tx, {
       itemCode: line.code,
       itemName: line.name,
       barCode: line.code,
+      uom: line.uom,
       price: round2(line.price),
       quantity: line.qty,
-      // = SaleLine.amount (price x qty, before bill discount and tax)
+      // price x qty, before bill discount and tax
       lineTotal: round2(line.amount),
       inStock: stockBefore.get(line.productId) ?? product.availableQty,
       taxableValue: round6(lineTaxable),
       taxValue: round6(lineTaxable * Number(line.taxRate)),
-      // Left NULL on purpose (see above); the schema default of 0 would claim a 0% rate.
-      tax: null,
+      taxRate: line.taxRate,
+      // Tax rate as a percent (5 for 5%).
+      tax: round6(Number(line.taxRate) * 100),
       taxCode: null,
     };
   });
-
-  if (lines.length === 0) throw new ApiError(500, 'A bill cannot be saved without lines');
   await tx.tczPos1.createMany({ data: lines });
+  const saved = await tx.tczPos1.findMany({ where: { docEntry: header.docEntry }, orderBy: { lineId: 'asc' } });
 
-  return header;
+  return toSaleDto(header, saved);
+}
+
+/**
+ * Maps a TCZ header (+ its lines) to the sale JSON the API has always returned,
+ * so the frontend contract (id / billNo / grandTotal / paymentMethod / lines[...])
+ * is unchanged. `id` is String(DocEntry); a line's `id` is "<DocEntry>-<LineId>".
+ */
+export function toSaleDto(header, lines = []) {
+  return {
+    id: billIdOf(header.docEntry),
+    docEntry: billIdOf(header.docEntry),
+    tenantId: header.tenantId,
+    outletId: header.outletId,
+    billNo: header.docNum,
+    customerId: header.customerId,
+    customerName: header.customerName,
+    cashierName: header.createdBy,
+    subTotal: header.subTotal,
+    discountType: header.headDiscTyp,
+    discountValue: header.headerDiscount,
+    discountAmount: header.discountAmount,
+    taxAmount: header.taxAmount,
+    grandTotal: header.grandTotal,
+    paymentMethod: header.payMode,
+    receivedAmount: header.received,
+    changeAmount: header.changeAmount,
+    cardType: header.cardType,
+    cardLast4: header.cardLast4,
+    cardBank: header.cardBank,
+    upiApp: header.upiApp,
+    upiTxnId: header.upiTxnId,
+    paymentReference: header.payRef,
+    status: header.docStatus,
+    createdAt: header.createDate,
+    updatedAt: header.updateDate || header.createDate,
+    lines: lines.map(toLineDto),
+  };
+}
+
+export function toLineDto(line) {
+  return {
+    id: lineIdOf(line.docEntry, line.lineId),
+    saleId: billIdOf(line.docEntry),
+    lineId: line.lineId,
+    productId: line.productId,
+    code: line.itemCode,
+    name: line.itemName,
+    uom: line.uom,
+    qty: Number(line.quantity),
+    price: line.price,
+    taxRate: line.taxRate,
+    amount: line.lineTotal,
+  };
 }

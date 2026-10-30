@@ -1,3 +1,4 @@
+import { asSale } from '../sale/tczSaleView.js';
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../middleware/errorHandler.js';
 
@@ -6,14 +7,14 @@ import { ApiError } from '../../middleware/errorHandler.js';
  *
  * There is no table of its own — every figure is derived from existing rows:
  *   ShiftSession          opening/closing counts, cashier, window (openedAt..closedAt)
- *   Sale                  tender totals (a sale belongs to the shift whose window contains
- *                         its createdAt at the same outlet — Sale has no shift FK)
+ *   Linesales              tender totals (a bill belongs to the shift whose window contains
+ *                         its CreateDate at the same outlet — a bill has no shift FK)
  *   SalesReturn           refunds (refundMode='refund', refundTo = cash/card/upi)
  *   CashWithdrawal / CashDeposit / CashTransfer   cash leaving the drawer (FK to the shift)
  *
  * FIELD MEANINGS (confirmed from the schema + sale.service.js):
- *   Sale.receivedAmount = tender handed over by the customer;
- *   Sale.changeAmount   = receivedAmount − grandTotal (change handed back);
+ *   Linesales.Received     = tender handed over by the customer;
+ *   Linesales.ChangeAmount = Received − GrandTotal (change handed back);
  *   so the cash the drawer actually KEEPS from a cash sale is
  *   receivedAmount − max(changeAmount, 0)  (= grandTotal when fully paid).
  *
@@ -145,43 +146,44 @@ export async function listVarianceFilterOptions(user) {
 // can belong to at most one shift — nothing is counted twice.
 async function aggregateShifts(tenantId, shiftIds) {
   const salesRows = await prisma.$queryRaw`
-    SELECT sh.id AS "shiftId",
-      COALESCE(SUM(CASE WHEN s."paymentMethod" = 'cash' THEN s."receivedAmount" - GREATEST(s."changeAmount", 0) END), 0) AS "cashSales",
-      COUNT(CASE WHEN s."paymentMethod" = 'cash' THEN 1 END)::int AS "cashCount",
-      COALESCE(SUM(CASE WHEN s."paymentMethod" = 'card' THEN s."grandTotal" END), 0) AS "cardSales",
-      COUNT(CASE WHEN s."paymentMethod" = 'card' THEN 1 END)::int AS "cardCount",
-      COALESCE(SUM(CASE WHEN s."paymentMethod" = 'upi' THEN s."grandTotal" END), 0) AS "upiSales",
-      COUNT(CASE WHEN s."paymentMethod" = 'upi' THEN 1 END)::int AS "upiCount",
-      COALESCE(SUM(s."grandTotal"), 0) AS "totalSales",
-      COUNT(s.id)::int AS "saleCount"
+    SELECT sh."Id" AS "shiftId",
+      COALESCE(SUM(CASE WHEN s."PayMode" = 'cash' THEN s."Received" - GREATEST(s."ChangeAmount", 0) END), 0) AS "cashSales",
+      COUNT(CASE WHEN s."PayMode" = 'cash' THEN 1 END)::int AS "cashCount",
+      COALESCE(SUM(CASE WHEN s."PayMode" = 'card' THEN s."GrandTotal" END), 0) AS "cardSales",
+      COUNT(CASE WHEN s."PayMode" = 'card' THEN 1 END)::int AS "cardCount",
+      COALESCE(SUM(CASE WHEN s."PayMode" = 'upi' THEN s."GrandTotal" END), 0) AS "upiSales",
+      COUNT(CASE WHEN s."PayMode" = 'upi' THEN 1 END)::int AS "upiCount",
+      COALESCE(SUM(s."GrandTotal"), 0) AS "totalSales",
+      COUNT(s."DocEntry")::int AS "saleCount"
     FROM "ShiftSession" sh
-    LEFT JOIN "Sale" s ON s."tenantId" = sh."tenantId" AND s."outletId" = sh."outletId"
-      AND s."status" = 'COMPLETED'
-      AND s."createdAt" >= sh."openedAt" AND s."createdAt" <= COALESCE(sh."closedAt", now())
-    WHERE sh."tenantId" = ${tenantId} AND sh.id = ANY(${shiftIds})
-    GROUP BY sh.id`;
+    LEFT JOIN "Linesales" s ON s."TenantId" = sh."TenantId" AND s."OutletId" = sh."OutletId"
+      AND s."DocStatus" = 'COMPLETED'
+      -- ShiftSession times are UTC "timestamp" columns; compare like with like.
+      AND (s."CreateDate" AT TIME ZONE 'UTC') >= sh."OpenedAt" AND (s."CreateDate" AT TIME ZONE 'UTC') <= COALESCE(sh."ClosedAt", now() AT TIME ZONE 'UTC')
+    WHERE sh."TenantId" = ${tenantId} AND sh."Id" = ANY(${shiftIds})
+    GROUP BY sh."Id"`;
 
   const refundRows = await prisma.$queryRaw`
-    SELECT sh.id AS "shiftId",
-      COALESCE(SUM(CASE WHEN r."refundTo" = 'cash' THEN r."grandTotal" END), 0) AS "cashRefunds",
-      COUNT(CASE WHEN r."refundTo" = 'cash' THEN 1 END)::int AS "cashRefundCount",
-      COALESCE(SUM(CASE WHEN r."refundTo" = 'card' THEN r."grandTotal" END), 0) AS "cardRefunds",
-      COALESCE(SUM(CASE WHEN r."refundTo" = 'upi' THEN r."grandTotal" END), 0) AS "upiRefunds"
+    SELECT sh."Id" AS "shiftId",
+      COALESCE(SUM(CASE WHEN r."RefundTo" = 'cash' THEN r."GrandTotal" END), 0) AS "cashRefunds",
+      COUNT(CASE WHEN r."RefundTo" = 'cash' THEN 1 END)::int AS "cashRefundCount",
+      COALESCE(SUM(CASE WHEN r."RefundTo" = 'card' THEN r."GrandTotal" END), 0) AS "cardRefunds",
+      COALESCE(SUM(CASE WHEN r."RefundTo" = 'upi' THEN r."GrandTotal" END), 0) AS "upiRefunds"
     FROM "ShiftSession" sh
-    JOIN "SalesReturn" r ON r."tenantId" = sh."tenantId" AND r."refundMode" = 'refund'
-      AND r."createdAt" >= sh."openedAt" AND r."createdAt" <= COALESCE(sh."closedAt", now())
-    JOIN "Sale" s ON s.id = r."saleId" AND s."outletId" = sh."outletId"
-    WHERE sh."tenantId" = ${tenantId} AND sh.id = ANY(${shiftIds})
-    GROUP BY sh.id`;
+    JOIN "SalesReturn" r ON r."TenantId" = sh."TenantId" AND r."RefundMode" = 'refund'
+      AND r."CreatedAt" >= sh."OpenedAt" AND r."CreatedAt" <= COALESCE(sh."ClosedAt", now())
+    JOIN "Linesales" s ON s."DocEntry" = r."DocEntry" AND s."OutletId" = sh."OutletId"
+    WHERE sh."TenantId" = ${tenantId} AND sh."Id" = ANY(${shiftIds})
+    GROUP BY sh."Id"`;
 
   const moveRows = await prisma.$queryRaw`
-    SELECT x."shiftSessionId" AS "shiftId", x.kind, SUM(x.amount) AS amount, COUNT(*)::int AS count FROM (
-      SELECT "shiftSessionId", 'withdrawal' AS kind, amount FROM "CashWithdrawal" WHERE "tenantId" = ${tenantId} AND "shiftSessionId" = ANY(${shiftIds})
+    SELECT x."ShiftSessionId" AS "shiftId", x.kind, SUM(x."Amount") AS amount, COUNT(*)::int AS count FROM (
+      SELECT "ShiftSessionId", 'withdrawal' AS kind, "Amount" FROM "CashWithdrawal" WHERE "TenantId" = ${tenantId} AND "ShiftSessionId" = ANY(${shiftIds})
       UNION ALL
-      SELECT "shiftSessionId", 'deposit', amount FROM "CashDeposit" WHERE "tenantId" = ${tenantId} AND "shiftSessionId" = ANY(${shiftIds})
+      SELECT "ShiftSessionId", 'deposit', "Amount" FROM "CashDeposit" WHERE "TenantId" = ${tenantId} AND "ShiftSessionId" = ANY(${shiftIds})
       UNION ALL
-      SELECT "shiftSessionId", 'transfer', amount FROM "CashTransfer" WHERE "tenantId" = ${tenantId} AND "shiftSessionId" = ANY(${shiftIds})
-    ) x GROUP BY x."shiftSessionId", x.kind`;
+      SELECT "ShiftSessionId", 'transfer', "Amount" FROM "CashTransfer" WHERE "TenantId" = ${tenantId} AND "ShiftSessionId" = ANY(${shiftIds})
+    ) x GROUP BY x."ShiftSessionId", x.kind`;
 
   const byShift = new Map(shiftIds.map((id) => [id, {
     cashSales: 0, cashCount: 0, cardSales: 0, cardCount: 0, upiSales: 0, upiCount: 0, totalSales: 0, saleCount: 0,
@@ -359,15 +361,15 @@ export async function getShiftVarianceTransactions(user, shiftId) {
   const windowEnd = shift.closedAt || new Date();
   const win = { gte: shift.openedAt, lte: windowEnd };
 
-  const sales = await prisma.sale.findMany({
-    where: { tenantId: user.tenantId, outletId: shift.outletId, status: 'COMPLETED', createdAt: win },
-    orderBy: { createdAt: 'asc' },
-    select: { id: true, billNo: true, createdAt: true, paymentMethod: true, grandTotal: true, receivedAmount: true, changeAmount: true, cashierName: true },
-  });
+  const sales = (await prisma.tczOpos.findMany({
+    where: { tenantId: user.tenantId, outletId: shift.outletId, docStatus: 'COMPLETED', createDate: win },
+    orderBy: { createDate: 'asc' },
+    select: { docEntry: true, docNum: true, createDate: true, payMode: true, grandTotal: true, received: true, changeAmount: true, createdBy: true },
+  })).map(asSale);
   const returns = await prisma.salesReturn.findMany({
-    where: { tenantId: user.tenantId, refundMode: 'refund', createdAt: win, sale: { outletId: shift.outletId } },
+    where: { tenantId: user.tenantId, refundMode: 'refund', createdAt: win, tczBill: { outletId: shift.outletId } },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, returnNo: true, createdAt: true, refundTo: true, grandTotal: true, cashierName: true, sale: { select: { billNo: true } } },
+    select: { id: true, returnNo: true, createdAt: true, refundTo: true, grandTotal: true, cashierName: true, tczBill: { select: { docNum: true } } },
   });
   const [withdrawals, deposits, transfers] = [
     await prisma.cashWithdrawal.findMany({ where: { tenantId: user.tenantId, shiftSessionId: shift.id }, orderBy: { createdAt: 'asc' } }),
@@ -385,7 +387,7 @@ export async function getShiftVarianceTransactions(user, shiftId) {
     })),
     ...returns.map((r) => ({
       id: r.id, type: 'REFUND', reference: r.returnNo, at: r.createdAt, tender: r.refundTo, amount: n(r.grandTotal),
-      cashEffect: r.refundTo === 'cash' ? -n(r.grandTotal) : 0, note: `Against ${r.sale.billNo}`,
+      cashEffect: r.refundTo === 'cash' ? -n(r.grandTotal) : 0, note: `Against ${r.tczBill.docNum}`,
     })),
     ...withdrawals.map((m) => ({ id: m.id, type: 'WITHDRAWAL', reference: m.referenceNo, at: m.createdAt, tender: 'cash', amount: n(m.amount), cashEffect: -n(m.amount), note: m.purpose })),
     ...deposits.map((m) => ({ id: m.id, type: 'DEPOSIT', reference: m.referenceNo, at: m.createdAt, tender: 'cash', amount: n(m.amount), cashEffect: -n(m.amount), note: m.purpose })),

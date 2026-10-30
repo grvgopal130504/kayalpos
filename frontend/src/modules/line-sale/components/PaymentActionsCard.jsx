@@ -1,4 +1,3 @@
-import { alpha } from '@mui/material/styles';
 import { Stack, Button, FormControlLabel, Checkbox, Typography, Paper, IconButton, Tooltip, Box } from '@mui/material';
 import LocalPrintshopOutlinedIcon from '@mui/icons-material/LocalPrintshopOutlined';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
@@ -20,7 +19,7 @@ export default function PaymentActionsCard({
   printSettingsEnabled, onTogglePrintSettings, disabled,
 }) {
   return (
-    <Paper variant="outlined" sx={{ borderRadius: 4, p: 2.5, boxShadow: '0 8px 24px rgba(15, 23, 42, 0.06)' }}>
+    <Paper variant="outlined" sx={{ borderRadius: 4, p: 2.5 }}>
       <Stack spacing={1.5}>
         <Button
           variant="contained"
@@ -29,11 +28,7 @@ export default function PaymentActionsCard({
           disabled={disabled}
           startIcon={<LocalPrintshopOutlinedIcon />}
           onClick={onPayAndPrint}
-          sx={{
-            py: 1.75, fontSize: 16, fontWeight: 800, borderRadius: 3,
-            boxShadow: (t) => `0 8px 20px ${alpha(t.palette.primary.main, 0.35)}`,
-            '&:hover': { boxShadow: (t) => `0 10px 24px ${alpha(t.palette.primary.main, 0.45)}` },
-          }}
+          sx={{ py: 1.5, fontSize: 15, fontWeight: 800, borderRadius: 3 }}
         >
           Pay &amp; Print{keyHint('F9')}
         </Button>

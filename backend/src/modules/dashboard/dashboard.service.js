@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js';
 import { getSalesOverviewSummary, getCustomerPurchaseSummaries } from '../sale/sale.service.js';
+import { asSale } from '../sale/tczSaleView.js';
 
 /**
  * Home dashboard + Management Dashboard — real Prisma aggregations against
@@ -73,13 +74,13 @@ async function getTodayVsYesterdaySales(tenantId, outletFilter) {
   const yesterday = dayBounds(1);
 
   const [todayAgg, yesterdayAgg] = await Promise.all([
-    prisma.sale.aggregate({
-      where: { tenantId, ...outletFilter, status: 'COMPLETED', createdAt: { gte: today.start, lte: today.end } },
+    prisma.tczOpos.aggregate({
+      where: { tenantId, ...outletFilter, docStatus: 'COMPLETED', createDate: { gte: today.start, lte: today.end } },
       _sum: { grandTotal: true },
       _count: { _all: true },
     }),
-    prisma.sale.aggregate({
-      where: { tenantId, ...outletFilter, status: 'COMPLETED', createdAt: { gte: yesterday.start, lte: yesterday.end } },
+    prisma.tczOpos.aggregate({
+      where: { tenantId, ...outletFilter, docStatus: 'COMPLETED', createDate: { gte: yesterday.start, lte: yesterday.end } },
       _sum: { grandTotal: true },
       _count: { _all: true },
     }),
@@ -164,9 +165,9 @@ async function getSalesOverview(tenantId, outletFilter, period) {
   rangeStart.setDate(rangeStart.getDate() - (days - 1));
   rangeStart.setHours(0, 0, 0, 0);
 
-  const sales = await prisma.sale.findMany({
-    where: { tenantId, ...outletFilter, status: 'COMPLETED', createdAt: { gte: rangeStart } },
-    select: { createdAt: true, grandTotal: true },
+  const sales = await prisma.tczOpos.findMany({
+    where: { tenantId, ...outletFilter, docStatus: 'COMPLETED', createDate: { gte: rangeStart } },
+    select: { createDate: true, grandTotal: true },
   });
 
   const buckets = [];
@@ -178,7 +179,7 @@ async function getSalesOverview(tenantId, outletFilter, period) {
   const bucketByKey = Object.fromEntries(buckets.map((b) => [b.key, b]));
 
   sales.forEach((sale) => {
-    const bucket = bucketByKey[new Date(sale.createdAt).toDateString()];
+    const bucket = bucketByKey[new Date(sale.createDate).toDateString()];
     if (bucket) bucket.total += Number(sale.grandTotal);
   });
 
@@ -186,10 +187,9 @@ async function getSalesOverview(tenantId, outletFilter, period) {
 }
 
 /**
- * Top Selling Items — real SaleLine qty/amount grouped by product for the
- * selected period, joined back to Product for name/uom. `where.sale` is a
- * relation filter, since SaleLine itself carries no tenantId/outletId (it's
- * a frozen line snapshot — see the Sale model's own doc comment).
+ * Top Selling Items — real LinesaleItemDetails quantity/line total grouped by product for
+ * the selected period, joined back to Product for name/uom. `where.header` is a
+ * relation filter, since a line itself carries no tenantId/outletId.
  */
 async function getTopSellingItems(tenantId, outletFilter, period) {
   const days = periodToDays(period);
@@ -197,11 +197,11 @@ async function getTopSellingItems(tenantId, outletFilter, period) {
   since.setDate(since.getDate() - (days - 1));
   since.setHours(0, 0, 0, 0);
 
-  const grouped = await prisma.saleLine.groupBy({
+  const grouped = await prisma.tczPos1.groupBy({
     by: ['productId'],
-    where: { sale: { tenantId, ...outletFilter, status: 'COMPLETED', createdAt: { gte: since } } },
-    _sum: { qty: true, amount: true },
-    orderBy: { _sum: { qty: 'desc' } },
+    where: { header: { tenantId, ...outletFilter, docStatus: 'COMPLETED', createDate: { gte: since } } },
+    _sum: { quantity: true, lineTotal: true },
+    orderBy: { _sum: { quantity: 'desc' } },
     take: 5,
   });
   if (grouped.length === 0) return [];
@@ -217,9 +217,9 @@ async function getTopSellingItems(tenantId, outletFilter, period) {
     return {
       id: g.productId,
       name: product?.name || 'Unknown Item',
-      qty: g._sum.qty || 0,
+      qty: Number(g._sum.quantity || 0),
       unit: product?.uom || '',
-      salesAmount: round2(g._sum.amount || 0),
+      salesAmount: round2(g._sum.lineTotal || 0),
     };
   });
 }
@@ -231,15 +231,15 @@ async function getTopSellingItems(tenantId, outletFilter, period) {
  */
 async function getPaymentSummary(tenantId, outletFilter) {
   const today = dayBounds(0);
-  const rows = await prisma.sale.groupBy({
-    by: ['paymentMethod'],
-    where: { tenantId, ...outletFilter, status: 'COMPLETED', createdAt: { gte: today.start, lte: today.end } },
+  const rows = await prisma.tczOpos.groupBy({
+    by: ['payMode'],
+    where: { tenantId, ...outletFilter, docStatus: 'COMPLETED', createDate: { gte: today.start, lte: today.end } },
     _sum: { grandTotal: true },
   });
 
   const totals = new Map();
   rows.forEach((row) => {
-    const label = paymentBucketLabel(row.paymentMethod);
+    const label = paymentBucketLabel(row.payMode);
     totals.set(label, (totals.get(label) || 0) + Number(row._sum.grandTotal || 0));
   });
 
@@ -253,14 +253,14 @@ async function getPaymentSummary(tenantId, outletFilter) {
 
 /** Recent Transactions — the latest 5 real Sale rows. */
 async function getRecentTransactions(tenantId, outletFilter) {
-  const sales = await prisma.sale.findMany({
+  const sales = (await prisma.tczOpos.findMany({
     where: { tenantId, ...outletFilter },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { createDate: 'desc' },
     take: 5,
     select: {
-      id: true, billNo: true, customerName: true, grandTotal: true, createdAt: true, status: true,
+      docEntry: true, docNum: true, customerName: true, grandTotal: true, createDate: true, docStatus: true,
     },
-  });
+  })).map(asSale);
 
   return sales.map((sale) => ({
     id: sale.id,
@@ -344,12 +344,12 @@ async function getSalesPurchaseProfit(tenantId) {
   const [
     salesToday, salesYesterday, purchaseToday, purchaseYesterday, expenseToday, expenseYesterday,
   ] = await Promise.all([
-    prisma.sale.aggregate({
-      where: { tenantId, status: 'COMPLETED', createdAt: { gte: today.start, lte: today.end } },
+    prisma.tczOpos.aggregate({
+      where: { tenantId, docStatus: 'COMPLETED', createDate: { gte: today.start, lte: today.end } },
       _sum: { grandTotal: true },
     }),
-    prisma.sale.aggregate({
-      where: { tenantId, status: 'COMPLETED', createdAt: { gte: yesterday.start, lte: yesterday.end } },
+    prisma.tczOpos.aggregate({
+      where: { tenantId, docStatus: 'COMPLETED', createDate: { gte: yesterday.start, lte: yesterday.end } },
       _sum: { grandTotal: true },
     }),
     prisma.stockReceipt.aggregate({
@@ -484,8 +484,8 @@ async function getOperationalAlerts(tenantId, inventory) {
 async function getSalesByOutlet(tenantId) {
   const today = dayBounds(0);
   const [sales, outlets] = await Promise.all([
-    prisma.sale.findMany({
-      where: { tenantId, status: 'COMPLETED', createdAt: { gte: today.start, lte: today.end } },
+    prisma.tczOpos.findMany({
+      where: { tenantId, docStatus: 'COMPLETED', createDate: { gte: today.start, lte: today.end } },
       select: { outletId: true, grandTotal: true },
     }),
     prisma.outlet.findMany({ where: { tenantId }, select: { id: true, name: true } }),
@@ -523,8 +523,8 @@ async function getOutletPerformance(tenantId) {
   const outlets = await prisma.outlet.findMany({ where: { tenantId, isActive: true }, select: { id: true, name: true } });
   if (outlets.length === 0) return [];
 
-  const sales = await prisma.sale.findMany({
-    where: { tenantId, status: 'COMPLETED', createdAt: { gte: today.start, lte: today.end } },
+  const sales = await prisma.tczOpos.findMany({
+    where: { tenantId, docStatus: 'COMPLETED', createDate: { gte: today.start, lte: today.end } },
     select: { outletId: true, grandTotal: true },
   });
 
@@ -586,9 +586,9 @@ async function getExpenseSummary(tenantId) {
 async function getInventorySummary(tenantId, inventory) {
   const today = dayBounds(0);
   const [soldToday, receivedToday] = await Promise.all([
-    prisma.saleLine.aggregate({
-      where: { sale: { tenantId, status: 'COMPLETED', createdAt: { gte: today.start, lte: today.end } } },
-      _sum: { amount: true },
+    prisma.tczPos1.aggregate({
+      where: { header: { tenantId, docStatus: 'COMPLETED', createDate: { gte: today.start, lte: today.end } } },
+      _sum: { lineTotal: true },
     }),
     prisma.stockReceipt.aggregate({
       where: { tenantId, status: 'received', receivedOn: { gte: today.start, lte: today.end } },
@@ -596,7 +596,7 @@ async function getInventorySummary(tenantId, inventory) {
     }),
   ]);
 
-  const stockMovementToday = round2((soldToday._sum.amount || 0) + Number(receivedToday._sum.totalEstimatedValue || 0));
+  const stockMovementToday = round2(Number(soldToday._sum.lineTotal || 0) + Number(receivedToday._sum.totalEstimatedValue || 0));
 
   return {
     totalItems: inventory.totalItems,
@@ -635,14 +635,14 @@ async function getReceivablesPayables(tenantId) {
   const [overview, customerSummaries, overdueSales] = await Promise.all([
     getSalesOverviewSummary(tenantId),
     getCustomerPurchaseSummaries(tenantId),
-    prisma.sale.findMany({
-      where: { tenantId, createdAt: { lte: cutoff30 } },
-      select: { grandTotal: true, receivedAmount: true },
+    prisma.tczOpos.findMany({
+      where: { tenantId, createDate: { lte: cutoff30 } },
+      select: { grandTotal: true, received: true },
     }),
   ]);
 
   const customersDue = Object.values(customerSummaries).filter((c) => c.outstanding > 0).length;
-  const overdue = round2(overdueSales.reduce((sum, sale) => sum + Math.max(Number(sale.grandTotal) - Number(sale.receivedAmount), 0), 0));
+  const overdue = round2(overdueSales.reduce((sum, sale) => sum + Math.max(Number(sale.grandTotal) - Number(sale.received), 0), 0));
 
   return {
     receivables: { total: overview.outstandingAmount, overdue, customersDue },

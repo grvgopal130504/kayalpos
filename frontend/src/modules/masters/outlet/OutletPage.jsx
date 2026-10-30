@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -8,7 +8,6 @@ import {
   TextField, InputAdornment, IconButton, Table, TableHead, TableBody, TableRow, TableCell, Chip,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
@@ -22,7 +21,6 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
@@ -38,7 +36,6 @@ import RegisteredAddressCard from '../company/components/RegisteredAddressCard';
 import ContactPersonTable from '../company/components/ContactPersonTable';
 import ContactPersonFormDialog from '../company/components/ContactPersonFormDialog';
 import OutletLogoCard from './components/OutletLogoCard';
-import { CASHIER } from '../mastersMockData';
 import {
   createOutletSchema, createOutletDefaultValues, outletToFormValues, outletFormValuesToPayload,
   OUTLET_TYPE_OPTIONS, COMPANY_OPTIONS, STATE_OPTIONS, CITY_OPTIONS, STATUS_OPTIONS,
@@ -68,7 +65,6 @@ const DETAIL_TABS = ['Outlet Details'];
  */
 export default function OutletPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
 
   const [view, setView] = useState('list');
   const [activeId, setActiveId] = useState(null);
@@ -134,10 +130,6 @@ export default function OutletPage() {
 
   const contacts = outlet?.contacts || [];
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   // ---- List actions ----
   const goToList = () => { setView('list'); setActiveId(null); };
@@ -253,21 +245,6 @@ export default function OutletPage() {
           {crumb && <Typography variant="caption" sx={{ color: 'text.secondary' }}>{crumb}</Typography>}
         </Breadcrumbs>
       </Box>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-        <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-          Cashier : {CASHIER.name} ({CASHIER.code})
-        </Typography>
-        <MuiLink
-          component="button"
-          type="button"
-          variant="body2"
-          underline="hover"
-          onClick={handleLogout}
-          sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-        >
-          <LogoutOutlinedIcon fontSize="inherit" /> Logout
-        </MuiLink>
-      </Stack>
     </Stack>
   );
 

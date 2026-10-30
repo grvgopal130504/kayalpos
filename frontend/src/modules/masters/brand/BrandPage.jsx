@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
   TextField, MenuItem, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
@@ -17,13 +16,11 @@ import ViewInArOutlinedIcon from '@mui/icons-material/ViewInArOutlined';
 import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
 import { useGetBrandsQuery, useDeleteBrandMutation } from '../../../api/brandApi';
 import { useGetProductsQuery } from '../../../api/productApi';
-import { CASHIER } from '../mastersMockData';
 import { CATEGORY_OPTIONS } from './brandMockData';
 
 import BrandTable from './components/BrandTable';
@@ -70,7 +67,6 @@ function FilterField({ label, children }) {
  */
 export default function BrandPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
 
   const [searchInput, setSearchInput] = useState('');
   const [status, setStatus] = useState('All');
@@ -96,10 +92,6 @@ export default function BrandPage() {
   // number of products whose brand matches a listed brand.
   const { data: productRows = [] } = useGetProductsQuery();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewBrand = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Brands is coming soon', 'info'));
@@ -172,21 +164,6 @@ export default function BrandPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Brand</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>

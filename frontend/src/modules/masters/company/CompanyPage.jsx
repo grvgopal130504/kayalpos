@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -7,14 +7,12 @@ import {
   Button, Menu, MenuItem, CircularProgress,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import FormTextField from '../../../components/form/FormTextField';
 import FormDatePicker from '../../../components/form/FormDatePicker';
@@ -28,7 +26,6 @@ import CompanyLogoCard from './components/CompanyLogoCard';
 import RegisteredAddressCard from './components/RegisteredAddressCard';
 import ContactPersonTable from './components/ContactPersonTable';
 import ContactPersonFormDialog from './components/ContactPersonFormDialog';
-import { CASHIER } from '../mastersMockData';
 import {
   createCompanySchema, createCompanyDefaultValues, companyProfileToFormValues, companyFormValuesToPayload,
   COMPANY_TYPE_OPTIONS, COUNTRY_OPTIONS, STATE_OPTIONS, CURRENCY_OPTIONS,
@@ -62,7 +59,6 @@ const TABS = ['Company Details'];
  */
 export default function CompanyPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [moreAnchor, setMoreAnchor] = useState(null);
@@ -95,10 +91,6 @@ export default function CompanyPage() {
 
   const contacts = profile?.contacts || [];
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewCompany = () => dispatch(showToast('This app supports one company profile per tenant — use Edit to update it', 'info'));
   const handleEdit = () => setIsEditing(true);
@@ -164,21 +156,6 @@ export default function CompanyPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Company</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, px: { xs: 1, sm: 1.5 } }}>

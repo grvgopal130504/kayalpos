@@ -32,61 +32,60 @@ enum RecordStatus {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String   @id @default(cuid()) @map("Id")
+  name      String   @map("Name")
+  slug      String   @unique @map("Slug")
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @updatedAt @map("UpdatedAt")
 
-  outlets   Outlet[]
-  users     User[]
-  brands    Brand[]
-  products  Product[]
-  customers Customer[]
-  suppliers Supplier[]
-  sales     Sale[]
-  heldBills HeldBill[]
-  tczBills TczOpos[]
-  promotions Promotion[]
-  giftVouchers GiftVoucher[]
-  loyaltyPrograms LoyaltyProgram[]
-  salesQuotations SalesQuotation[]
-  salesReturns SalesReturn[]
-  salesOrders SalesOrder[]
-  salesInvoices SalesInvoice[]
+  outlets             Outlet[]
+  users               User[]
+  brands              Brand[]
+  products            Product[]
+  customers           Customer[]
+  suppliers           Supplier[]
+  heldBills           HeldBill[]
+  tczBills            TczOpos[]
+  promotions          Promotion[]
+  giftVouchers        GiftVoucher[]
+  loyaltyPrograms     LoyaltyProgram[]
+  salesQuotations     SalesQuotation[]
+  salesReturns        SalesReturn[]
+  salesOrders         SalesOrder[]
+  salesInvoices       SalesInvoice[]
   barcodeLabelBatches BarcodeLabelBatch[]
-  stockIndents StockIndent[]
-  stockTransfers StockTransfer[]
-  stockReceipts StockReceipt[]
-  stockReturns StockReturn[]
-  stockWastages StockWastage[]
-  stockCounts StockCount[]
-  shiftSessions ShiftSession[]
-  cashWithdrawals CashWithdrawal[]
-  cashDeposits CashDeposit[]
-  cashTransfers CashTransfer[]
-  expenses Expense[]
-  company Company?
-  warehouses Warehouse[]
-  uomGroups UomGroup[]
-  uoms Uom[]
-  taxCodes TaxCode[]
-  hsnSacCodes HsnSac[]
-  sellingPrices SellingPrice[]
-  priceLists PriceList[]
-  batchSerials BatchSerial[]
-  employees Employee[]
+  stockIndents        StockIndent[]
+  stockTransfers      StockTransfer[]
+  stockReceipts       StockReceipt[]
+  stockReturns        StockReturn[]
+  stockWastages       StockWastage[]
+  stockCounts         StockCount[]
+  shiftSessions       ShiftSession[]
+  cashWithdrawals     CashWithdrawal[]
+  cashDeposits        CashDeposit[]
+  cashTransfers       CashTransfer[]
+  expenses            Expense[]
+  company             Company?
+  warehouses          Warehouse[]
+  uomGroups           UomGroup[]
+  uoms                Uom[]
+  taxCodes            TaxCode[]
+  hsnSacCodes         HsnSac[]
+  sellingPrices       SellingPrice[]
+  priceLists          PriceList[]
+  batchSerials        BatchSerial[]
+  employees           Employee[]
 }
 
 model Outlet {
-  id        String   @id @default(cuid())
-  tenantId  String
+  id        String   @id @default(cuid()) @map("Id")
+  tenantId  String   @map("TenantId")
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  code      String
-  name      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  code      String   @map("Code")
+  name      String   @map("Name")
+  isActive  Boolean  @default(true) @map("IsActive")
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @updatedAt @map("UpdatedAt")
 
   // Masters > Outlet's own detail-screen fields — added alongside the List
   // page (Masters > Outlet was previously a single hand-edited detail view
@@ -95,117 +94,116 @@ model Outlet {
   // column — same convention Brand's Active/Inactive toggle already uses
   // elsewhere, just without Brand's separate ACTIVE/INACTIVE enum since
   // Outlet only ever needed the plain boolean.
-  outletType      String?
+  outletType      String? @map("OutletType")
   // Free-text, not a relation to the Company model — this app only models
   // one Company profile per tenant (see the Company master), so this is
   // just the display name shown on the Outlet form, not a second source of
   // truth to keep in sync.
-  companyName     String?
-  registrationNo  String?
-  gstin           String?
-  panNo           String?
-  phone           String?
-  email           String?
-  mobile          String?
-  website         String?
-  state           String?
-  city            String?
+  companyName     String? @map("CompanyName")
+  registrationNo  String? @map("RegistrationNo")
+  gstin           String? @map("Gstin")
+  panNo           String? @map("PanNo")
+  phone           String? @map("Phone")
+  email           String? @map("Email")
+  mobile          String? @map("Mobile")
+  website         String? @map("Website")
+  state           String? @map("State")
+  city            String? @map("City")
   // Just the uploaded logo file's name — same honest limitation as
   // Company.logoName and Expense.attachmentName: no file-storage backend
   // is wired up yet.
-  logoName        String?
-  addressLine1    String?
-  addressLine2    String?
-  addressLine3    String?
-  addressLine4    String?
-  addressLandmark String?
+  logoName        String? @map("LogoName")
+  addressLine1    String? @map("AddressLine1")
+  addressLine2    String? @map("AddressLine2")
+  addressLine3    String? @map("AddressLine3")
+  addressLine4    String? @map("AddressLine4")
+  addressLandmark String? @map("AddressLandmark")
 
-  sales Sale[]
-  heldBills HeldBill[]
-  tczBills TczOpos[]
-  shiftSessions ShiftSession[]
+  heldBills       HeldBill[]
+  tczBills        TczOpos[]
+  shiftSessions   ShiftSession[]
   cashWithdrawals CashWithdrawal[]
-  cashDeposits CashDeposit[]
-  cashTransfers CashTransfer[]
-  expenses Expense[]
-  contacts OutletContact[]
-  warehouses Warehouse[]
-  sellingPrices SellingPrice[]
-  employees Employee[]
+  cashDeposits    CashDeposit[]
+  cashTransfers   CashTransfer[]
+  expenses        Expense[]
+  contacts        OutletContact[]
+  warehouses      Warehouse[]
+  sellingPrices   SellingPrice[]
+  employees       Employee[]
 
   @@unique([tenantId, code])
 }
 
 model OutletContact {
-  id       String @id @default(cuid())
-  outletId String
+  id       String @id @default(cuid()) @map("Id")
+  outletId String @map("OutletId")
   outlet   Outlet @relation(fields: [outletId], references: [id])
 
-  name        String
-  designation String?
-  email       String?
-  phone       String?
+  name        String  @map("Name")
+  designation String? @map("Designation")
+  email       String? @map("Email")
+  phone       String? @map("Phone")
   // Only one contact per outlet can be primary at a time — enforced in
   // outlet.service.js the same way as Company's contacts (see
   // CompanyContact.isPrimary's doc comment): unset every other row's
   // isPrimary inside the same transaction that sets this one.
-  isPrimary   Boolean @default(false)
+  isPrimary   Boolean @default(false) @map("IsPrimary")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @updatedAt @map("UpdatedAt")
 
   @@index([outletId])
 }
 
 model Warehouse {
-  id        String   @id @default(cuid())
-  tenantId  String
+  id        String   @id @default(cuid()) @map("Id")
+  tenantId  String   @map("TenantId")
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  code      String
-  name      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  code      String   @map("Code")
+  name      String   @map("Name")
+  isActive  Boolean  @default(true) @map("IsActive")
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @updatedAt @map("UpdatedAt")
 
   // Masters > Warehouse's detail-screen fields — same shape as Outlet's own
   // detail fields (see Outlet's doc comment above): `status` on the
   // frontend maps onto this plain `isActive` boolean, not a separate enum.
-  warehouseType String?
-  location      String?
+  warehouseType String? @map("WarehouseType")
+  location      String? @map("Location")
   // Free-text display name, not a relation to the Company model — same
   // reasoning as Outlet.companyName (this app only models one Company
   // profile per tenant via the Company master).
-  companyName   String?
+  companyName   String? @map("CompanyName")
   // Real relation (unlike companyName above) — a Warehouse always belongs
   // to one Outlet, and Outlet already exists as a proper master, so the
   // frontend's "Outlet" dropdown is populated from the real Outlet list
   // instead of a static picklist. Nullable + SetNull on delete so removing
   // an Outlet never cascades into silently deleting its warehouses.
-  outletId      String?
-  outlet        Outlet?  @relation(fields: [outletId], references: [id], onDelete: SetNull)
-  state         String?
-  country       String?
-  address       String?
-  pincode       String?
-  landmark      String?
+  outletId      String? @map("OutletId")
+  outlet        Outlet? @relation(fields: [outletId], references: [id], onDelete: SetNull)
+  state         String? @map("State")
+  country       String? @map("Country")
+  address       String? @map("Address")
+  pincode       String? @map("Pincode")
+  landmark      String? @map("Landmark")
 
   // Warehouse Capacity sidebar card. Kept as Decimal (not a computed
   // column) — Available Capacity is derived client-side (Total − Used) and
   // recomputed on every read, same as WarehouseCapacityCard's own useWatch.
-  totalCapacity Decimal? @db.Decimal(14, 2)
-  usedCapacity  Decimal? @db.Decimal(14, 2)
-  capacityUnit  String?
+  totalCapacity Decimal? @map("TotalCapacity") @db.Decimal(14, 2)
+  usedCapacity  Decimal? @map("UsedCapacity") @db.Decimal(14, 2)
+  capacityUnit  String?  @map("CapacityUnit")
 
   // Warehouse Incharge sidebar card — plain text, not a User relation; no
   // login/permissions are attached to this yet.
-  inchargeName  String?
-  inchargePhone String?
+  inchargeName  String? @map("InchargeName")
+  inchargePhone String? @map("InchargePhone")
 
   // Just the uploaded logo file's name — same honest limitation as
   // Company.logoName/Outlet.logoName: no file-storage backend wired up yet.
-  logoName String?
+  logoName String? @map("LogoName")
 
-  contacts WarehouseContact[]
+  contacts     WarehouseContact[]
   batchSerials BatchSerial[]
 
   @@unique([tenantId, code])
@@ -213,35 +211,35 @@ model Warehouse {
 }
 
 model WarehouseContact {
-  id          String    @id @default(cuid())
-  warehouseId String
+  id          String    @id @default(cuid()) @map("Id")
+  warehouseId String    @map("WarehouseId")
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
 
-  name        String
-  designation String?
-  email       String?
-  phone       String?
+  name        String  @map("Name")
+  designation String? @map("Designation")
+  email       String? @map("Email")
+  phone       String? @map("Phone")
   // Only one contact per warehouse can be primary at a time — enforced in
   // warehouse.service.js the same way as Outlet/Company's own contacts.
-  isPrimary   Boolean @default(false)
+  isPrimary   Boolean @default(false) @map("IsPrimary")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @updatedAt @map("UpdatedAt")
 
   @@index([warehouseId])
 }
 
 model User {
-  id           String   @id @default(cuid())
-  tenantId     String
+  id           String   @id @default(cuid()) @map("Id")
+  tenantId     String   @map("TenantId")
   tenant       Tenant   @relation(fields: [tenantId], references: [id])
-  username     String   @unique
-  passwordHash String
-  name         String
-  role         UserRole @default(ADMIN)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  username     String   @unique @map("Username")
+  passwordHash String   @map("PasswordHash")
+  name         String   @map("Name")
+  role         UserRole @default(ADMIN) @map("Role")
+  isActive     Boolean  @default(true) @map("IsActive")
+  createdAt    DateTime @default(now()) @map("CreatedAt")
+  updatedAt    DateTime @updatedAt @map("UpdatedAt")
 }
 
 // ---------------------------------------------------------------------------
@@ -251,16 +249,16 @@ model User {
 // ---------------------------------------------------------------------------
 
 model Brand {
-  id          String       @id @default(cuid())
-  tenantId    String
+  id          String       @id @default(cuid()) @map("Id")
+  tenantId    String       @map("TenantId")
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
-  code        String
-  name        String
-  description String?
-  category    String
-  status      RecordStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  code        String       @map("Code")
+  name        String       @map("Name")
+  description String?      @map("Description")
+  category    String       @map("Category")
+  status      RecordStatus @default(ACTIVE) @map("Status")
+  createdAt   DateTime     @default(now()) @map("CreatedAt")
+  updatedAt   DateTime     @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, code])
   // Every list query is scoped by tenantId first (multi-tenant isolation),
@@ -274,16 +272,16 @@ model Brand {
 // UOM Group — a category (Weight, Volume, Piece, ...) grouping related UOMs.
 // Its `code` is auto-generated (GRP001, GRP002, ...) the same way Brand's is.
 model UomGroup {
-  id          String       @id @default(cuid())
-  tenantId    String
+  id          String       @id @default(cuid()) @map("Id")
+  tenantId    String       @map("TenantId")
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
-  code        String
-  name        String
-  description String?
-  baseUom     String?
-  status      RecordStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  code        String       @map("Code")
+  name        String       @map("Name")
+  description String?      @map("Description")
+  baseUom     String?      @map("BaseUom")
+  status      RecordStatus @default(ACTIVE) @map("Status")
+  createdAt   DateTime     @default(now()) @map("CreatedAt")
+  updatedAt   DateTime     @updatedAt @map("UpdatedAt")
 
   uoms Uom[]
 
@@ -299,17 +297,17 @@ model UomGroup {
 // already made for Product.brand — nothing else needs to join on it yet, and
 // it means a base UOM that's later renamed/removed doesn't orphan the field.
 model Uom {
-  id               String       @id @default(cuid())
-  tenantId         String
+  id               String       @id @default(cuid()) @map("Id")
+  tenantId         String       @map("TenantId")
   tenant           Tenant       @relation(fields: [tenantId], references: [id])
-  code             String
-  name             String
-  groupId          String?
+  code             String       @map("Code")
+  name             String       @map("Name")
+  groupId          String?      @map("GroupId")
   group            UomGroup?    @relation(fields: [groupId], references: [id])
-  conversionFactor Decimal?     @db.Decimal(14, 6)
-  status           RecordStatus @default(ACTIVE)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  conversionFactor Decimal?     @map("ConversionFactor") @db.Decimal(14, 6)
+  status           RecordStatus @default(ACTIVE) @map("Status")
+  createdAt        DateTime     @default(now()) @map("CreatedAt")
+  updatedAt        DateTime     @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -324,20 +322,20 @@ model Uom {
 // live in the frontend form (createTaxCodeSchema.js) and may need new values
 // added without a migration. `rate` is a percentage (0-999.99).
 model TaxCode {
-  id              String       @id @default(cuid())
-  tenantId        String
+  id              String       @id @default(cuid()) @map("Id")
+  tenantId        String       @map("TenantId")
   tenant          Tenant       @relation(fields: [tenantId], references: [id])
-  code            String
-  name            String
-  type            String
-  category        String
-  rate            Decimal      @db.Decimal(5, 2)
-  calculationType String
-  appliesTo       String
-  effectiveFrom   DateTime?
-  status          RecordStatus @default(ACTIVE)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  code            String       @map("Code")
+  name            String       @map("Name")
+  type            String       @map("Type")
+  category        String       @map("Category")
+  rate            Decimal      @map("Rate") @db.Decimal(5, 2)
+  calculationType String       @map("CalculationType")
+  appliesTo       String       @map("AppliesTo")
+  effectiveFrom   DateTime?    @map("EffectiveFrom")
+  status          RecordStatus @default(ACTIVE) @map("Status")
+  createdAt       DateTime     @default(now()) @map("CreatedAt")
+  updatedAt       DateTime     @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -352,19 +350,19 @@ model TaxCode {
 // strings (not DB enums / FKs) for the same "frontend-owned option list"
 // reason as TaxCode's type/category/calculationType/appliesTo.
 model HsnSac {
-  id            String       @id @default(cuid())
-  tenantId      String
+  id            String       @id @default(cuid()) @map("Id")
+  tenantId      String       @map("TenantId")
   tenant        Tenant       @relation(fields: [tenantId], references: [id])
-  code          String
-  description   String
-  type          String
-  chapter       String?
-  taxRate       Decimal      @db.Decimal(5, 2)
-  uqc           String?
-  effectiveFrom DateTime?
-  status        RecordStatus @default(ACTIVE)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  code          String       @map("Code")
+  description   String       @map("Description")
+  type          String       @map("Type")
+  chapter       String?      @map("Chapter")
+  taxRate       Decimal      @map("TaxRate") @db.Decimal(5, 2)
+  uqc           String?      @map("Uqc")
+  effectiveFrom DateTime?    @map("EffectiveFrom")
+  status        RecordStatus @default(ACTIVE) @map("Status")
+  createdAt     DateTime     @default(now()) @map("CreatedAt")
+  updatedAt     DateTime     @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -376,32 +374,38 @@ model HsnSac {
 // (see docs/architecture-proposal.md §7) and this field becomes a cached/
 // derived balance instead of the source of truth.
 model Product {
-  id           String       @id @default(cuid())
-  tenantId     String
+  id           String       @id @default(cuid()) @map("Id")
+  tenantId     String       @map("TenantId")
   tenant       Tenant       @relation(fields: [tenantId], references: [id])
-  code         String
-  name         String
-  group        String
+  code         String       @map("Code")
+  name         String       @map("Name")
+  group        String       @map("Group")
   // Free-text, not a hard enum — same "kept loose, list lives in the
   // frontend" reasoning as group/brand: the Product Type filter/field on
   // the Masters > Product page reads and writes this column.
-  productType  String?
-  brand        String?
-  uom          String
-  hsnSac       String?
-  taxCode      String?
-  salePrice    Decimal      @default(0) @db.Decimal(12, 2)
-  mrp          Decimal      @default(0) @db.Decimal(12, 2)
-  availableQty Int          @default(0)
+  productType  String?      @map("ProductType")
+  brand        String?      @map("Brand")
+  uom          String       @map("Uom")
+  hsnSac       String?      @map("HsnSac")
+  taxCode      String?      @map("TaxCode")
+  salePrice    Decimal      @default(0) @map("SalePrice") @db.Decimal(12, 2)
+  mrp          Decimal      @default(0) @map("Mrp") @db.Decimal(12, 2)
+  availableQty Int          @default(0) @map("AvailableQty")
   // Reorder threshold for the Home dashboard's "Low Stock Items" panel — a
   // product is low stock once availableQty <= reorderLevel. Defaults to 10
   // so every existing row gets a sane threshold without a data migration;
   // editable later from the Product master once that page grows a field
   // for it (out of scope for this dashboard wiring).
-  reorderLevel Int          @default(10)
-  status       RecordStatus @default(ACTIVE)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  reorderLevel Int          @default(10) @map("ReorderLevel")
+  status       RecordStatus @default(ACTIVE) @map("Status")
+  createdAt    DateTime     @default(now()) @map("CreatedAt")
+  updatedAt    DateTime     @updatedAt @map("UpdatedAt")
+
+  heldBillLines HeldBillLine[]
+  tczLines      TczPos1[]
+  returnItems   SalesReturnItem[]
+  sellingPrices SellingPrice[]
+  batchSerials  BatchSerial[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -410,13 +414,6 @@ model Product {
   // Product list's search box); a plain btree index at least turns a
   // prefix search into an index range scan instead of a full scan.
   @@index([tenantId, name])
-
-  saleLines SaleLine[]
-  heldBillLines HeldBillLine[]
-  tczLines TczPos1[]
-  returnItems SalesReturnItem[]
-  sellingPrices SellingPrice[]
-  batchSerials BatchSerial[]
 }
 
 // Price List master (Masters > Price List) — a named price list (Main
@@ -430,32 +427,32 @@ model Product {
 // "based on" genuinely means "another row in this same table", not an
 // open-ended picklist value.
 model PriceList {
-  id       String @id @default(cuid())
-  tenantId String
+  id       String @id @default(cuid()) @map("Id")
+  tenantId String @map("TenantId")
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  code         String
-  name         String
-  type         String
-  applicableTo String
+  code         String @map("Code")
+  name         String @map("Name")
+  type         String @map("Type")
+  applicableTo String @map("ApplicableTo")
 
   // Nullable + SetNull on delete — deleting the base price list should
   // never cascade into deleting the lists built on top of it, just clear
   // the reference. `@relation("PriceListBase")` names this self-relation so
   // Prisma can tell the "child -> base" direction apart from the reverse
   // "base -> its dependents" list below.
-  basePriceListId String?
+  basePriceListId String?     @map("BasePriceListId")
   basePriceList   PriceList?  @relation("PriceListBase", fields: [basePriceListId], references: [id], onDelete: SetNull)
   basedOnByLists  PriceList[] @relation("PriceListBase")
 
-  currency      String    @default("INR")
-  effectiveFrom DateTime?
-  effectiveTo   DateTime?
+  currency      String    @default("INR") @map("Currency")
+  effectiveFrom DateTime? @map("EffectiveFrom")
+  effectiveTo   DateTime? @map("EffectiveTo")
 
-  status RecordStatus @default(ACTIVE)
+  status RecordStatus @default(ACTIVE) @map("Status")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -493,29 +490,29 @@ enum BatchSerialType {
 // update API still requires one to be selected (enforced in
 // batchSerial.schema.js, not the database).
 model BatchSerial {
-  id       String @id @default(cuid())
-  tenantId String
+  id       String @id @default(cuid()) @map("Id")
+  tenantId String @map("TenantId")
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  productId String
+  productId String  @map("ProductId")
   product   Product @relation(fields: [productId], references: [id])
 
-  number String
-  type   BatchSerialType
+  number String          @map("Number")
+  type   BatchSerialType @map("Type")
 
-  mfgDate    DateTime?
-  expiryDate DateTime?
+  mfgDate    DateTime? @map("MfgDate")
+  expiryDate DateTime? @map("ExpiryDate")
 
-  warehouseId String?
+  warehouseId String?    @map("WarehouseId")
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
 
-  qty Decimal @default(1) @db.Decimal(14, 2)
-  uom String
+  qty Decimal @default(1) @map("Qty") @db.Decimal(14, 2)
+  uom String  @map("Uom")
 
-  status RecordStatus @default(ACTIVE)
+  status RecordStatus @default(ACTIVE) @map("Status")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @updatedAt @map("UpdatedAt")
 
   // Serial numbers are meant to be unique identifiers, and batch numbers are
   // unique enough per tenant in practice (mfg-date-coded, e.g. "B2505001")
@@ -542,47 +539,47 @@ model BatchSerial {
 // later change to that TaxCode's rate never silently reprices historical
 // records.
 model SellingPrice {
-  id       String @id @default(cuid())
-  tenantId String
+  id       String @id @default(cuid()) @map("Id")
+  tenantId String @map("TenantId")
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  productId String
+  productId String  @map("ProductId")
   product   Product @relation(fields: [productId], references: [id])
 
-  priceList String
+  priceList String @map("PriceList")
 
   // Nullable + SetNull on delete, same convention as Warehouse.outletId —
   // removing an Outlet should never cascade into silently deleting its
   // selling prices. Omitted (null) means "applies to every outlet".
-  outletId String?
+  outletId String? @map("OutletId")
   outlet   Outlet? @relation(fields: [outletId], references: [id], onDelete: SetNull)
 
-  mrp          Decimal @db.Decimal(12, 2)
-  purchaseCost Decimal @default(0) @db.Decimal(12, 2)
+  mrp          Decimal @map("Mrp") @db.Decimal(12, 2)
+  purchaseCost Decimal @default(0) @map("PurchaseCost") @db.Decimal(12, 2)
 
-  taxCode String?
-  taxRate Decimal @default(0) @db.Decimal(5, 2)
+  taxCode String? @map("TaxCode")
+  taxRate Decimal @default(0) @map("TaxRate") @db.Decimal(5, 2)
 
-  pricingMethod PricingMethod @default(MARGIN_FROM_MRP)
-  marginPercent Decimal       @default(0) @db.Decimal(5, 2)
+  pricingMethod PricingMethod @default(MARGIN_FROM_MRP) @map("PricingMethod")
+  marginPercent Decimal       @default(0) @map("MarginPercent") @db.Decimal(5, 2)
 
-  sellingPriceExclTax Decimal @db.Decimal(12, 2)
-  sellingPriceInclTax Decimal @db.Decimal(12, 2)
+  sellingPriceExclTax Decimal @map("SellingPriceExclTax") @db.Decimal(12, 2)
+  sellingPriceInclTax Decimal @map("SellingPriceInclTax") @db.Decimal(12, 2)
 
   // Free text, same "frontend-owned option list" reasoning as Product.brand —
   // display-only, doesn't affect the stored amounts above (those are already
   // rounded to 2dp server-side regardless of this label).
-  rounding          String  @default("Round to 2 Decimal")
-  priceUpdateReason String?
+  rounding          String  @default("Round to 2 Decimal") @map("Rounding")
+  priceUpdateReason String? @map("PriceUpdateReason")
 
-  effectiveFrom DateTime
-  effectiveTo   DateTime?
+  effectiveFrom DateTime  @map("EffectiveFrom")
+  effectiveTo   DateTime? @map("EffectiveTo")
 
-  approvalRequired Boolean      @default(false)
-  status           RecordStatus @default(ACTIVE)
+  approvalRequired Boolean      @default(false) @map("ApprovalRequired")
+  status           RecordStatus @default(ACTIVE) @map("Status")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @updatedAt @map("UpdatedAt")
 
   // One priceList/outlet combination per product shouldn't be entered twice —
   // editing the existing row (not creating a duplicate) is the expected way
@@ -601,44 +598,44 @@ model SellingPrice {
 // records once that module exists, never hand-maintained on the customer
 // row itself (source-of-truth rule from the architecture proposal).
 model Customer {
-  id                  String       @id @default(cuid())
-  tenantId            String
+  id                  String       @id @default(cuid()) @map("Id")
+  tenantId            String       @map("TenantId")
   tenant              Tenant       @relation(fields: [tenantId], references: [id])
-  code                String
-  name                String
-  mobile              String
-  email               String?
-  gstin               String?
-  customerType        String
-  group               String?
-  priceCategory       String?
-  creditLimit         Decimal      @default(0) @db.Decimal(12, 2)
-  openingBalance      Decimal      @default(0) @db.Decimal(12, 2)
-  openingBalanceType  String       @default("Cr")
-  address             String?
-  salesRepresentative String?
-  territory           String?
-  allowCreditSale     Boolean      @default(true)
-  priceInclusive      Boolean      @default(false)
-  smsNotification     Boolean      @default(true)
-  notes               String?
-  loyaltyPoints       Int          @default(0)
-  status              RecordStatus @default(ACTIVE)
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  code                String       @map("Code")
+  name                String       @map("Name")
+  mobile              String       @map("Mobile")
+  email               String?      @map("Email")
+  gstin               String?      @map("Gstin")
+  customerType        String       @map("CustomerType")
+  group               String?      @map("Group")
+  priceCategory       String?      @map("PriceCategory")
+  creditLimit         Decimal      @default(0) @map("CreditLimit") @db.Decimal(12, 2)
+  openingBalance      Decimal      @default(0) @map("OpeningBalance") @db.Decimal(12, 2)
+  openingBalanceType  String       @default("Cr") @map("OpeningBalanceType")
+  address             String?      @map("Address")
+  salesRepresentative String?      @map("SalesRepresentative")
+  territory           String?      @map("Territory")
+  allowCreditSale     Boolean      @default(true) @map("AllowCreditSale")
+  priceInclusive      Boolean      @default(false) @map("PriceInclusive")
+  smsNotification     Boolean      @default(true) @map("SmsNotification")
+  notes               String?      @map("Notes")
+  loyaltyPoints       Int          @default(0) @map("LoyaltyPoints")
+  status              RecordStatus @default(ACTIVE) @map("Status")
+  createdAt           DateTime     @default(now()) @map("CreatedAt")
+  updatedAt           DateTime     @updatedAt @map("UpdatedAt")
+
+  tczBills        TczOpos[]
+  heldBills       HeldBill[]
+  salesQuotations SalesQuotation[]
+  salesReturns    SalesReturn[]
+  salesOrders     SalesOrder[]
+  salesInvoices   SalesInvoice[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
   @@index([tenantId, name])
   @@index([tenantId, mobile])
-
-  sales Sale[]
-  heldBills HeldBill[]
-  salesQuotations SalesQuotation[]
-  salesReturns SalesReturn[]
-  salesOrders SalesOrder[]
-  salesInvoices SalesInvoice[]
 }
 
 // Supplier master. Same tenant-scoped/auto-code/RecordStatus shape as the
@@ -647,21 +644,21 @@ model Customer {
 // bar options (SUPPLIER_GROUP_OPTIONS/CITY_OPTIONS/STATE_OPTIONS on the
 // frontend, still a fixed list there rather than DB-driven).
 model Supplier {
-  id           String       @id @default(cuid())
-  tenantId     String
+  id           String       @id @default(cuid()) @map("Id")
+  tenantId     String       @map("TenantId")
   tenant       Tenant       @relation(fields: [tenantId], references: [id])
-  code         String
-  name         String
-  group        String?
-  phone        String?
-  email        String?
-  gstNo        String?
-  city         String?
-  state        String?
-  paymentTerms String?
-  status       RecordStatus @default(ACTIVE)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  code         String       @map("Code")
+  name         String       @map("Name")
+  group        String?      @map("Group")
+  phone        String?      @map("Phone")
+  email        String?      @map("Email")
+  gstNo        String?      @map("GstNo")
+  city         String?      @map("City")
+  state        String?      @map("State")
+  paymentTerms String?      @map("PaymentTerms")
+  status       RecordStatus @default(ACTIVE) @map("Status")
+  createdAt    DateTime     @default(now()) @map("CreatedAt")
+  updatedAt    DateTime     @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -685,25 +682,25 @@ model Supplier {
 // `type`) since "Location" genuinely means one of the tenant's actual
 // Outlet rows — same reasoning as Warehouse.outletId.
 model Employee {
-  id       String @id @default(cuid())
-  tenantId String
+  id       String @id @default(cuid()) @map("Id")
+  tenantId String @map("TenantId")
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  code String
-  name String
-  type String
+  code String @map("Code")
+  name String @map("Name")
+  type String @map("Type")
 
-  outletId String?
+  outletId String? @map("OutletId")
   outlet   Outlet? @relation(fields: [outletId], references: [id], onDelete: SetNull)
 
-  phone         String?
-  email         String?
-  loginUsername String?
-  joiningDate   DateTime?
+  phone         String?   @map("Phone")
+  email         String?   @map("Email")
+  loginUsername String?   @map("LoginUsername")
+  joiningDate   DateTime? @map("JoiningDate")
 
-  status    RecordStatus @default(ACTIVE)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  status    RecordStatus @default(ACTIVE) @map("Status")
+  createdAt DateTime     @default(now()) @map("CreatedAt")
+  updatedAt DateTime     @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -716,95 +713,9 @@ model Employee {
 // more elaborate documents per the architecture proposal.
 // ---------------------------------------------------------------------------
 
-enum SaleStatus {
-  COMPLETED
-  HELD
-}
-
-// A completed sale's money fields are stored on the header (not just
-// derivable from its lines) because a sale is an immutable financial record
-// once created — recomputing totals later from live Product prices would
-// silently rewrite history if a price ever changes.
-model Sale {
-  id             String     @id @default(cuid())
-  tenantId       String
-  tenant         Tenant     @relation(fields: [tenantId], references: [id])
-  // The outlet the cashier was logged into at the time of sale (from the
-  // JWT's outletId — see auth.service.js login()), never a client-supplied
-  // value. Nullable because sales created before this column existed have
-  // no outlet on record; the discount-summary report buckets those under
-  // "Unassigned" instead of guessing.
-  outletId       String?
-  outlet         Outlet?    @relation(fields: [outletId], references: [id])
-  billNo         String
-  customerId     String?
-  customer       Customer?  @relation(fields: [customerId], references: [id])
-  customerName   String     @default("Walk-in Customer")
-  cashierName    String
-  subTotal       Decimal    @default(0) @db.Decimal(12, 2)
-  discountType   String     @default("amount")
-  discountValue  Decimal    @default(0) @db.Decimal(12, 2)
-  discountAmount Decimal    @default(0) @db.Decimal(12, 2)
-  taxAmount      Decimal    @default(0) @db.Decimal(12, 2)
-  grandTotal     Decimal    @default(0) @db.Decimal(12, 2)
-  paymentMethod  String
-  receivedAmount Decimal    @default(0) @db.Decimal(12, 2)
-  changeAmount   Decimal    @default(0) @db.Decimal(12, 2)
-  // Card-network detail, only ever set when paymentMethod is "card" — the
-  // Line Sale checkout doesn't collect these yet (createSale accepts them
-  // as optional), so every existing sale and any non-card sale has them
-  // null. The Card Sales report shows "—" rather than guessing when unset.
-  cardType       String?
-  cardLast4      String?
-  cardBank       String?
-  // UPI detail, only ever set when paymentMethod is "upi" — same "checkout
-  // doesn't collect it yet" caveat as the card fields above; the UPI Sales
-  // report shows "—" rather than guessing when unset.
-  upiApp         String?
-  upiTxnId       String?
-  // Free-text reference for any tender that isn't cash/card/upi — a cheque
-  // number, a gift card code, a bank transfer UTR, a loyalty-redemption
-  // note. Generic on purpose (unlike the card/UPI fields above) since these
-  // "other" tenders don't share a common structured shape. Same "checkout
-  // doesn't collect it yet" caveat.
-  paymentReference String?
-  status         SaleStatus @default(COMPLETED)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-
-  lines SaleLine[]
-  returns SalesReturn[]
-  heldBill HeldBill?
-  tczBill TczOpos?
-
-  @@unique([tenantId, billNo])
-  @@index([tenantId, status])
-  @@index([tenantId, createdAt])
-  @@index([tenantId, outletId])
-}
-
-// Line items are a frozen snapshot (code/name/uom/price/taxRate) of the
-// Product at time of sale, not a live join — so a later Product rename or
-// price change never alters a past bill.
-model SaleLine {
-  id        String  @id @default(cuid())
-  saleId    String
-  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-  code      String
-  name      String
-  uom       String
-  qty       Int
-  price     Decimal @db.Decimal(12, 2)
-  taxRate   Decimal @db.Decimal(5, 4)
-  amount    Decimal @db.Decimal(12, 2)
-
-  returnItems SalesReturnItem[]
-
-  @@index([saleId])
-  @@index([productId])
-}
+// Line Sale bills live in the Linesales (header) / LinesaleItemDetails (lines) tables —
+// see "TCZ billing tables" at the end of this file. The old Sale / SaleLine
+// tables were removed; TCZ is the only store for sales now.
 
 // ---------------------------------------------------------------------------
 // Held ("parked") bills. A held bill is a cart a cashier set aside to serve
@@ -827,44 +738,44 @@ enum HeldBillStatus {
 }
 
 model HeldBill {
-  id             String         @id @default(cuid())
-  tenantId       String
+  id             String         @id @default(cuid()) @map("Id")
+  tenantId       String         @map("TenantId")
   tenant         Tenant         @relation(fields: [tenantId], references: [id])
-  outletId       String?
+  outletId       String?        @map("OutletId")
   outlet         Outlet?        @relation(fields: [outletId], references: [id])
   // Per-tenant temporary reference ("HB-00001"). The real bill number
   // (LS-xxxxx) is only issued when the sale is paid.
-  reference      String
+  reference      String         @map("Reference")
   // The cashier who parked it (JWT user id + display name at the time).
-  userId         String
-  cashierName    String
-  customerId     String?
+  userId         String         @map("UserId")
+  cashierName    String         @map("CashierName")
+  customerId     String?        @map("CustomerId")
   customer       Customer?      @relation(fields: [customerId], references: [id])
-  customerName   String         @default("Walk-in Customer")
-  discountType   String         @default("amount")
-  discountValue  Decimal        @default(0) @db.Decimal(12, 2)
-  discountAmount Decimal        @default(0) @db.Decimal(12, 2)
-  subTotal       Decimal        @default(0) @db.Decimal(12, 2)
-  taxAmount      Decimal        @default(0) @db.Decimal(12, 2)
-  grandTotal     Decimal        @default(0) @db.Decimal(12, 2)
-  itemCount      Int            @default(0)
-  status         HeldBillStatus @default(HELD)
+  customerName   String         @default("Walk-in Customer") @map("CustomerName")
+  discountType   String         @default("amount") @map("DiscountType")
+  discountValue  Decimal        @default(0) @map("DiscountValue") @db.Decimal(12, 2)
+  discountAmount Decimal        @default(0) @map("DiscountAmount") @db.Decimal(12, 2)
+  subTotal       Decimal        @default(0) @map("SubTotal") @db.Decimal(12, 2)
+  taxAmount      Decimal        @default(0) @map("TaxAmount") @db.Decimal(12, 2)
+  grandTotal     Decimal        @default(0) @map("GrandTotal") @db.Decimal(12, 2)
+  itemCount      Int            @default(0) @map("ItemCount")
+  status         HeldBillStatus @default(HELD) @map("Status")
   // When it was (last) parked — reset every time the bill is held again.
-  heldAt         DateTime       @default(now())
+  heldAt         DateTime       @default(now()) @map("HeldAt")
   // Client-generated idempotency token for the "hold" request: a retry of
   // the same request (timeout, double tap) returns the existing row instead
   // of creating a duplicate held bill.
-  clientToken    String?
+  clientToken    String?        @map("ClientToken")
   // Who has it open right now / when (set by resume, cleared by re-hold).
-  resumedById    String?
-  resumedAt      DateTime?
-  completedAt    DateTime?
-  // The Sale this bill became when paid. @unique = one held bill can only
-  // ever produce one sale.
-  saleId         String?        @unique
-  sale           Sale?          @relation(fields: [saleId], references: [id])
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  resumedById    String?        @map("ResumedById")
+  resumedAt      DateTime?      @map("ResumedAt")
+  completedAt    DateTime?      @map("CompletedAt")
+  // The TCZ bill (Linesales.DocEntry) this held bill became when paid.
+  // @unique = one held bill can only ever produce one bill.
+  tczDocEntry    BigInt?        @unique @map("TczDocEntry")
+  tczBill        TczOpos?       @relation(fields: [tczDocEntry], references: [docEntry])
+  createdAt      DateTime       @default(now()) @map("CreatedAt")
+  updatedAt      DateTime       @updatedAt @map("UpdatedAt")
 
   lines HeldBillLine[]
 
@@ -875,18 +786,18 @@ model HeldBill {
 }
 
 model HeldBillLine {
-  id         String   @id @default(cuid())
-  heldBillId String
+  id         String   @id @default(cuid()) @map("Id")
+  heldBillId String   @map("HeldBillId")
   heldBill   HeldBill @relation(fields: [heldBillId], references: [id], onDelete: Cascade)
-  productId  String
+  productId  String   @map("ProductId")
   product    Product  @relation(fields: [productId], references: [id])
-  code       String
-  name       String
-  uom        String
-  qty        Int
-  price      Decimal  @db.Decimal(12, 2)
-  taxRate    Decimal  @db.Decimal(5, 4)
-  amount     Decimal  @db.Decimal(12, 2)
+  code       String   @map("Code")
+  name       String   @map("Name")
+  uom        String   @map("Uom")
+  qty        Int      @map("Qty")
+  price      Decimal  @map("Price") @db.Decimal(12, 2)
+  taxRate    Decimal  @map("TaxRate") @db.Decimal(5, 4)
+  amount     Decimal  @map("Amount") @db.Decimal(12, 2)
 
   @@index([heldBillId])
   @@index([productId])
@@ -902,32 +813,32 @@ model HeldBillLine {
 // how lightly the rest of this schema treats free-text category names
 // (Product.group is a plain string too, no separate Category model yet).
 model Promotion {
-  id                 String   @id @default(cuid())
-  tenantId           String
-  tenant             Tenant   @relation(fields: [tenantId], references: [id])
-  code               String
-  name               String
-  promotionType      String
-  description        String?
-  appliesTo          String
-  selectedItems      String[] @default([])
-  selectedCategories String[] @default([])
-  discountType       String
-  discountValue      Decimal  @default(0) @db.Decimal(12, 2)
-  discountUnit       String   @default("%")
-  maximumUsage       String   @default("no-limit")
-  minimumBillAmount  Decimal  @default(0) @db.Decimal(12, 2)
-  startDate          DateTime
-  endDate            DateTime?
-  noExpiry           Boolean  @default(false)
-  usageLimitEnabled  Boolean  @default(false)
-  usageLimitCount    Int      @default(0)
-  onePerCustomer     Boolean  @default(false)
-  combinable         Boolean  @default(true)
-  showInInvoice      Boolean  @default(true)
-  usageCount         Int      @default(0)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                 String    @id @default(cuid()) @map("Id")
+  tenantId           String    @map("TenantId")
+  tenant             Tenant    @relation(fields: [tenantId], references: [id])
+  code               String    @map("Code")
+  name               String    @map("Name")
+  promotionType      String    @map("PromotionType")
+  description        String?   @map("Description")
+  appliesTo          String    @map("AppliesTo")
+  selectedItems      String[]  @default([]) @map("SelectedItems")
+  selectedCategories String[]  @default([]) @map("SelectedCategories")
+  discountType       String    @map("DiscountType")
+  discountValue      Decimal   @default(0) @map("DiscountValue") @db.Decimal(12, 2)
+  discountUnit       String    @default("%") @map("DiscountUnit")
+  maximumUsage       String    @default("no-limit") @map("MaximumUsage")
+  minimumBillAmount  Decimal   @default(0) @map("MinimumBillAmount") @db.Decimal(12, 2)
+  startDate          DateTime  @map("StartDate")
+  endDate            DateTime? @map("EndDate")
+  noExpiry           Boolean   @default(false) @map("NoExpiry")
+  usageLimitEnabled  Boolean   @default(false) @map("UsageLimitEnabled")
+  usageLimitCount    Int       @default(0) @map("UsageLimitCount")
+  onePerCustomer     Boolean   @default(false) @map("OnePerCustomer")
+  combinable         Boolean   @default(true) @map("Combinable")
+  showInInvoice      Boolean   @default(true) @map("ShowInInvoice")
+  usageCount         Int       @default(0) @map("UsageCount")
+  createdAt          DateTime  @default(now()) @map("CreatedAt")
+  updatedAt          DateTime  @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, code])
   @@index([tenantId, createdAt])
@@ -945,35 +856,35 @@ model Promotion {
 // at checkout yet (Line Sale has no "earn/redeem points" step), the same
 // honest-zero situation as Promotion's usageCount / GiftVoucher's usageCount.
 model LoyaltyProgram {
-  id                            String   @id @default(cuid())
-  tenantId                      String
+  id                            String   @id @default(cuid()) @map("Id")
+  tenantId                      String   @map("TenantId")
   tenant                        Tenant   @relation(fields: [tenantId], references: [id])
-  code                          String
-  name                          String
-  description                  String?
-  status                        String   @default("Active")
-  earnPointsOn                  String
-  pointsType                    String
-  pointsValue                   Decimal  @default(0) @db.Decimal(12, 2)
-  redemptionType                String
-  redemptionValue               Decimal  @default(0) @db.Decimal(12, 2)
-  minimumPointsRequired         Int      @default(0)
-  maximumDiscountPerTransaction Decimal  @default(0) @db.Decimal(12, 2)
-  applyOn                       String   @default("all")
-  membershipValidity            String
-  validityPeriodMonths          Int      @default(0)
-  pointsExpiry                  String
-  welcomePointsEnabled          Boolean  @default(false)
-  welcomePointsValue            Int      @default(0)
-  allowPointsRedemption         Boolean  @default(true)
-  showLoyaltyDetailsInInvoice   Boolean  @default(true)
-  allowNegativePoints           Boolean  @default(false)
-  pointsExpiryNotification      Boolean  @default(true)
-  membersEnrolled               Int      @default(0)
-  pointsIssuedTillDate          Int      @default(0)
-  pointsRedeemedTillDate        Int      @default(0)
-  createdAt                     DateTime @default(now())
-  updatedAt                     DateTime @updatedAt
+  code                          String   @map("Code")
+  name                          String   @map("Name")
+  description                   String?  @map("Description")
+  status                        String   @default("Active") @map("Status")
+  earnPointsOn                  String   @map("EarnPointsOn")
+  pointsType                    String   @map("PointsType")
+  pointsValue                   Decimal  @default(0) @map("PointsValue") @db.Decimal(12, 2)
+  redemptionType                String   @map("RedemptionType")
+  redemptionValue               Decimal  @default(0) @map("RedemptionValue") @db.Decimal(12, 2)
+  minimumPointsRequired         Int      @default(0) @map("MinimumPointsRequired")
+  maximumDiscountPerTransaction Decimal  @default(0) @map("MaximumDiscountPerTransaction") @db.Decimal(12, 2)
+  applyOn                       String   @default("all") @map("ApplyOn")
+  membershipValidity            String   @map("MembershipValidity")
+  validityPeriodMonths          Int      @default(0) @map("ValidityPeriodMonths")
+  pointsExpiry                  String   @map("PointsExpiry")
+  welcomePointsEnabled          Boolean  @default(false) @map("WelcomePointsEnabled")
+  welcomePointsValue            Int      @default(0) @map("WelcomePointsValue")
+  allowPointsRedemption         Boolean  @default(true) @map("AllowPointsRedemption")
+  showLoyaltyDetailsInInvoice   Boolean  @default(true) @map("ShowLoyaltyDetailsInInvoice")
+  allowNegativePoints           Boolean  @default(false) @map("AllowNegativePoints")
+  pointsExpiryNotification      Boolean  @default(true) @map("PointsExpiryNotification")
+  membersEnrolled               Int      @default(0) @map("MembersEnrolled")
+  pointsIssuedTillDate          Int      @default(0) @map("PointsIssuedTillDate")
+  pointsRedeemedTillDate        Int      @default(0) @map("PointsRedeemedTillDate")
+  createdAt                     DateTime @default(now()) @map("CreatedAt")
+  updatedAt                     DateTime @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, code])
   @@index([tenantId, createdAt])
@@ -991,29 +902,29 @@ model LoyaltyProgram {
 // "redeem voucher" step), the same honest-zero situation as Promotion's
 // usageCount.
 model GiftVoucher {
-  id                       String   @id @default(cuid())
-  tenantId                 String
-  tenant                   Tenant   @relation(fields: [tenantId], references: [id])
-  code                     String
-  name                     String
-  voucherType              String
-  voucherValue             Decimal  @default(0) @db.Decimal(12, 2)
-  description              String?
-  startDate                DateTime
-  endDate                  DateTime?
-  noExpiry                 Boolean  @default(false)
-  minimumBillAmount        Decimal  @default(0) @db.Decimal(12, 2)
-  maximumUsage             String   @default("no-limit")
-  onePerCustomer           Boolean  @default(false)
-  partialRedemptionAllowed Boolean  @default(true)
-  allowMultipleInOneBill   Boolean  @default(true)
-  applicableTo             String   @default("all")
-  isActive                 Boolean  @default(true)
-  sendSms                  Boolean  @default(false)
-  sendEmail                Boolean  @default(false)
-  usageCount               Int      @default(0)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                       String    @id @default(cuid()) @map("Id")
+  tenantId                 String    @map("TenantId")
+  tenant                   Tenant    @relation(fields: [tenantId], references: [id])
+  code                     String    @map("Code")
+  name                     String    @map("Name")
+  voucherType              String    @map("VoucherType")
+  voucherValue             Decimal   @default(0) @map("VoucherValue") @db.Decimal(12, 2)
+  description              String?   @map("Description")
+  startDate                DateTime  @map("StartDate")
+  endDate                  DateTime? @map("EndDate")
+  noExpiry                 Boolean   @default(false) @map("NoExpiry")
+  minimumBillAmount        Decimal   @default(0) @map("MinimumBillAmount") @db.Decimal(12, 2)
+  maximumUsage             String    @default("no-limit") @map("MaximumUsage")
+  onePerCustomer           Boolean   @default(false) @map("OnePerCustomer")
+  partialRedemptionAllowed Boolean   @default(true) @map("PartialRedemptionAllowed")
+  allowMultipleInOneBill   Boolean   @default(true) @map("AllowMultipleInOneBill")
+  applicableTo             String    @default("all") @map("ApplicableTo")
+  isActive                 Boolean   @default(true) @map("IsActive")
+  sendSms                  Boolean   @default(false) @map("SendSms")
+  sendEmail                Boolean   @default(false) @map("SendEmail")
+  usageCount               Int       @default(0) @map("UsageCount")
+  createdAt                DateTime  @default(now()) @map("CreatedAt")
+  updatedAt                DateTime  @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, code])
   @@index([tenantId, createdAt])
@@ -1041,40 +952,40 @@ model GiftVoucher {
 // read. `customerName` is likewise a snapshot of the customer's name at
 // save time, same as Sale.customerName.
 model SalesQuotation {
-  id             String    @id @default(cuid())
-  tenantId       String
+  id             String    @id @default(cuid()) @map("Id")
+  tenantId       String    @map("TenantId")
   tenant         Tenant    @relation(fields: [tenantId], references: [id])
-  code           String
-  customerId     String?
+  code           String    @map("Code")
+  customerId     String?   @map("CustomerId")
   customer       Customer? @relation(fields: [customerId], references: [id])
-  customerName   String
-  contactPerson  String?
-  mobile         String?
-  email          String?
-  address        String?
-  quotationDate  DateTime
-  validTill      DateTime
-  paymentTerms   String?
-  salesPerson    String
-  currency       String    @default("INR")
-  referenceNo    String?
-  referenceDate  DateTime?
-  priceList      String?
-  remarks        String?
-  notes          String?
-  subTotal       Decimal   @default(0) @db.Decimal(12, 2)
-  extraDiscount  Decimal   @default(0) @db.Decimal(12, 2)
-  discountAmount Decimal   @default(0) @db.Decimal(12, 2)
-  taxableAmount  Decimal   @default(0) @db.Decimal(12, 2)
-  sgstAmount     Decimal   @default(0) @db.Decimal(12, 2)
-  cgstAmount     Decimal   @default(0) @db.Decimal(12, 2)
-  grandTotal     Decimal   @default(0) @db.Decimal(12, 2)
-  status         String    @default("pending")
-  createdBy      String
-  convertedOn    DateTime?
-  convertedTo    String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  customerName   String    @map("CustomerName")
+  contactPerson  String?   @map("ContactPerson")
+  mobile         String?   @map("Mobile")
+  email          String?   @map("Email")
+  address        String?   @map("Address")
+  quotationDate  DateTime  @map("QuotationDate")
+  validTill      DateTime  @map("ValidTill")
+  paymentTerms   String?   @map("PaymentTerms")
+  salesPerson    String    @map("SalesPerson")
+  currency       String    @default("INR") @map("Currency")
+  referenceNo    String?   @map("ReferenceNo")
+  referenceDate  DateTime? @map("ReferenceDate")
+  priceList      String?   @map("PriceList")
+  remarks        String?   @map("Remarks")
+  notes          String?   @map("Notes")
+  subTotal       Decimal   @default(0) @map("SubTotal") @db.Decimal(12, 2)
+  extraDiscount  Decimal   @default(0) @map("ExtraDiscount") @db.Decimal(12, 2)
+  discountAmount Decimal   @default(0) @map("DiscountAmount") @db.Decimal(12, 2)
+  taxableAmount  Decimal   @default(0) @map("TaxableAmount") @db.Decimal(12, 2)
+  sgstAmount     Decimal   @default(0) @map("SgstAmount") @db.Decimal(12, 2)
+  cgstAmount     Decimal   @default(0) @map("CgstAmount") @db.Decimal(12, 2)
+  grandTotal     Decimal   @default(0) @map("GrandTotal") @db.Decimal(12, 2)
+  status         String    @default("pending") @map("Status")
+  createdBy      String    @map("CreatedBy")
+  convertedOn    DateTime? @map("ConvertedOn")
+  convertedTo    String?   @map("ConvertedTo")
+  createdAt      DateTime  @default(now()) @map("CreatedAt")
+  updatedAt      DateTime  @updatedAt @map("UpdatedAt")
 
   items SalesQuotationItem[]
 
@@ -1092,19 +1003,19 @@ model SalesQuotation {
 // product picker wired up yet), so storing anything more than what the user
 // actually typed would be inventing data that was never really looked up.
 model SalesQuotationItem {
-  id              String         @id @default(cuid())
-  quotationId     String
+  id              String         @id @default(cuid()) @map("Id")
+  quotationId     String         @map("QuotationId")
   quotation       SalesQuotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  itemCode        String
-  itemName        String
-  hsnCode         String?
-  qty             Decimal        @db.Decimal(12, 2)
-  unit            String?
-  unitPrice       Decimal        @db.Decimal(12, 2)
-  discountPercent Decimal        @default(0) @db.Decimal(5, 2)
-  discountAmount  Decimal        @default(0) @db.Decimal(12, 2)
-  taxCode         String?
-  amount          Decimal        @db.Decimal(12, 2)
+  itemCode        String         @map("ItemCode")
+  itemName        String         @map("ItemName")
+  hsnCode         String?        @map("HsnCode")
+  qty             Decimal        @map("Qty") @db.Decimal(12, 2)
+  unit            String?        @map("Unit")
+  unitPrice       Decimal        @map("UnitPrice") @db.Decimal(12, 2)
+  discountPercent Decimal        @default(0) @map("DiscountPercent") @db.Decimal(5, 2)
+  discountAmount  Decimal        @default(0) @map("DiscountAmount") @db.Decimal(12, 2)
+  taxCode         String?        @map("TaxCode")
+  amount          Decimal        @map("Amount") @db.Decimal(12, 2)
 
   @@index([quotationId])
 }
@@ -1136,39 +1047,39 @@ model SalesQuotationItem {
 // rule Sale/SalesQuotation use), and `customerName` is a snapshot of the
 // customer's name at save time.
 model SalesOrder {
-  id             String     @id @default(cuid())
-  tenantId       String
-  tenant         Tenant     @relation(fields: [tenantId], references: [id])
-  code           String
-  customerId     String?
-  customer       Customer?  @relation(fields: [customerId], references: [id])
-  customerName   String
-  contactPerson  String?
-  mobile         String?
-  email          String?
-  address        String?
-  orderDate      DateTime
-  deliveryDate   DateTime
-  paymentTerms   String?
-  salesPerson    String
-  currency       String     @default("INR")
-  quotationRef   String?
-  referenceDate  DateTime?
-  priceList      String?
-  remarks        String?
-  notes          String?
-  subTotal       Decimal    @default(0) @db.Decimal(12, 2)
-  extraDiscount  Decimal    @default(0) @db.Decimal(12, 2)
-  discountAmount Decimal    @default(0) @db.Decimal(12, 2)
-  taxableAmount  Decimal    @default(0) @db.Decimal(12, 2)
-  sgstAmount     Decimal    @default(0) @db.Decimal(12, 2)
-  cgstAmount     Decimal    @default(0) @db.Decimal(12, 2)
-  grandTotal     Decimal    @default(0) @db.Decimal(12, 2)
-  status         String     @default("pending")
-  createdBy      String
-  deliveredOn    DateTime?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id             String    @id @default(cuid()) @map("Id")
+  tenantId       String    @map("TenantId")
+  tenant         Tenant    @relation(fields: [tenantId], references: [id])
+  code           String    @map("Code")
+  customerId     String?   @map("CustomerId")
+  customer       Customer? @relation(fields: [customerId], references: [id])
+  customerName   String    @map("CustomerName")
+  contactPerson  String?   @map("ContactPerson")
+  mobile         String?   @map("Mobile")
+  email          String?   @map("Email")
+  address        String?   @map("Address")
+  orderDate      DateTime  @map("OrderDate")
+  deliveryDate   DateTime  @map("DeliveryDate")
+  paymentTerms   String?   @map("PaymentTerms")
+  salesPerson    String    @map("SalesPerson")
+  currency       String    @default("INR") @map("Currency")
+  quotationRef   String?   @map("QuotationRef")
+  referenceDate  DateTime? @map("ReferenceDate")
+  priceList      String?   @map("PriceList")
+  remarks        String?   @map("Remarks")
+  notes          String?   @map("Notes")
+  subTotal       Decimal   @default(0) @map("SubTotal") @db.Decimal(12, 2)
+  extraDiscount  Decimal   @default(0) @map("ExtraDiscount") @db.Decimal(12, 2)
+  discountAmount Decimal   @default(0) @map("DiscountAmount") @db.Decimal(12, 2)
+  taxableAmount  Decimal   @default(0) @map("TaxableAmount") @db.Decimal(12, 2)
+  sgstAmount     Decimal   @default(0) @map("SgstAmount") @db.Decimal(12, 2)
+  cgstAmount     Decimal   @default(0) @map("CgstAmount") @db.Decimal(12, 2)
+  grandTotal     Decimal   @default(0) @map("GrandTotal") @db.Decimal(12, 2)
+  status         String    @default("pending") @map("Status")
+  createdBy      String    @map("CreatedBy")
+  deliveredOn    DateTime? @map("DeliveredOn")
+  createdAt      DateTime  @default(now()) @map("CreatedAt")
+  updatedAt      DateTime  @updatedAt @map("UpdatedAt")
 
   items SalesOrderItem[]
 
@@ -1182,19 +1093,19 @@ model SalesOrder {
 // SalesQuotationItem (free-text itemCode/itemName, not a Product FK, since
 // the item grid is plain text entry with no product picker wired up yet).
 model SalesOrderItem {
-  id              String     @id @default(cuid())
-  orderId         String
+  id              String     @id @default(cuid()) @map("Id")
+  orderId         String     @map("OrderId")
   order           SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  itemCode        String
-  itemName        String
-  hsnCode         String?
-  qty             Decimal    @db.Decimal(12, 2)
-  unit            String?
-  unitPrice       Decimal    @db.Decimal(12, 2)
-  discountPercent Decimal    @default(0) @db.Decimal(5, 2)
-  discountAmount  Decimal    @default(0) @db.Decimal(12, 2)
-  taxCode         String?
-  amount          Decimal    @db.Decimal(12, 2)
+  itemCode        String     @map("ItemCode")
+  itemName        String     @map("ItemName")
+  hsnCode         String?    @map("HsnCode")
+  qty             Decimal    @map("Qty") @db.Decimal(12, 2)
+  unit            String?    @map("Unit")
+  unitPrice       Decimal    @map("UnitPrice") @db.Decimal(12, 2)
+  discountPercent Decimal    @default(0) @map("DiscountPercent") @db.Decimal(5, 2)
+  discountAmount  Decimal    @default(0) @map("DiscountAmount") @db.Decimal(12, 2)
+  taxCode         String?    @map("TaxCode")
+  amount          Decimal    @map("Amount") @db.Decimal(12, 2)
 
   @@index([orderId])
 }
@@ -1225,41 +1136,41 @@ model SalesOrderItem {
 // rule Sale/SalesQuotation/SalesOrder use), and `customerName` is a snapshot
 // of the customer's name at save time.
 model SalesInvoice {
-  id             String    @id @default(cuid())
-  tenantId       String
+  id             String    @id @default(cuid()) @map("Id")
+  tenantId       String    @map("TenantId")
   tenant         Tenant    @relation(fields: [tenantId], references: [id])
-  code           String
-  customerId     String?
+  code           String    @map("Code")
+  customerId     String?   @map("CustomerId")
   customer       Customer? @relation(fields: [customerId], references: [id])
-  customerName   String
-  contactPerson  String?
-  mobile         String?
-  email          String?
-  address        String?
-  invoiceDate    DateTime
-  dueDate        DateTime?
-  salesOrderRef  String?
-  quotationRef   String?
-  salesPerson    String
-  currency       String    @default("INR")
-  paymentTerms   String?
-  priceList      String?
-  deliveryDate   DateTime?
-  referenceNo    String?
-  remarks        String?
-  notes          String?
-  subTotal       Decimal   @default(0) @db.Decimal(12, 2)
-  extraDiscount  Decimal   @default(0) @db.Decimal(12, 2)
-  discountAmount Decimal   @default(0) @db.Decimal(12, 2)
-  taxableAmount  Decimal   @default(0) @db.Decimal(12, 2)
-  sgstAmount     Decimal   @default(0) @db.Decimal(12, 2)
-  cgstAmount     Decimal   @default(0) @db.Decimal(12, 2)
-  grandTotal     Decimal   @default(0) @db.Decimal(12, 2)
-  status         String    @default("draft")
-  createdBy      String
-  paidOn         DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  customerName   String    @map("CustomerName")
+  contactPerson  String?   @map("ContactPerson")
+  mobile         String?   @map("Mobile")
+  email          String?   @map("Email")
+  address        String?   @map("Address")
+  invoiceDate    DateTime  @map("InvoiceDate")
+  dueDate        DateTime? @map("DueDate")
+  salesOrderRef  String?   @map("SalesOrderRef")
+  quotationRef   String?   @map("QuotationRef")
+  salesPerson    String    @map("SalesPerson")
+  currency       String    @default("INR") @map("Currency")
+  paymentTerms   String?   @map("PaymentTerms")
+  priceList      String?   @map("PriceList")
+  deliveryDate   DateTime? @map("DeliveryDate")
+  referenceNo    String?   @map("ReferenceNo")
+  remarks        String?   @map("Remarks")
+  notes          String?   @map("Notes")
+  subTotal       Decimal   @default(0) @map("SubTotal") @db.Decimal(12, 2)
+  extraDiscount  Decimal   @default(0) @map("ExtraDiscount") @db.Decimal(12, 2)
+  discountAmount Decimal   @default(0) @map("DiscountAmount") @db.Decimal(12, 2)
+  taxableAmount  Decimal   @default(0) @map("TaxableAmount") @db.Decimal(12, 2)
+  sgstAmount     Decimal   @default(0) @map("SgstAmount") @db.Decimal(12, 2)
+  cgstAmount     Decimal   @default(0) @map("CgstAmount") @db.Decimal(12, 2)
+  grandTotal     Decimal   @default(0) @map("GrandTotal") @db.Decimal(12, 2)
+  status         String    @default("draft") @map("Status")
+  createdBy      String    @map("CreatedBy")
+  paidOn         DateTime? @map("PaidOn")
+  createdAt      DateTime  @default(now()) @map("CreatedAt")
+  updatedAt      DateTime  @updatedAt @map("UpdatedAt")
 
   items SalesInvoiceItem[]
 
@@ -1274,19 +1185,19 @@ model SalesInvoice {
 // Product FK, since the item grid is plain text entry with no product
 // picker wired up yet).
 model SalesInvoiceItem {
-  id              String       @id @default(cuid())
-  invoiceId       String
+  id              String       @id @default(cuid()) @map("Id")
+  invoiceId       String       @map("InvoiceId")
   invoice         SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  itemCode        String
-  itemName        String
-  hsnCode         String?
-  qty             Decimal      @db.Decimal(12, 2)
-  unit            String?
-  unitPrice       Decimal      @db.Decimal(12, 2)
-  discountPercent Decimal      @default(0) @db.Decimal(5, 2)
-  discountAmount  Decimal      @default(0) @db.Decimal(12, 2)
-  taxCode         String?
-  amount          Decimal      @db.Decimal(12, 2)
+  itemCode        String       @map("ItemCode")
+  itemName        String       @map("ItemName")
+  hsnCode         String?      @map("HsnCode")
+  qty             Decimal      @map("Qty") @db.Decimal(12, 2)
+  unit            String?      @map("Unit")
+  unitPrice       Decimal      @map("UnitPrice") @db.Decimal(12, 2)
+  discountPercent Decimal      @default(0) @map("DiscountPercent") @db.Decimal(5, 2)
+  discountAmount  Decimal      @default(0) @map("DiscountAmount") @db.Decimal(12, 2)
+  taxCode         String?      @map("TaxCode")
+  amount          Decimal      @map("Amount") @db.Decimal(12, 2)
 
   @@index([invoiceId])
 }
@@ -1316,36 +1227,36 @@ model SalesInvoiceItem {
 // frontend — they're stored as a record of what was selected, not re-run as
 // a live query on read.
 model BarcodeLabelBatch {
-  id               String    @id @default(cuid())
-  tenantId         String
+  id               String    @id @default(cuid()) @map("Id")
+  tenantId         String    @map("TenantId")
   tenant           Tenant    @relation(fields: [tenantId], references: [id])
-  code             String
-  labelName        String
-  labelType        String    @default("barcode")
-  labelSize        String
-  printTemplate    String?
-  labelsAcross     Int?
-  labelsDown       Int?
-  remarks          String?
-  itemCategory     String?
-  item             String?
-  uom              String?
-  brand            String?
-  warehouse        String?
-  batchNo          String?
-  fromItemCode     String?
-  toItemCode       String?
-  barcodeType      String    @default("ean-13")
-  additionalFilter String?
-  sortBy           String    @default("item-name")
-  notes            String?
-  totalItems       Int       @default(0)
-  totalLabels      Decimal   @default(0) @db.Decimal(12, 2)
-  status           String    @default("draft")
-  createdBy        String
-  printedOn        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  code             String    @map("Code")
+  labelName        String    @map("LabelName")
+  labelType        String    @default("barcode") @map("LabelType")
+  labelSize        String    @map("LabelSize")
+  printTemplate    String?   @map("PrintTemplate")
+  labelsAcross     Int?      @map("LabelsAcross")
+  labelsDown       Int?      @map("LabelsDown")
+  remarks          String?   @map("Remarks")
+  itemCategory     String?   @map("ItemCategory")
+  item             String?   @map("Item")
+  uom              String?   @map("Uom")
+  brand            String?   @map("Brand")
+  warehouse        String?   @map("Warehouse")
+  batchNo          String?   @map("BatchNo")
+  fromItemCode     String?   @map("FromItemCode")
+  toItemCode       String?   @map("ToItemCode")
+  barcodeType      String    @default("ean-13") @map("BarcodeType")
+  additionalFilter String?   @map("AdditionalFilter")
+  sortBy           String    @default("item-name") @map("SortBy")
+  notes            String?   @map("Notes")
+  totalItems       Int       @default(0) @map("TotalItems")
+  totalLabels      Decimal   @default(0) @map("TotalLabels") @db.Decimal(12, 2)
+  status           String    @default("draft") @map("Status")
+  createdBy        String    @map("CreatedBy")
+  printedOn        DateTime? @map("PrintedOn")
+  createdAt        DateTime  @default(now()) @map("CreatedAt")
+  updatedAt        DateTime  @updatedAt @map("UpdatedAt")
 
   items BarcodeLabelItem[]
 
@@ -1362,17 +1273,17 @@ model BarcodeLabelBatch {
 // never becomes part of the batch (see LabelPrintSummaryCard's own
 // selected-only totals on the frontend, which this mirrors).
 model BarcodeLabelItem {
-  id              String            @id @default(cuid())
-  batchId         String
+  id              String            @id @default(cuid()) @map("Id")
+  batchId         String            @map("BatchId")
   batch           BarcodeLabelBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  itemCode        String
-  itemName        String
-  hsnCode         String?
-  uom             String?
-  barcode         String?
-  printQty        Decimal           @db.Decimal(12, 2)
-  fromSerialBatch String?
-  toSerialBatch   String?
+  itemCode        String            @map("ItemCode")
+  itemName        String            @map("ItemName")
+  hsnCode         String?           @map("HsnCode")
+  uom             String?           @map("Uom")
+  barcode         String?           @map("Barcode")
+  printQty        Decimal           @map("PrintQty") @db.Decimal(12, 2)
+  fromSerialBatch String?           @map("FromSerialBatch")
+  toSerialBatch   String?           @map("ToSerialBatch")
 
   @@index([batchId])
 }
@@ -1391,32 +1302,33 @@ model BarcodeLabelItem {
 // deliberate business rule (the goods physically come back to stock), same
 // "single on-hand counter for now" caveat availableQty already carries.
 model SalesReturn {
-  id             String    @id @default(cuid())
-  tenantId       String
+  id             String    @id @default(cuid()) @map("Id")
+  tenantId       String    @map("TenantId")
   tenant         Tenant    @relation(fields: [tenantId], references: [id])
-  returnNo       String
-  saleId         String
-  sale           Sale      @relation(fields: [saleId], references: [id])
-  customerId     String?
+  returnNo       String    @map("ReturnNo")
+  // The original bill: Linesales.DocEntry.
+  docEntry       BigInt    @map("DocEntry")
+  tczBill        TczOpos   @relation(fields: [docEntry], references: [docEntry])
+  customerId     String?   @map("CustomerId")
   customer       Customer? @relation(fields: [customerId], references: [id])
-  customerName   String    @default("Walk-in Customer")
-  cashierName    String
-  reason         String
-  note           String?
-  refundMode     String
-  refundTo       String?
-  subTotal       Decimal   @default(0) @db.Decimal(12, 2)
-  discountAmount Decimal   @default(0) @db.Decimal(12, 2)
-  taxAmount      Decimal   @default(0) @db.Decimal(12, 2)
-  grandTotal     Decimal   @default(0) @db.Decimal(12, 2)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  customerName   String    @default("Walk-in Customer") @map("CustomerName")
+  cashierName    String    @map("CashierName")
+  reason         String    @map("Reason")
+  note           String?   @map("Note")
+  refundMode     String    @map("RefundMode")
+  refundTo       String?   @map("RefundTo")
+  subTotal       Decimal   @default(0) @map("SubTotal") @db.Decimal(12, 2)
+  discountAmount Decimal   @default(0) @map("DiscountAmount") @db.Decimal(12, 2)
+  taxAmount      Decimal   @default(0) @map("TaxAmount") @db.Decimal(12, 2)
+  grandTotal     Decimal   @default(0) @map("GrandTotal") @db.Decimal(12, 2)
+  createdAt      DateTime  @default(now()) @map("CreatedAt")
+  updatedAt      DateTime  @updatedAt @map("UpdatedAt")
 
   items SalesReturnItem[]
 
   @@unique([tenantId, returnNo])
   @@index([tenantId, createdAt])
-  @@index([tenantId, saleId])
+  @@index([tenantId, docEntry])
 }
 
 // A frozen snapshot of the returned line (code/name/uom/rate/tax rate, all
@@ -1426,23 +1338,25 @@ model SalesReturn {
 // getReturnableItems() sums against to compute a line's remaining
 // returnable qty on every future lookup of the same invoice.
 model SalesReturnItem {
-  id         String      @id @default(cuid())
-  returnId   String
-  return     SalesReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
-  saleLineId String
-  saleLine   SaleLine    @relation(fields: [saleLineId], references: [id])
-  productId  String
-  product    Product     @relation(fields: [productId], references: [id])
-  code       String
-  name       String
-  uom        String
-  qty        Int
-  rate       Decimal     @db.Decimal(12, 2)
-  taxRate    Decimal     @db.Decimal(5, 4)
-  amount     Decimal     @db.Decimal(12, 2)
+  id        String      @id @default(cuid()) @map("Id")
+  returnId  String      @map("ReturnId")
+  return    SalesReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  // The original bill line: LinesaleItemDetails (DocEntry, LineId).
+  docEntry  BigInt      @map("DocEntry")
+  lineId    Int         @map("LineId")
+  tczLine   TczPos1     @relation(fields: [docEntry, lineId], references: [docEntry, lineId])
+  productId String      @map("ProductId")
+  product   Product     @relation(fields: [productId], references: [id])
+  code      String      @map("Code")
+  name      String      @map("Name")
+  uom       String      @map("Uom")
+  qty       Int         @map("Qty")
+  rate      Decimal     @map("Rate") @db.Decimal(12, 2)
+  taxRate   Decimal     @map("TaxRate") @db.Decimal(5, 4)
+  amount    Decimal     @map("Amount") @db.Decimal(12, 2)
 
   @@index([returnId])
-  @@index([saleLineId])
+  @@index([docEntry, lineId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1488,36 +1402,36 @@ model SalesReturnItem {
 // time — an item code with no matching product honestly gets 0 for both
 // rather than a fabricated number.
 model StockIndent {
-  id                  String    @id @default(cuid())
-  tenantId            String
+  id                  String    @id @default(cuid()) @map("Id")
+  tenantId            String    @map("TenantId")
   tenant              Tenant    @relation(fields: [tenantId], references: [id])
-  code                String
-  indentDate          DateTime
-  requiredDate        DateTime
-  department          String
-  purpose             String?
-  fromOutletId        String
-  fromOutletName      String
-  toOutletId          String
-  toOutletName        String
-  requestor           String
-  priority            String    @default("medium")
-  designation         String?
-  referenceNo         String?
-  locationId           String?
-  locationName         String?
-  costCenter          String?
-  remarks             String?
-  notes               String?
-  totalItems          Int       @default(0)
-  totalRequiredQty    Decimal   @default(0) @db.Decimal(12, 2)
-  totalEstimatedValue Decimal   @default(0) @db.Decimal(12, 2)
-  status              String    @default("draft")
-  createdBy           String
-  approvedBy          String?
-  approvedOn          DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  code                String    @map("Code")
+  indentDate          DateTime  @map("IndentDate")
+  requiredDate        DateTime  @map("RequiredDate")
+  department          String    @map("Department")
+  purpose             String?   @map("Purpose")
+  fromOutletId        String    @map("FromOutletId")
+  fromOutletName      String    @map("FromOutletName")
+  toOutletId          String    @map("ToOutletId")
+  toOutletName        String    @map("ToOutletName")
+  requestor           String    @map("Requestor")
+  priority            String    @default("medium") @map("Priority")
+  designation         String?   @map("Designation")
+  referenceNo         String?   @map("ReferenceNo")
+  locationId          String?   @map("LocationId")
+  locationName        String?   @map("LocationName")
+  costCenter          String?   @map("CostCenter")
+  remarks             String?   @map("Remarks")
+  notes               String?   @map("Notes")
+  totalItems          Int       @default(0) @map("TotalItems")
+  totalRequiredQty    Decimal   @default(0) @map("TotalRequiredQty") @db.Decimal(12, 2)
+  totalEstimatedValue Decimal   @default(0) @map("TotalEstimatedValue") @db.Decimal(12, 2)
+  status              String    @default("draft") @map("Status")
+  createdBy           String    @map("CreatedBy")
+  approvedBy          String?   @map("ApprovedBy")
+  approvedOn          DateTime? @map("ApprovedOn")
+  createdAt           DateTime  @default(now()) @map("CreatedAt")
+  updatedAt           DateTime  @updatedAt @map("UpdatedAt")
 
   items StockIndentItem[]
 
@@ -1533,19 +1447,19 @@ model StockIndent {
 // described above — `amount` is requiredQty * unitValue, honestly 0 when no
 // matching product was found for itemCode.
 model StockIndentItem {
-  id            String      @id @default(cuid())
-  indentId      String
-  indent        StockIndent @relation(fields: [indentId], references: [id], onDelete: Cascade)
-  itemCode      String
-  itemName      String
-  hsnCode       String?
-  uom           String?
-  requiredQty   Decimal     @db.Decimal(12, 2)
-  availableQty  Decimal     @default(0) @db.Decimal(12, 2)
-  unitValue     Decimal     @default(0) @db.Decimal(12, 2)
-  amount        Decimal     @default(0) @db.Decimal(12, 2)
-  issueWarehouse String?
-  remarks       String?
+  id             String      @id @default(cuid()) @map("Id")
+  indentId       String      @map("IndentId")
+  indent         StockIndent @relation(fields: [indentId], references: [id], onDelete: Cascade)
+  itemCode       String      @map("ItemCode")
+  itemName       String      @map("ItemName")
+  hsnCode        String?     @map("HsnCode")
+  uom            String?     @map("Uom")
+  requiredQty    Decimal     @map("RequiredQty") @db.Decimal(12, 2)
+  availableQty   Decimal     @default(0) @map("AvailableQty") @db.Decimal(12, 2)
+  unitValue      Decimal     @default(0) @map("UnitValue") @db.Decimal(12, 2)
+  amount         Decimal     @default(0) @map("Amount") @db.Decimal(12, 2)
+  issueWarehouse String?     @map("IssueWarehouse")
+  remarks        String?     @map("Remarks")
 
   @@index([indentId])
 }
@@ -1590,32 +1504,32 @@ model StockIndentItem {
 // scoped to this tenant) at save time — an item code with no matching
 // product honestly gets 0 for both rather than a fabricated number.
 model StockTransfer {
-  id                  String    @id @default(cuid())
-  tenantId            String
+  id                  String    @id @default(cuid()) @map("Id")
+  tenantId            String    @map("TenantId")
   tenant              Tenant    @relation(fields: [tenantId], references: [id])
-  code                String
-  transferDate        DateTime
-  indentRef           String?
-  fromOutletId        String
-  fromOutletName      String
-  toOutletId          String
-  toOutletName        String
-  department          String?
-  purpose             String?
-  priority            String    @default("medium")
-  referenceNo         String?
-  costCenter          String?
-  remarks             String?
-  notes               String?
-  totalItems          Int       @default(0)
-  totalTransferQty    Decimal   @default(0) @db.Decimal(12, 2)
-  totalEstimatedValue Decimal   @default(0) @db.Decimal(12, 2)
-  status              String    @default("draft")
-  createdBy           String
-  receivedBy          String?
-  receivedOn          DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  code                String    @map("Code")
+  transferDate        DateTime  @map("TransferDate")
+  indentRef           String?   @map("IndentRef")
+  fromOutletId        String    @map("FromOutletId")
+  fromOutletName      String    @map("FromOutletName")
+  toOutletId          String    @map("ToOutletId")
+  toOutletName        String    @map("ToOutletName")
+  department          String?   @map("Department")
+  purpose             String?   @map("Purpose")
+  priority            String    @default("medium") @map("Priority")
+  referenceNo         String?   @map("ReferenceNo")
+  costCenter          String?   @map("CostCenter")
+  remarks             String?   @map("Remarks")
+  notes               String?   @map("Notes")
+  totalItems          Int       @default(0) @map("TotalItems")
+  totalTransferQty    Decimal   @default(0) @map("TotalTransferQty") @db.Decimal(12, 2)
+  totalEstimatedValue Decimal   @default(0) @map("TotalEstimatedValue") @db.Decimal(12, 2)
+  status              String    @default("draft") @map("Status")
+  createdBy           String    @map("CreatedBy")
+  receivedBy          String?   @map("ReceivedBy")
+  receivedOn          DateTime? @map("ReceivedOn")
+  createdAt           DateTime  @default(now()) @map("CreatedAt")
+  updatedAt           DateTime  @updatedAt @map("UpdatedAt")
 
   items StockTransferItem[]
 
@@ -1631,18 +1545,18 @@ model StockTransfer {
 // above — `totalCost` is transferQty * unitCost, honestly 0 when no
 // matching product was found for itemCode.
 model StockTransferItem {
-  id           String        @id @default(cuid())
-  transferId   String
+  id           String        @id @default(cuid()) @map("Id")
+  transferId   String        @map("TransferId")
   transfer     StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
-  itemCode     String
-  itemName     String
-  hsnCode      String?
-  uom          String?
-  transferQty  Decimal       @db.Decimal(12, 2)
-  availableQty Decimal       @default(0) @db.Decimal(12, 2)
-  unitCost     Decimal       @default(0) @db.Decimal(12, 2)
-  totalCost    Decimal       @default(0) @db.Decimal(12, 2)
-  remarks      String?
+  itemCode     String        @map("ItemCode")
+  itemName     String        @map("ItemName")
+  hsnCode      String?       @map("HsnCode")
+  uom          String?       @map("Uom")
+  transferQty  Decimal       @map("TransferQty") @db.Decimal(12, 2)
+  availableQty Decimal       @default(0) @map("AvailableQty") @db.Decimal(12, 2)
+  unitCost     Decimal       @default(0) @map("UnitCost") @db.Decimal(12, 2)
+  totalCost    Decimal       @default(0) @map("TotalCost") @db.Decimal(12, 2)
+  remarks      String?       @map("Remarks")
 
   @@index([transferId])
 }
@@ -1679,41 +1593,41 @@ model StockTransferItem {
 // (now server-recomputed, never trusted as-is) line entries instead of a
 // Product-master join.
 model StockReceipt {
-  id                  String    @id @default(cuid())
-  tenantId            String
+  id                  String    @id @default(cuid()) @map("Id")
+  tenantId            String    @map("TenantId")
   tenant              Tenant    @relation(fields: [tenantId], references: [id])
-  code                String
-  receiptDate         DateTime
-  purchaseType        String
-  purchaseInvoiceNo   String?
-  purchaseInvoiceDate DateTime?
-  grnDcNo             String?
-  grnDcDate           DateTime?
-  receiptRemarks      String?
-  supplierId          String
-  supplierName        String
-  fromOutletId        String
-  fromOutletName      String
-  costCenter          String?
-  contactPerson       String?
-  mobileNo            String?
-  referenceNo         String?
-  vehicleNo           String?
-  transporter         String?
-  deliveryChallanNo   String?
-  otherRemarks        String?
-  notes               String?
-  totalItems          Int       @default(0)
-  totalReceivedQty    Decimal   @default(0) @db.Decimal(12, 2)
-  totalDiscount       Decimal   @default(0) @db.Decimal(12, 2)
-  totalTax            Decimal   @default(0) @db.Decimal(12, 2)
-  totalEstimatedValue Decimal   @default(0) @db.Decimal(12, 2)
-  status              String    @default("draft")
-  createdBy           String
-  receivedBy          String?
-  receivedOn          DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  code                String    @map("Code")
+  receiptDate         DateTime  @map("ReceiptDate")
+  purchaseType        String    @map("PurchaseType")
+  purchaseInvoiceNo   String?   @map("PurchaseInvoiceNo")
+  purchaseInvoiceDate DateTime? @map("PurchaseInvoiceDate")
+  grnDcNo             String?   @map("GrnDcNo")
+  grnDcDate           DateTime? @map("GrnDcDate")
+  receiptRemarks      String?   @map("ReceiptRemarks")
+  supplierId          String    @map("SupplierId")
+  supplierName        String    @map("SupplierName")
+  fromOutletId        String    @map("FromOutletId")
+  fromOutletName      String    @map("FromOutletName")
+  costCenter          String?   @map("CostCenter")
+  contactPerson       String?   @map("ContactPerson")
+  mobileNo            String?   @map("MobileNo")
+  referenceNo         String?   @map("ReferenceNo")
+  vehicleNo           String?   @map("VehicleNo")
+  transporter         String?   @map("Transporter")
+  deliveryChallanNo   String?   @map("DeliveryChallanNo")
+  otherRemarks        String?   @map("OtherRemarks")
+  notes               String?   @map("Notes")
+  totalItems          Int       @default(0) @map("TotalItems")
+  totalReceivedQty    Decimal   @default(0) @map("TotalReceivedQty") @db.Decimal(12, 2)
+  totalDiscount       Decimal   @default(0) @map("TotalDiscount") @db.Decimal(12, 2)
+  totalTax            Decimal   @default(0) @map("TotalTax") @db.Decimal(12, 2)
+  totalEstimatedValue Decimal   @default(0) @map("TotalEstimatedValue") @db.Decimal(12, 2)
+  status              String    @default("draft") @map("Status")
+  createdBy           String    @map("CreatedBy")
+  receivedBy          String?   @map("ReceivedBy")
+  receivedOn          DateTime? @map("ReceivedOn")
+  createdAt           DateTime  @default(now()) @map("CreatedAt")
+  updatedAt           DateTime  @updatedAt @map("UpdatedAt")
 
   items StockReceiptItem[]
 
@@ -1731,23 +1645,23 @@ model StockReceipt {
 // server-computed (receivedQty * unitCost, less the line discount, plus tax
 // on the discounted amount), so a client can never fabricate its own total.
 model StockReceiptItem {
-  id          String       @id @default(cuid())
-  receiptId   String
+  id          String       @id @default(cuid()) @map("Id")
+  receiptId   String       @map("ReceiptId")
   receipt     StockReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  itemCode    String
-  itemName    String
-  hsnCode     String?
-  uom         String?
-  orderedQty  Decimal      @default(0) @db.Decimal(12, 2)
-  receivedQty Decimal      @db.Decimal(12, 2)
-  unitCost    Decimal      @default(0) @db.Decimal(12, 2)
-  discount    Decimal      @default(0) @db.Decimal(12, 2)
-  tax         Decimal      @default(0) @db.Decimal(12, 2)
-  totalCost   Decimal      @default(0) @db.Decimal(12, 2)
-  warehouse   String?
-  batchNo     String?
-  expiryDate  DateTime?
-  remarks     String?
+  itemCode    String       @map("ItemCode")
+  itemName    String       @map("ItemName")
+  hsnCode     String?      @map("HsnCode")
+  uom         String?      @map("Uom")
+  orderedQty  Decimal      @default(0) @map("OrderedQty") @db.Decimal(12, 2)
+  receivedQty Decimal      @map("ReceivedQty") @db.Decimal(12, 2)
+  unitCost    Decimal      @default(0) @map("UnitCost") @db.Decimal(12, 2)
+  discount    Decimal      @default(0) @map("Discount") @db.Decimal(12, 2)
+  tax         Decimal      @default(0) @map("Tax") @db.Decimal(12, 2)
+  totalCost   Decimal      @default(0) @map("TotalCost") @db.Decimal(12, 2)
+  warehouse   String?      @map("Warehouse")
+  batchNo     String?      @map("BatchNo")
+  expiryDate  DateTime?    @map("ExpiryDate")
+  remarks     String?      @map("Remarks")
 
   @@index([receiptId])
 }
@@ -1762,41 +1676,41 @@ model StockReceiptItem {
 // they're plain text rather than a picker over fabricated options — same
 // honesty rule the rest of this schema follows.
 model StockReturn {
-  id             String    @id @default(cuid())
-  tenantId       String
-  tenant         Tenant    @relation(fields: [tenantId], references: [id])
-  code           String
-  returnDate     DateTime
-  returnType     String
-  referenceType  String
-  referenceNo    String?
-  referenceDate  DateTime?
-  returnReason   String?
-  returnRemarks  String?
-  supplierId     String
-  supplierName   String
-  fromOutletId   String
-  fromOutletName String
-  costCenter     String?
-  contactPerson  String?
-  mobileNo       String?
-  grnDcNo        String?
-  grnDcDate      DateTime?
-  vehicleNo      String?
-  transporter    String?
-  otherRemarks   String?
-  notes          String?
-  totalItems       Int     @default(0)
-  totalReturnedQty Decimal @default(0) @db.Decimal(12, 2)
-  totalDiscount    Decimal @default(0) @db.Decimal(12, 2)
-  totalTax         Decimal @default(0) @db.Decimal(12, 2)
-  totalValue       Decimal @default(0) @db.Decimal(12, 2)
-  status         String    @default("draft")
-  createdBy      String
-  acceptedBy     String?
-  acceptedOn     DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id               String    @id @default(cuid()) @map("Id")
+  tenantId         String    @map("TenantId")
+  tenant           Tenant    @relation(fields: [tenantId], references: [id])
+  code             String    @map("Code")
+  returnDate       DateTime  @map("ReturnDate")
+  returnType       String    @map("ReturnType")
+  referenceType    String    @map("ReferenceType")
+  referenceNo      String?   @map("ReferenceNo")
+  referenceDate    DateTime? @map("ReferenceDate")
+  returnReason     String?   @map("ReturnReason")
+  returnRemarks    String?   @map("ReturnRemarks")
+  supplierId       String    @map("SupplierId")
+  supplierName     String    @map("SupplierName")
+  fromOutletId     String    @map("FromOutletId")
+  fromOutletName   String    @map("FromOutletName")
+  costCenter       String?   @map("CostCenter")
+  contactPerson    String?   @map("ContactPerson")
+  mobileNo         String?   @map("MobileNo")
+  grnDcNo          String?   @map("GrnDcNo")
+  grnDcDate        DateTime? @map("GrnDcDate")
+  vehicleNo        String?   @map("VehicleNo")
+  transporter      String?   @map("Transporter")
+  otherRemarks     String?   @map("OtherRemarks")
+  notes            String?   @map("Notes")
+  totalItems       Int       @default(0) @map("TotalItems")
+  totalReturnedQty Decimal   @default(0) @map("TotalReturnedQty") @db.Decimal(12, 2)
+  totalDiscount    Decimal   @default(0) @map("TotalDiscount") @db.Decimal(12, 2)
+  totalTax         Decimal   @default(0) @map("TotalTax") @db.Decimal(12, 2)
+  totalValue       Decimal   @default(0) @map("TotalValue") @db.Decimal(12, 2)
+  status           String    @default("draft") @map("Status")
+  createdBy        String    @map("CreatedBy")
+  acceptedBy       String?   @map("AcceptedBy")
+  acceptedOn       DateTime? @map("AcceptedOn")
+  createdAt        DateTime  @default(now()) @map("CreatedAt")
+  updatedAt        DateTime  @updatedAt @map("UpdatedAt")
 
   items StockReturnItem[]
 
@@ -1811,22 +1725,22 @@ model StockReturn {
 // user-entered value — only `totalCost` is server-computed (returnedQty *
 // unitCost, less the line discount, plus tax on the discounted amount).
 model StockReturnItem {
-  id          String      @id @default(cuid())
-  returnId    String
+  id          String      @id @default(cuid()) @map("Id")
+  returnId    String      @map("ReturnId")
   stockReturn StockReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
-  itemCode    String
-  itemName    String
-  hsnCode     String?
-  uom         String?
-  returnedQty Decimal     @db.Decimal(12, 2)
-  unitCost    Decimal     @default(0) @db.Decimal(12, 2)
-  discount    Decimal     @default(0) @db.Decimal(12, 2)
-  tax         Decimal     @default(0) @db.Decimal(12, 2)
-  totalCost   Decimal     @default(0) @db.Decimal(12, 2)
-  warehouse   String?
-  batchNo     String?
-  expiryDate  DateTime?
-  remarks     String?
+  itemCode    String      @map("ItemCode")
+  itemName    String      @map("ItemName")
+  hsnCode     String?     @map("HsnCode")
+  uom         String?     @map("Uom")
+  returnedQty Decimal     @map("ReturnedQty") @db.Decimal(12, 2)
+  unitCost    Decimal     @default(0) @map("UnitCost") @db.Decimal(12, 2)
+  discount    Decimal     @default(0) @map("Discount") @db.Decimal(12, 2)
+  tax         Decimal     @default(0) @map("Tax") @db.Decimal(12, 2)
+  totalCost   Decimal     @default(0) @map("TotalCost") @db.Decimal(12, 2)
+  warehouse   String?     @map("Warehouse")
+  batchNo     String?     @map("BatchNo")
+  expiryDate  DateTime?   @map("ExpiryDate")
+  remarks     String?     @map("Remarks")
 
   @@index([returnId])
 }
@@ -1865,31 +1779,31 @@ model StockReturnItem {
 // same frozen-financial-snapshot rule every other stock-movement module
 // uses.
 model StockWastage {
-  id             String    @id @default(cuid())
-  tenantId       String
-  tenant         Tenant    @relation(fields: [tenantId], references: [id])
-  code           String
-  wastageDate    DateTime
-  wastageType    String
-  department     String?
-  costCenter     String?
-  wastageReason  String?
-  wastageRemarks String?
-  outletId       String
-  outletName     String
-  warehouse      String?
-  binRack        String?
-  referenceNo    String?
-  preparedBy     String?
-  approvedBy     String?
-  notes          String?
-  totalItems      Int     @default(0)
-  totalWastageQty Decimal @default(0) @db.Decimal(12, 2)
-  totalValue      Decimal @default(0) @db.Decimal(12, 2)
-  status         String    @default("draft")
-  createdBy      String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id              String   @id @default(cuid()) @map("Id")
+  tenantId        String   @map("TenantId")
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  code            String   @map("Code")
+  wastageDate     DateTime @map("WastageDate")
+  wastageType     String   @map("WastageType")
+  department      String?  @map("Department")
+  costCenter      String?  @map("CostCenter")
+  wastageReason   String?  @map("WastageReason")
+  wastageRemarks  String?  @map("WastageRemarks")
+  outletId        String   @map("OutletId")
+  outletName      String   @map("OutletName")
+  warehouse       String?  @map("Warehouse")
+  binRack         String?  @map("BinRack")
+  referenceNo     String?  @map("ReferenceNo")
+  preparedBy      String?  @map("PreparedBy")
+  approvedBy      String?  @map("ApprovedBy")
+  notes           String?  @map("Notes")
+  totalItems      Int      @default(0) @map("TotalItems")
+  totalWastageQty Decimal  @default(0) @map("TotalWastageQty") @db.Decimal(12, 2)
+  totalValue      Decimal  @default(0) @map("TotalValue") @db.Decimal(12, 2)
+  status          String   @default("draft") @map("Status")
+  createdBy       String   @map("CreatedBy")
+  createdAt       DateTime @default(now()) @map("CreatedAt")
+  updatedAt       DateTime @updatedAt @map("UpdatedAt")
 
   items StockWastageItem[]
 
@@ -1906,20 +1820,20 @@ model StockWastage {
 // user-entered value — only `totalValue` is server-computed (wastageQty *
 // unitCost — no discount/tax on a stock write-off).
 model StockWastageItem {
-  id           String       @id @default(cuid())
-  wastageId    String
+  id           String       @id @default(cuid()) @map("Id")
+  wastageId    String       @map("WastageId")
   stockWastage StockWastage @relation(fields: [wastageId], references: [id], onDelete: Cascade)
-  itemCode     String
-  itemName     String
-  hsnCode      String?
-  uom          String?
-  batchNo      String?
-  expiryDate   DateTime?
-  availableQty Decimal      @default(0) @db.Decimal(12, 2)
-  wastageQty   Decimal      @db.Decimal(12, 2)
-  unitCost     Decimal      @default(0) @db.Decimal(12, 2)
-  totalValue   Decimal      @default(0) @db.Decimal(12, 2)
-  remarks      String?
+  itemCode     String       @map("ItemCode")
+  itemName     String       @map("ItemName")
+  hsnCode      String?      @map("HsnCode")
+  uom          String?      @map("Uom")
+  batchNo      String?      @map("BatchNo")
+  expiryDate   DateTime?    @map("ExpiryDate")
+  availableQty Decimal      @default(0) @map("AvailableQty") @db.Decimal(12, 2)
+  wastageQty   Decimal      @map("WastageQty") @db.Decimal(12, 2)
+  unitCost     Decimal      @default(0) @map("UnitCost") @db.Decimal(12, 2)
+  totalValue   Decimal      @default(0) @map("TotalValue") @db.Decimal(12, 2)
+  remarks      String?      @map("Remarks")
 
   @@index([wastageId])
 }
@@ -1954,36 +1868,36 @@ model StockWastageItem {
 // same frozen-financial-snapshot rule every other stock-movement module
 // uses.
 model StockCount {
-  id             String    @id @default(cuid())
-  tenantId       String
-  tenant         Tenant    @relation(fields: [tenantId], references: [id])
-  code           String
-  countDate      DateTime
-  warehouse      String
-  department     String?
-  costCenter     String?
-  countReason    String
-  countRemarks   String?
-  countType      String
-  countBy        String
-  binRack        String?
-  startCountTime String?
-  endCountTime   String?
-  referenceNo    String?
-  preparedBy     String?
-  approvedBy     String?
-  otherNotes     String?
-  notes          String?
-  totalItems          Int     @default(0)
-  totalSystemQty      Decimal @default(0) @db.Decimal(12, 2)
-  totalCountedQty     Decimal @default(0) @db.Decimal(12, 2)
-  totalVarianceQty    Decimal @default(0) @db.Decimal(12, 2)
-  totalVarianceValue  Decimal @default(0) @db.Decimal(12, 2)
-  totalCountValue     Decimal @default(0) @db.Decimal(12, 2)
-  status         String    @default("draft")
-  createdBy      String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                 String   @id @default(cuid()) @map("Id")
+  tenantId           String   @map("TenantId")
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  code               String   @map("Code")
+  countDate          DateTime @map("CountDate")
+  warehouse          String   @map("Warehouse")
+  department         String?  @map("Department")
+  costCenter         String?  @map("CostCenter")
+  countReason        String   @map("CountReason")
+  countRemarks       String?  @map("CountRemarks")
+  countType          String   @map("CountType")
+  countBy            String   @map("CountBy")
+  binRack            String?  @map("BinRack")
+  startCountTime     String?  @map("StartCountTime")
+  endCountTime       String?  @map("EndCountTime")
+  referenceNo        String?  @map("ReferenceNo")
+  preparedBy         String?  @map("PreparedBy")
+  approvedBy         String?  @map("ApprovedBy")
+  otherNotes         String?  @map("OtherNotes")
+  notes              String?  @map("Notes")
+  totalItems         Int      @default(0) @map("TotalItems")
+  totalSystemQty     Decimal  @default(0) @map("TotalSystemQty") @db.Decimal(12, 2)
+  totalCountedQty    Decimal  @default(0) @map("TotalCountedQty") @db.Decimal(12, 2)
+  totalVarianceQty   Decimal  @default(0) @map("TotalVarianceQty") @db.Decimal(12, 2)
+  totalVarianceValue Decimal  @default(0) @map("TotalVarianceValue") @db.Decimal(12, 2)
+  totalCountValue    Decimal  @default(0) @map("TotalCountValue") @db.Decimal(12, 2)
+  status             String   @default("draft") @map("Status")
+  createdBy          String   @map("CreatedBy")
+  createdAt          DateTime @default(now()) @map("CreatedAt")
+  updatedAt          DateTime @updatedAt @map("UpdatedAt")
 
   items StockCountItem[]
 
@@ -1998,19 +1912,19 @@ model StockCount {
 // user-entered value — only `varianceQty` (countedQty - systemQty) and
 // `varianceValue` (varianceQty * unitCost) are server-computed.
 model StockCountItem {
-  id            String     @id @default(cuid())
-  countId       String
+  id            String     @id @default(cuid()) @map("Id")
+  countId       String     @map("CountId")
   stockCount    StockCount @relation(fields: [countId], references: [id], onDelete: Cascade)
-  itemCode      String
-  itemName      String
-  hsnCode       String?
-  uom           String?
-  systemQty     Decimal    @default(0) @db.Decimal(12, 2)
-  countedQty    Decimal    @db.Decimal(12, 2)
-  unitCost      Decimal    @default(0) @db.Decimal(12, 2)
-  varianceQty   Decimal    @default(0) @db.Decimal(12, 2)
-  varianceValue Decimal    @default(0) @db.Decimal(12, 2)
-  remarks       String?
+  itemCode      String     @map("ItemCode")
+  itemName      String     @map("ItemName")
+  hsnCode       String?    @map("HsnCode")
+  uom           String?    @map("Uom")
+  systemQty     Decimal    @default(0) @map("SystemQty") @db.Decimal(12, 2)
+  countedQty    Decimal    @map("CountedQty") @db.Decimal(12, 2)
+  unitCost      Decimal    @default(0) @map("UnitCost") @db.Decimal(12, 2)
+  varianceQty   Decimal    @default(0) @map("VarianceQty") @db.Decimal(12, 2)
+  varianceValue Decimal    @default(0) @map("VarianceValue") @db.Decimal(12, 2)
+  remarks       String?    @map("Remarks")
 
   @@index([countId])
 }
@@ -2037,28 +1951,28 @@ enum ShiftStatus {
 }
 
 model ShiftSession {
-  id                   String       @id @default(cuid())
-  tenantId             String
-  tenant               Tenant       @relation(fields: [tenantId], references: [id])
-  outletId             String
-  outlet               Outlet       @relation(fields: [outletId], references: [id])
-  shiftNo              String
-  shiftName            String?
-  shiftDate            DateTime
-  startTime            String
-  endTime              String?
-  description          String?
-  cashierId            String
-  cashierName          String
-  openingCash          Decimal      @default(0) @db.Decimal(12, 2)
-  previousClosingCash  Decimal      @default(0) @db.Decimal(12, 2)
-  notes                String?
-  attachmentName       String?
-  agreedTerms          Boolean      @default(false)
-  status               ShiftStatus  @default(OPEN)
-  openedAt             DateTime     @default(now())
-  closedAt             DateTime?
-  closingCash          Decimal?     @db.Decimal(12, 2)
+  id                  String      @id @default(cuid()) @map("Id")
+  tenantId            String      @map("TenantId")
+  tenant              Tenant      @relation(fields: [tenantId], references: [id])
+  outletId            String      @map("OutletId")
+  outlet              Outlet      @relation(fields: [outletId], references: [id])
+  shiftNo             String      @map("ShiftNo")
+  shiftName           String?     @map("ShiftName")
+  shiftDate           DateTime    @map("ShiftDate")
+  startTime           String      @map("StartTime")
+  endTime             String?     @map("EndTime")
+  description         String?     @map("Description")
+  cashierId           String      @map("CashierId")
+  cashierName         String      @map("CashierName")
+  openingCash         Decimal     @default(0) @map("OpeningCash") @db.Decimal(12, 2)
+  previousClosingCash Decimal     @default(0) @map("PreviousClosingCash") @db.Decimal(12, 2)
+  notes               String?     @map("Notes")
+  attachmentName      String?     @map("AttachmentName")
+  agreedTerms         Boolean     @default(false) @map("AgreedTerms")
+  status              ShiftStatus @default(OPEN) @map("Status")
+  openedAt            DateTime    @default(now()) @map("OpenedAt")
+  closedAt            DateTime?   @map("ClosedAt")
+  closingCash         Decimal?    @map("ClosingCash") @db.Decimal(12, 2)
   // The three fields below are computed once, at the moment closeShift()
   // runs (see shiftSession.service.js), and stored rather than recomputed
   // later on every report read — so a shift's historical reconciliation
@@ -2068,18 +1982,18 @@ model ShiftSession {
   // every cash-movement report already uses). closingVariance is
   // closingCash − expectedClosingCash. closingTotalSales is every Sale
   // (any tender) recorded between openedAt and the close.
-  expectedClosingCash  Decimal?     @db.Decimal(12, 2)
-  closingVariance      Decimal?     @db.Decimal(12, 2)
-  closingTotalSales    Decimal?     @db.Decimal(12, 2)
-  closingRemarks       String?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  expectedClosingCash Decimal?    @map("ExpectedClosingCash") @db.Decimal(12, 2)
+  closingVariance     Decimal?    @map("ClosingVariance") @db.Decimal(12, 2)
+  closingTotalSales   Decimal?    @map("ClosingTotalSales") @db.Decimal(12, 2)
+  closingRemarks      String?     @map("ClosingRemarks")
+  createdAt           DateTime    @default(now()) @map("CreatedAt")
+  updatedAt           DateTime    @updatedAt @map("UpdatedAt")
 
-  denominations ShiftOpeningDenomination[]
+  denominations        ShiftOpeningDenomination[]
   closingDenominations ShiftClosingDenomination[]
-  cashWithdrawals CashWithdrawal[]
-  cashDeposits CashDeposit[]
-  cashTransfers CashTransfer[]
+  cashWithdrawals      CashWithdrawal[]
+  cashDeposits         CashDeposit[]
+  cashTransfers        CashTransfer[]
 
   @@unique([tenantId, outletId, shiftNo])
   @@index([tenantId, outletId, status])
@@ -2093,26 +2007,26 @@ model ShiftSession {
 // running cash position (opening + cash received − withdrawn) can always
 // be reconstructed from real rows instead of a fabricated figure.
 model CashWithdrawal {
-  id             String       @id @default(cuid())
-  tenantId       String
+  id             String       @id @default(cuid()) @map("Id")
+  tenantId       String       @map("TenantId")
   tenant         Tenant       @relation(fields: [tenantId], references: [id])
-  outletId       String
+  outletId       String       @map("OutletId")
   outlet         Outlet       @relation(fields: [outletId], references: [id])
-  shiftSessionId String
+  shiftSessionId String       @map("ShiftSessionId")
   shiftSession   ShiftSession @relation(fields: [shiftSessionId], references: [id])
   // "WD-YYMMDD-NNNN", sequential per tenant per day — see nextReferenceNo().
-  referenceNo    String
-  purpose        String
-  amount         Decimal      @default(0) @db.Decimal(12, 2)
+  referenceNo    String       @map("ReferenceNo")
+  purpose        String       @map("Purpose")
+  amount         Decimal      @default(0) @map("Amount") @db.Decimal(12, 2)
   // Always "cash" today — a withdrawal is by definition cash leaving the
   // drawer. Kept as a real column (not hardcoded in the UI) in case a
   // future tender-neutral "cash movement" report needs to tell withdrawals
   // apart from deposits/transfers by more than which table they're in.
-  paymentMode    String       @default("cash")
-  remarks        String?
-  cashierId      String
-  cashierName    String
-  createdAt      DateTime     @default(now())
+  paymentMode    String       @default("cash") @map("PaymentMode")
+  remarks        String?      @map("Remarks")
+  cashierId      String       @map("CashierId")
+  cashierName    String       @map("CashierName")
+  createdAt      DateTime     @default(now()) @map("CreatedAt")
 
   @@unique([tenantId, referenceNo])
   @@index([tenantId, outletId])
@@ -2128,24 +2042,24 @@ model CashWithdrawal {
 // can never together push the drawer negative. bankAccount is only ever
 // populated for a "Bank Deposit" (see createCashDepositSchema's refine).
 model CashDeposit {
-  id             String       @id @default(cuid())
-  tenantId       String
+  id             String       @id @default(cuid()) @map("Id")
+  tenantId       String       @map("TenantId")
   tenant         Tenant       @relation(fields: [tenantId], references: [id])
-  outletId       String
+  outletId       String       @map("OutletId")
   outlet         Outlet       @relation(fields: [outletId], references: [id])
-  shiftSessionId String
+  shiftSessionId String       @map("ShiftSessionId")
   shiftSession   ShiftSession @relation(fields: [shiftSessionId], references: [id])
   // "DP-YYMMDD-NNNN", sequential per tenant per day — see nextReferenceNo().
-  referenceNo    String
-  purpose        String
-  amount         Decimal      @default(0) @db.Decimal(12, 2)
+  referenceNo    String       @map("ReferenceNo")
+  purpose        String       @map("Purpose")
+  amount         Decimal      @default(0) @map("Amount") @db.Decimal(12, 2)
   // Always "cash" today — same reasoning as CashWithdrawal.paymentMode.
-  paymentMode    String       @default("cash")
-  bankAccount    String?
-  remarks        String?
-  cashierId      String
-  cashierName    String
-  createdAt      DateTime     @default(now())
+  paymentMode    String       @default("cash") @map("PaymentMode")
+  bankAccount    String?      @map("BankAccount")
+  remarks        String?      @map("Remarks")
+  cashierId      String       @map("CashierId")
+  cashierName    String       @map("CashierName")
+  createdAt      DateTime     @default(now()) @map("CreatedAt")
 
   @@unique([tenantId, referenceNo])
   @@index([tenantId, outletId])
@@ -2163,29 +2077,29 @@ model CashDeposit {
 // createCashDeposit), so all three movements together can never push the
 // drawer negative regardless of the order they're recorded in.
 model CashTransfer {
-  id             String       @id @default(cuid())
-  tenantId       String
+  id             String       @id @default(cuid()) @map("Id")
+  tenantId       String       @map("TenantId")
   tenant         Tenant       @relation(fields: [tenantId], references: [id])
-  outletId       String
+  outletId       String       @map("OutletId")
   outlet         Outlet       @relation(fields: [outletId], references: [id])
-  shiftSessionId String
+  shiftSessionId String       @map("ShiftSessionId")
   shiftSession   ShiftSession @relation(fields: [shiftSessionId], references: [id])
   // "CT-YYMMDD-NNNN", sequential per tenant per day — see nextReferenceNo().
-  referenceNo    String
-  purpose        String
+  referenceNo    String       @map("ReferenceNo")
+  purpose        String       @map("Purpose")
   // Free-text destination the cash was moved to — "HDFC Bank - A/c
   // 1234567890", "Petty Cash Box", "Change Fund Box", or any other named
   // place. Always required (unlike CashDeposit.bankAccount, which is only
   // populated for a Bank Deposit) since a transfer is meaningless without
   // knowing where the cash went.
-  toLocation     String
-  amount         Decimal      @default(0) @db.Decimal(12, 2)
+  toLocation     String       @map("ToLocation")
+  amount         Decimal      @default(0) @map("Amount") @db.Decimal(12, 2)
   // Always "cash" today — same reasoning as CashWithdrawal.paymentMode.
-  paymentMode    String       @default("cash")
-  remarks        String?
-  cashierId      String
-  cashierName    String
-  createdAt      DateTime     @default(now())
+  paymentMode    String       @default("cash") @map("PaymentMode")
+  remarks        String?      @map("Remarks")
+  cashierId      String       @map("CashierId")
+  cashierName    String       @map("CashierName")
+  createdAt      DateTime     @default(now()) @map("CreatedAt")
 
   @@unique([tenantId, referenceNo])
   @@index([tenantId, outletId])
@@ -2199,13 +2113,13 @@ model CashTransfer {
 // computed from pieces. Every other row's amount is always
 // unitValue * pieces, recomputed server-side, never trusted as sent.
 model ShiftOpeningDenomination {
-  id        String       @id @default(cuid())
-  shiftId   String
+  id        String       @id @default(cuid()) @map("Id")
+  shiftId   String       @map("ShiftId")
   shift     ShiftSession @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  label     String
-  unitValue Decimal?     @db.Decimal(12, 2)
-  pieces    Int          @default(0)
-  amount    Decimal      @default(0) @db.Decimal(12, 2)
+  label     String       @map("Label")
+  unitValue Decimal?     @map("UnitValue") @db.Decimal(12, 2)
+  pieces    Int          @default(0) @map("Pieces")
+  amount    Decimal      @default(0) @map("Amount") @db.Decimal(12, 2)
 
   @@index([shiftId])
 }
@@ -2215,13 +2129,13 @@ model ShiftOpeningDenomination {
 // own table (rather than reusing that one) so an opening's count and a
 // closing's count of the very same shift never overwrite each other.
 model ShiftClosingDenomination {
-  id        String       @id @default(cuid())
-  shiftId   String
+  id        String       @id @default(cuid()) @map("Id")
+  shiftId   String       @map("ShiftId")
   shift     ShiftSession @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  label     String
-  unitValue Decimal?     @db.Decimal(12, 2)
-  pieces    Int          @default(0)
-  amount    Decimal      @default(0) @db.Decimal(12, 2)
+  label     String       @map("Label")
+  unitValue Decimal?     @map("UnitValue") @db.Decimal(12, 2)
+  pieces    Int          @default(0) @map("Pieces")
+  amount    Decimal      @default(0) @map("Amount") @db.Decimal(12, 2)
 
   @@index([shiftId])
 }
@@ -2237,43 +2151,43 @@ model ShiftClosingDenomination {
 // ---------------------------------------------------------------------------
 
 model Expense {
-  id           String    @id @default(cuid())
-  tenantId     String
-  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  id             String   @id @default(cuid()) @map("Id")
+  tenantId       String   @map("TenantId")
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
   // Nullable like Sale.outletId — a tenant-wide overhead expense (or one
   // logged before an outlet is assigned to the cashier) still needs to be
   // recorded rather than blocked.
-  outletId     String?
-  outlet       Outlet?   @relation(fields: [outletId], references: [id])
+  outletId       String?  @map("OutletId")
+  outlet         Outlet?  @relation(fields: [outletId], references: [id])
   // "EXP-YYMMDD-NNNN", sequential per tenant per day — see nextReferenceNo().
-  referenceNo  String
+  referenceNo    String   @map("ReferenceNo")
   // The date the expense was actually incurred (user-picked, can be
   // backdated) — every date-scoped figure on this report (today's/selected
   // date's expenses, the transactions list) is keyed off this column, NOT
   // createdAt, since a cashier can log yesterday's electricity bill today.
-  expenseDate  DateTime
-  category     String
-  description  String
-  amount       Decimal   @default(0) @db.Decimal(12, 2)
-  tax          Decimal   @default(0) @db.Decimal(12, 2)
+  expenseDate    DateTime @map("ExpenseDate")
+  category       String   @map("Category")
+  description    String   @map("Description")
+  amount         Decimal  @default(0) @map("Amount") @db.Decimal(12, 2)
+  tax            Decimal  @default(0) @map("Tax") @db.Decimal(12, 2)
   // amount + tax, recomputed server-side — never trust the client's own
   // addition, same "never trust client math" rule every other module here
   // follows.
-  totalAmount  Decimal   @default(0) @db.Decimal(12, 2)
-  paymentMode  String
-  paidToVendor String
-  remarks      String?
-  costCenter   String?
-  accountHead  String?
-  project      String?
+  totalAmount    Decimal  @default(0) @map("TotalAmount") @db.Decimal(12, 2)
+  paymentMode    String   @map("PaymentMode")
+  paidToVendor   String   @map("PaidToVendor")
+  remarks        String?  @map("Remarks")
+  costCenter     String?  @map("CostCenter")
+  accountHead    String?  @map("AccountHead")
+  project        String?  @map("Project")
   // Just the uploaded file's name — there's no file-storage backend wired
   // up yet, so this honestly records what was attached without pretending
   // to store the file itself.
-  attachmentName String?
-  cashierId    String
-  cashierName  String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  attachmentName String?  @map("AttachmentName")
+  cashierId      String   @map("CashierId")
+  cashierName    String   @map("CashierName")
+  createdAt      DateTime @default(now()) @map("CreatedAt")
+  updatedAt      DateTime @updatedAt @map("UpdatedAt")
 
   @@unique([tenantId, referenceNo])
   @@index([tenantId, outletId])
@@ -2292,54 +2206,54 @@ model Expense {
 // ---------------------------------------------------------------------------
 
 model Company {
-  id       String @id @default(cuid())
-  tenantId String @unique
+  id       String @id @default(cuid()) @map("Id")
+  tenantId String @unique @map("TenantId")
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  companyCode        String
-  companyName        String
-  displayName        String?
-  registrationNo     String?
-  gstin              String
-  panNo              String?
-  email              String?
-  website            String?
-  companyType        String?
+  companyCode        String  @map("CompanyCode")
+  companyName        String  @map("CompanyName")
+  displayName        String? @map("DisplayName")
+  registrationNo     String? @map("RegistrationNo")
+  gstin              String  @map("Gstin")
+  panNo              String? @map("PanNo")
+  email              String? @map("Email")
+  website            String? @map("Website")
+  companyType        String? @map("CompanyType")
   // Kept as the same "DD Mon YYYY" display string FormDatePicker reads/
   // writes everywhere else (see Expense.expenseDate's sibling comment in
   // the frontend schema) rather than a DateTime — this is a fiscal-year
   // anchor day, not an event date any report groups by.
-  financialYearStart String
-  country            String
-  state              String
-  currency           String
-  phone              String?
-  mobile             String?
-  fax                String?
+  financialYearStart String  @map("FinancialYearStart")
+  country            String  @map("Country")
+  state              String  @map("State")
+  currency           String  @map("Currency")
+  phone              String? @map("Phone")
+  mobile             String? @map("Mobile")
+  fax                String? @map("Fax")
   // Just the uploaded logo file's name — same honest limitation as
   // Expense.attachmentName: no file-storage backend is wired up yet.
-  logoName        String?
-  addressLine1    String?
-  addressLine2    String?
-  addressLine3    String?
-  addressLine4    String?
-  addressLandmark String?
+  logoName           String? @map("LogoName")
+  addressLine1       String? @map("AddressLine1")
+  addressLine2       String? @map("AddressLine2")
+  addressLine3       String? @map("AddressLine3")
+  addressLine4       String? @map("AddressLine4")
+  addressLandmark    String? @map("AddressLandmark")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @updatedAt @map("UpdatedAt")
 
   contacts CompanyContact[]
 }
 
 model CompanyContact {
-  id        String  @id @default(cuid())
-  companyId String
+  id        String  @id @default(cuid()) @map("Id")
+  companyId String  @map("CompanyId")
   company   Company @relation(fields: [companyId], references: [id])
 
-  name        String
-  designation String?
-  email       String?
-  phone       String?
+  name        String  @map("Name")
+  designation String? @map("Designation")
+  email       String? @map("Email")
+  phone       String? @map("Phone")
   // Only one contact per company can be primary at a time — enforced in
   // company.service.js by unsetting every other row's isPrimary inside the
   // same transaction that sets this one, not by a DB constraint (Postgres
@@ -2347,37 +2261,38 @@ model CompanyContact {
   // unique index, and this table is small enough that the app-level
   // transaction is simpler and just as safe under this app's single-admin,
   // low-concurrency usage).
-  isPrimary Boolean @default(false)
+  isPrimary   Boolean @default(false) @map("IsPrimary")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("CreatedAt")
+  updatedAt DateTime @updatedAt @map("UpdatedAt")
 
   @@index([companyId])
 }
 
 // ---------------------------------------------------------------------------
-// TCZ billing tables (Line Sale / Billing). Written IN ADDITION to Sale /
-// SaleLine, inside the same transaction (see sale.service.js createSale and
-// tczBilling.service.js) — Sale and its readers (cashier panel, returns, held
-// bills, reports) are unchanged. Column names follow the source SQL Server
-// script. Columns NOT in that script: TenantId, OutletId, SaleId, ClientToken
-// (header) and ProductId (lines). Intentional type changes vs. the script:
-// RoundOff int -> Decimal, InvEntry int -> BigInt, child DocEntry int -> BigInt,
-// and DocNum is unique per tenant rather than globally.
+// TCZ billing tables (Line Sale / Billing) — the ONLY store for POS sales (the
+// old Sale / SaleLine tables were removed). Column names follow the source SQL
+// Server script. Extra columns added on top of that script (all nullable unless
+// noted; they carry data the script has no column for):
+//   header: CustomerId, SubTotal, TaxAmount, Received, ChangeAmount, PayMode,
+//           CardType, CardLast4, CardBank, UpiApp, UpiTxnId, PayRef
+//           (+ TenantId, OutletId, ClientToken from the first TCZ migration)
+//   lines : Uom, TaxRate (+ ProductId from the first TCZ migration)
+// Intentional type changes vs. the script: RoundOff int -> Decimal, InvEntry
+// int -> BigInt, child DocEntry int -> BigInt, and DocNum is unique per tenant.
+// Id contract for the API: a bill id is String(DocEntry); a line id is
+// "<DocEntry>-<LineId>" (see sale/tczIds.js).
 //
-// Columns whose meaning is not defined anywhere in this repo (DiscountType,
-// DiscountAmount, TaxableValue, TaxableValueTotal, TotalRevenue, SalesType,
-// Canceled, Hold, DocStatus, Return, Free, Batch, ChangeLog; lines: Tax,
-// TaxCode) are deliberately left NULL by the app until their meaning is
-// confirmed — see tczBilling.service.js.
+// Still NULL (meaning not defined anywhere): TotalRevenue, DiscountType,
+// SalesType, Return, Free, Batch, ChangeLog, SlpCode*/SlpName*; lines TaxCode.
 model TczOpos {
   docEntry             BigInt    @id @default(autoincrement()) @map("DocEntry")
   tenantId             String    @map("TenantId")
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   outletId             String?   @map("OutletId")
   outlet               Outlet?   @relation(fields: [outletId], references: [id], onDelete: SetNull)
-  saleId               String?   @unique @map("SaleId")
-  sale                 Sale?     @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  customerId           String?   @map("CustomerId")
+  customer             Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   // Client-generated idempotency token: a retry of the same checkout returns
   // the bill already saved instead of creating a duplicate.
   clientToken          String?   @map("ClientToken")
@@ -2390,7 +2305,7 @@ model TczOpos {
   updatedBy            String?   @map("UpdatedBy") @db.VarChar(500)
   changeLog            String?   @map("ChangeLog") @db.VarChar(50)
   canceled             String?   @map("Canceled") @db.VarChar(5)
-  object               String?   @default("TCZ_OPOS") @map("Object") @db.VarChar(20)
+  object               String?   @default("Linesales") @map("Object") @db.VarChar(20)
   salesType            String?   @map("SalesType") @db.VarChar(5)
   hold                 String?   @map("Hold") @db.VarChar(5)
   customerMobileNumber String?   @map("CustomerMobileNumber") @db.VarChar(20)
@@ -2427,16 +2342,34 @@ model TczOpos {
   invNum               Int?      @default(0) @map("InvNum")
   invEntry             BigInt?   @default(0) @map("InvEntry")
   invRemarks           String?   @map("InvRemarks") @db.VarChar(255)
+  // ---- extra columns (not in the SQL Server script) ----
+  subTotal             Decimal?  @default(0) @map("SubTotal") @db.Decimal(19, 6)
+  taxAmount            Decimal?  @default(0) @map("TaxAmount") @db.Decimal(19, 6)
+  received             Decimal?  @default(0) @map("Received") @db.Decimal(19, 6)
+  changeAmount         Decimal?  @default(0) @map("ChangeAmount") @db.Decimal(19, 6)
+  // cash | card | upi | wallet | credit | store-credit | gift-card | cheque | bank-transfer
+  payMode              String?   @map("PayMode") @db.VarChar(30)
+  cardType             String?   @map("CardType") @db.VarChar(50)
+  cardLast4            String?   @map("CardLast4") @db.VarChar(4)
+  cardBank             String?   @map("CardBank") @db.VarChar(100)
+  upiApp               String?   @map("UpiApp") @db.VarChar(50)
+  upiTxnId             String?   @map("UpiTxnId") @db.VarChar(100)
+  payRef               String?   @map("PayRef") @db.VarChar(120)
 
-  lines  TczPos1[]
-  offers TczPos2[]
+  lines    TczPos1[]
+  offers   TczPos2[]
+  returns  SalesReturn[]
+  heldBill HeldBill?
 
   @@unique([tenantId, docNum])
   @@unique([tenantId, clientToken])
   @@index([tenantId, createDate])
   @@index([tenantId, outletId])
   @@index([tenantId, customerMobileNumber])
-  @@map("TCZ_OPOS")
+  @@index([tenantId, customerId])
+  @@index([tenantId, outletId, createDate])
+  @@index([tenantId, payMode, createDate])
+  @@map("Linesales")
 }
 
 // Billing line items. LineId is the 1-based position of the cart line within
@@ -2447,7 +2380,7 @@ model TczPos1 {
   lineId        Int      @map("LineId")
   productId     String?  @map("ProductId")
   product       Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
-  object        String?  @default("TCZ_OPOS") @map("Object") @db.VarChar(10)
+  object        String?  @default("Linesales") @map("Object") @db.VarChar(10)
   itemCode      String?  @map("ItemCode") @db.VarChar(255)
   itemName      String?  @map("ItemName") @db.VarChar(255)
   price         Decimal? @default(0) @map("Price") @db.Decimal(19, 6)
@@ -2465,21 +2398,26 @@ model TczPos1 {
   offerQty      Decimal? @default(0) @map("OfferQty") @db.Decimal(19, 6)
   salesQty      Decimal? @default(0) @map("SalesQty") @db.Decimal(19, 6)
   returnBill    String?  @map("ReturnBill") @db.VarChar(255)
+  // ---- extra columns (not in the SQL Server script) ----
+  uom           String?  @map("Uom") @db.VarChar(50)
+  taxRate       Decimal? @map("TaxRate") @db.Decimal(5, 4)
+
+  returnItems SalesReturnItem[]
 
   @@id([docEntry, lineId])
   @@index([productId])
   @@index([itemCode])
-  @@map("TCZ_POS1")
+  @@map("LinesaleItemDetails")
 }
 
 // Offer / discount details. Not written by the app yet (promotions are not
 // applied at checkout). TODO: confirm whether LineId is an offer row number
-// within the bill or a pointer at a TCZ_POS1 line before writing any rows.
+// within the bill or a pointer at a LinesaleItemDetails line before writing any rows.
 model TczPos2 {
   docEntry      BigInt    @map("DocEntry")
   header        TczOpos   @relation(fields: [docEntry], references: [docEntry], onDelete: Cascade)
   lineId        Int       @map("LineId")
-  object        String?   @default("TCZ_OPOS") @map("Object") @db.VarChar(10)
+  object        String?   @default("Linesales") @map("Object") @db.VarChar(10)
   discountName  String?   @map("DiscountName") @db.VarChar(255)
   priority      Int?      @map("Priority")
   effectiveFrom DateTime? @map("EffectiveFrom") @db.Timestamptz(6)
@@ -2489,5 +2427,5 @@ model TczPos2 {
   discType      String?   @map("DiscType") @db.VarChar(20)
 
   @@id([docEntry, lineId])
-  @@map("TCZ_POS2")
+  @@map("LinesaleOfferDetails")
 }

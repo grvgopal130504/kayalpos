@@ -3,7 +3,7 @@ import { ApiError } from '../../middleware/errorHandler.js';
 
 import { TAX_RATE } from './saleConstants.js';
 import { completeHeldBill } from '../held-bill/heldBill.service.js';
-import { writeTczBill } from './tczBilling.service.js';
+import { writeTczBill, toSaleDto } from './tczBilling.service.js';
 
 /**
  * Preview of the bill number the NEXT sale will get (e.g. "LS-00001"),
@@ -12,16 +12,15 @@ import { writeTczBill } from './tczBilling.service.js';
  * not a reservation" caveat as useNextCodePreview on the frontend.
  */
 export async function nextBillNo(tenantId) {
-  const count = await prisma.sale.count({ where: { tenantId } });
+  const count = await prisma.tczOpos.count({ where: { tenantId } });
   return `LS-${String(count + 1).padStart(5, '0')}`;
 }
 
 /**
  * Creates a sale: re-reads every Product fresh inside one transaction
  * (never trusts the client's cached price/name/stock), verifies stock,
- * computes subtotal/discount/tax/grand total server-side, writes the Sale +
- * SaleLine rows (and the matching TCZ_OPOS/TCZ_POS1 rows — see
- * tczBilling.service.js), and decrements each Product's availableQty — all
+ * computes subtotal/discount/tax/grand total server-side, writes the Linesales +
+ * LinesaleItemDetails rows (see tczBilling.service.js), and decrements each Product's availableQty — all
  * atomic, so a mid-way failure (insufficient stock on line 3 of 5) leaves
  * nothing half-written.
  *
@@ -53,14 +52,11 @@ export async function createSale({
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sale-bill:${tenantId}`}))`;
 
     if (clientToken) {
-      const prior = await tx.tczOpos.findFirst({ where: { tenantId, clientToken }, select: { saleId: true } });
-      if (prior) {
-        const existing = prior.saleId
-          ? await tx.sale.findFirst({ where: { id: prior.saleId, tenantId }, include: { lines: true } })
-          : null;
-        if (!existing) throw new ApiError(409, 'This bill was already submitted but can no longer be loaded — check Sales before retrying');
-        return existing;
-      }
+      const prior = await tx.tczOpos.findFirst({
+        where: { tenantId, clientToken },
+        include: { lines: { orderBy: { lineId: 'asc' } } },
+      });
+      if (prior) return toSaleDto(prior, prior.lines);
     }
 
     let customer = null;
@@ -116,43 +112,21 @@ export async function createSale({
 
     const billNo = await nextBillNoWithinTx(tx, tenantId);
 
-    const sale = await tx.sale.create({
-      data: {
-        tenantId,
-        outletId: outletId || null,
-        billNo,
-        customerId: customerId || null,
-        customerName: customerName || 'Walk-in Customer',
-        cashierName,
-        subTotal,
-        discountType,
-        discountValue,
-        discountAmount,
-        taxAmount,
-        grandTotal,
-        paymentMethod,
-        receivedAmount,
-        changeAmount,
-        cardType: paymentMethod === 'card' ? (cardType || null) : null,
-        cardLast4: paymentMethod === 'card' ? (cardLast4 || null) : null,
-        cardBank: paymentMethod === 'card' ? (cardBank || null) : null,
-        upiApp: paymentMethod === 'upi' ? (upiApp || null) : null,
-        upiTxnId: paymentMethod === 'upi' ? (upiTxnId || null) : null,
-        // Not gated to specific tenders like the card/UPI fields above —
-        // it's a generic reference any non-cash/card/upi tender can carry
-        // (cheque number, gift card code, bank transfer UTR, ...).
-        paymentReference: paymentReference || null,
-        lines: { create: lineData },
-      },
-      include: { lines: true },
+    // Stock on hand as it was when this bill was priced (recorded on the TCZ lines).
+    const stockBefore = new Map(products.map((p) => [p.id, p.availableQty]));
+
+    const sale = await writeTczBill(tx, {
+      tenantId, outletId, billNo, cashierName, customer, customerId: customerId || null,
+      customerName: customerName || 'Walk-in Customer',
+      productById, lineData, subTotal, discountAmount, taxable, taxAmount, grandTotal,
+      discountType, discountValue, paymentMethod, receivedAmount, changeAmount,
+      cardType, cardLast4, cardBank, upiApp, upiTxnId, paymentReference,
+      clientToken, stockBefore,
     });
 
     // Throws (rolling back this whole sale, stock deduction included) if the
     // held bill was already paid/discarded — one held bill, one sale.
-    if (heldBillId) await completeHeldBill(tx, { user: actor, heldBillId, saleId: sale.id });
-
-    // Stock on hand as it was when this bill was priced (recorded on the TCZ lines).
-    const stockBefore = new Map(products.map((p) => [p.id, p.availableQty]));
+    if (heldBillId) await completeHeldBill(tx, { user: actor, heldBillId, docEntry: BigInt(sale.id) });
 
     // Conditional decrement: only succeeds while enough stock is still there at
     // write time. Products are updated in a fixed order so two concurrent bills
@@ -168,11 +142,6 @@ export async function createSale({
         throw new ApiError(409, `Stock for ${name} changed while this bill was being saved — nothing was charged. Review the cart and try again.`);
       }
     }
-
-    await writeTczBill(tx, {
-      sale, customer, productById, lineData, subTotal, taxable,
-      discountType, discountValue, clientToken, stockBefore,
-    });
 
     return sale;
   }, { maxWait: 10_000, timeout: 20_000 });
@@ -197,9 +166,9 @@ export async function getDiscountSummary(tenantId) {
   since.setHours(0, 0, 0, 0);
 
   const [sales, outlets] = await Promise.all([
-    prisma.sale.findMany({
-      where: { tenantId, createdAt: { gte: since } },
-      select: { discountAmount: true, createdAt: true, outletId: true },
+    prisma.tczOpos.findMany({
+      where: { tenantId, createDate: { gte: since } },
+      select: { discountAmount: true, createDate: true, outletId: true },
     }),
     prisma.outlet.findMany({ where: { tenantId }, select: { id: true, name: true } }),
   ]);
@@ -216,7 +185,7 @@ export async function getDiscountSummary(tenantId) {
   const outletTotals = new Map();
   sales.forEach((sale) => {
     const amount = Number(sale.discountAmount || 0);
-    const dayKey = new Date(sale.createdAt).toDateString();
+    const dayKey = new Date(sale.createDate).toDateString();
     if (bucketByKey[dayKey]) bucketByKey[dayKey].total += amount;
 
     const outletKey = sale.outletId || 'unassigned';
@@ -252,18 +221,18 @@ export async function getSalesOverviewSummary(tenantId) {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const sales = await prisma.sale.findMany({
+  const sales = await prisma.tczOpos.findMany({
     where: { tenantId },
-    select: { grandTotal: true, receivedAmount: true, createdAt: true },
+    select: { grandTotal: true, received: true, createDate: true },
   });
 
   let totalSalesThisMonth = 0;
   let outstandingAmount = 0;
   sales.forEach((sale) => {
     const grand = Number(sale.grandTotal);
-    const received = Number(sale.receivedAmount);
+    const received = Number(sale.received);
     outstandingAmount += Math.max(grand - received, 0);
-    if (new Date(sale.createdAt) >= startOfMonth) totalSalesThisMonth += grand;
+    if (new Date(sale.createDate) >= startOfMonth) totalSalesThisMonth += grand;
   });
 
   return {
@@ -279,16 +248,16 @@ export async function getSalesOverviewSummary(tenantId) {
  * entry (the caller treats that as all-zero).
  */
 export async function getCustomerPurchaseSummaries(tenantId) {
-  const sales = await prisma.sale.findMany({
+  const sales = await prisma.tczOpos.findMany({
     where: { tenantId, customerId: { not: null } },
-    select: { customerId: true, grandTotal: true, receivedAmount: true },
+    select: { customerId: true, grandTotal: true, received: true },
   });
 
   const map = {};
   sales.forEach((sale) => {
     const key = sale.customerId;
     const grand = Number(sale.grandTotal);
-    const received = Number(sale.receivedAmount);
+    const received = Number(sale.received);
     if (!map[key]) map[key] = { totalPurchase: 0, outstanding: 0, transactionCount: 0 };
     map[key].totalPurchase += grand;
     map[key].outstanding += Math.max(grand - received, 0);
@@ -311,11 +280,11 @@ export async function getCustomerPurchaseSummary(tenantId, customerId) {
   const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId } });
   if (!customer) throw new ApiError(404, 'Customer not found');
 
-  const sales = await prisma.sale.findMany({
+  const sales = await prisma.tczOpos.findMany({
     where: { tenantId, customerId },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { createDate: 'desc' },
     select: {
-      id: true, billNo: true, createdAt: true, grandTotal: true, receivedAmount: true, paymentMethod: true,
+      docEntry: true, docNum: true, createDate: true, grandTotal: true, received: true, payMode: true,
     },
   });
 
@@ -323,20 +292,20 @@ export async function getCustomerPurchaseSummary(tenantId, customerId) {
   let outstanding = 0;
   sales.forEach((sale) => {
     const grand = Number(sale.grandTotal);
-    const received = Number(sale.receivedAmount);
+    const received = Number(sale.received);
     totalPurchase += grand;
     outstanding += Math.max(grand - received, 0);
   });
 
   const recentTransactions = sales.slice(0, 20).map((sale) => {
     const grand = Number(sale.grandTotal);
-    const received = Number(sale.receivedAmount);
+    const received = Number(sale.received);
     return {
-      date: sale.createdAt,
+      date: sale.createDate,
       type: 'Sale',
-      invoiceNo: sale.billNo,
+      invoiceNo: sale.docNum,
       amount: grand,
-      payment: sale.paymentMethod,
+      payment: sale.payMode,
       status: received >= grand ? 'paid' : 'due',
     };
   });
@@ -355,7 +324,7 @@ export async function getCustomerPurchaseSummary(tenantId, customerId) {
 // to claim the same billNo — the @@unique([tenantId, billNo]) constraint
 // would still catch that as a last resort, just with an uglier 500 instead).
 async function nextBillNoWithinTx(tx, tenantId) {
-  const count = await tx.sale.count({ where: { tenantId } });
+  const count = await tx.tczOpos.count({ where: { tenantId } });
   return `LS-${String(count + 1).padStart(5, '0')}`;
 }
 
@@ -403,22 +372,22 @@ async function getTenderSalesReport(tenantId, outletId, { date, page, pageSize }
   const { start: todayStart, end: todayEnd } = dayBounds();
 
   const [allTenderSales, todaysAgg, daySales, dayReturns] = await Promise.all([
-    prisma.sale.findMany({
-      where: { tenantId, ...outletFilter, paymentMethod: paymentMethodWhere },
-      select: { grandTotal: true, lines: { select: { qty: true } } },
+    prisma.tczOpos.findMany({
+      where: { tenantId, ...outletFilter, payMode: paymentMethodWhere },
+      select: { grandTotal: true, lines: { select: { quantity: true } } },
     }),
-    prisma.sale.aggregate({
+    prisma.tczOpos.aggregate({
       where: {
-        tenantId, ...outletFilter, paymentMethod: paymentMethodWhere, createdAt: { gte: todayStart, lte: todayEnd },
+        tenantId, ...outletFilter, payMode: paymentMethodWhere, createDate: { gte: todayStart, lte: todayEnd },
       },
       _sum: { grandTotal: true },
       _count: { _all: true },
     }),
-    prisma.sale.findMany({
+    prisma.tczOpos.findMany({
       where: {
-        tenantId, ...outletFilter, paymentMethod: paymentMethodWhere, createdAt: { gte: dayStart, lte: dayEnd },
+        tenantId, ...outletFilter, payMode: paymentMethodWhere, createDate: { gte: dayStart, lte: dayEnd },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createDate: 'desc' },
       include: { lines: true },
     }),
     prisma.salesReturn.findMany({
@@ -427,7 +396,7 @@ async function getTenderSalesReport(tenantId, outletId, { date, page, pageSize }
         refundMode: 'refund',
         refundTo: refundToWhere,
         createdAt: { gte: dayStart, lte: dayEnd },
-        ...(outletId ? { sale: { outletId } } : {}),
+        ...(outletId ? { tczBill: { outletId } } : {}),
       },
       select: { grandTotal: true },
     }),
@@ -439,7 +408,7 @@ async function getTenderSalesReport(tenantId, outletId, { date, page, pageSize }
   allTenderSales.forEach((sale) => {
     totalValue += Number(sale.grandTotal);
     totalItems += sale.lines.length;
-    totalQty += sale.lines.reduce((sum, line) => sum + line.qty, 0);
+    totalQty += sale.lines.reduce((sum, line) => sum + Number(line.quantity), 0);
   });
   const totalTransactions = allTenderSales.length;
   const avgInvoiceValue = totalTransactions > 0 ? totalValue / totalTransactions : 0;
@@ -455,7 +424,7 @@ async function getTenderSalesReport(tenantId, outletId, { date, page, pageSize }
     discount += Number(sale.discountAmount);
     taxAmount += Number(sale.taxAmount);
     grandTotal += Number(sale.grandTotal);
-    received += Number(sale.receivedAmount);
+    received += Number(sale.received);
     changeReturned += Number(sale.changeAmount);
   });
   const taxableAmount = Math.max(grossSales - discount, 0);
@@ -466,15 +435,15 @@ async function getTenderSalesReport(tenantId, outletId, { date, page, pageSize }
   const safePage = Math.min(page, totalPages);
   const pageStart = (safePage - 1) * pageSize;
   const transactions = daySales.slice(pageStart, pageStart + pageSize).map((sale) => ({
-    invoiceNo: sale.billNo,
-    dateTime: sale.createdAt,
+    invoiceNo: sale.docNum,
+    dateTime: sale.createDate,
     items: sale.lines.length,
-    qty: sale.lines.reduce((sum, line) => sum + line.qty, 0),
+    qty: sale.lines.reduce((sum, line) => sum + Number(line.quantity), 0),
     discount: round2(sale.discountAmount),
     tax: round2(sale.taxAmount),
     totalAmount: round2(sale.grandTotal),
-    received: round2(sale.receivedAmount),
-    cashier: sale.cashierName,
+    received: round2(sale.received),
+    cashier: sale.createdBy,
     ...mapExtraRowFields(sale),
   }));
 
@@ -705,21 +674,21 @@ export async function getOtherPaymentsReport(tenantId, outletId, params = {}) {
       donutId: 'other',
       tenderLabel: 'Other Payments Retained',
       mapExtraRowFields: (sale) => ({
-        paymentMode: labelForPaymentMethod(sale.paymentMethod),
-        reference: sale.paymentReference || null,
+        paymentMode: labelForPaymentMethod(sale.payMode),
+        reference: sale.payRef || null,
       }),
     }),
-    prisma.sale.groupBy({
-      by: ['paymentMethod'],
+    prisma.tczOpos.groupBy({
+      by: ['payMode'],
       where: {
-        tenantId, ...outletFilter, paymentMethod: { in: PRIMARY_TENDER_METHODS }, createdAt: { gte: dayStart, lte: dayEnd },
+        tenantId, ...outletFilter, payMode: { in: PRIMARY_TENDER_METHODS }, createDate: { gte: dayStart, lte: dayEnd },
       },
-      _sum: { receivedAmount: true },
+      _sum: { received: true },
     }),
   ]);
 
   const receivedByMethod = Object.fromEntries(
-    primaryTenderTotals.map((row) => [row.paymentMethod, round2(row._sum.receivedAmount || 0)]),
+    primaryTenderTotals.map((row) => [row.payMode, round2(row._sum.received || 0)]),
   );
   const cash = receivedByMethod.cash || 0;
   const card = receivedByMethod.card || 0;

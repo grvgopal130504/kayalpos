@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../middleware/errorHandler.js';
+import { asSaleGroup } from '../sale/tczSaleView.js';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -147,12 +148,12 @@ export async function getCashDrawerOpeningReport(tenantId, outletId, params = {}
   // its connections.
   let closingCashActual = 0;
   if (openShift) {
-    const cashSalesAgg = await prisma.sale.aggregate({
+    const cashSalesAgg = asSaleGroup(await prisma.tczOpos.aggregate({
       where: {
-        tenantId, ...outletFilter, paymentMethod: 'cash', createdAt: { gte: openShift.openedAt },
+        tenantId, ...outletFilter, payMode: 'cash', createDate: { gte: openShift.openedAt },
       },
-      _sum: { receivedAmount: true },
-    });
+      _sum: { received: true },
+    }));
     const withdrawalsAgg = await prisma.cashWithdrawal.aggregate({
       where: { tenantId, shiftSessionId: openShift.id },
       _sum: { amount: true },

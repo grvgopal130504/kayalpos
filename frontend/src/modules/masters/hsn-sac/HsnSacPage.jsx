@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
   TextField, MenuItem, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -17,7 +16,6 @@ import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
@@ -26,7 +24,6 @@ import { formatPickerDate } from '../../../components/form/FormDatePicker';
 import HsnSacTable from './components/HsnSacTable';
 import HsnSacFormDialog from './components/HsnSacFormDialog';
 import HsnSacViewDialog from './components/HsnSacViewDialog';
-import { CASHIER } from '../mastersMockData';
 import { TYPE_OPTIONS, CHAPTER_OPTIONS, TAX_RATE_OPTIONS } from './createHsnSacSchema';
 import { useGetHsnSacCodesQuery, useDeleteHsnSacMutation } from '../../../api/hsnSacApi';
 
@@ -43,7 +40,6 @@ import { useGetHsnSacCodesQuery, useDeleteHsnSacMutation } from '../../../api/hs
  */
 export default function HsnSacPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState('');
   const [type, setType] = useState('All');
   const [chapter, setChapter] = useState('All');
@@ -63,10 +59,6 @@ export default function HsnSacPage() {
   });
   const [deleteHsnSac] = useDeleteHsnSacMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewHsnSac = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import HSN / SAC codes is coming soon', 'info'));
@@ -137,21 +129,6 @@ export default function HsnSacPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>HSN / SAC</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>

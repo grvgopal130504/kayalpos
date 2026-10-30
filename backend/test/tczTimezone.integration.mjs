@@ -11,7 +11,7 @@
 //   * every connection of the application's pool (src/config/prisma.js) has session TimeZone = UTC, also after a reconnect;
 //   * CreateDate (timestamptz) keeps the exact instant of the real checkout / of explicit boundary instants;
 //   * CreateTime is the IST (Asia/Kolkata) wall-clock time of that same instant;
-//   * a plain (non-application) session in the database's own zone sees the same exact instants, and verify is clean;
+//   * a plain (non-application) session in the database's own zone sees the same exact instants;
 //   * NEGATIVE CONTROL: a Prisma client WITHOUT the UTC pin does shift CreateDate by the database zone's offset, which is
 //     why the pin exists (if this ever stops being true, the adapter changed: revisit the pin).
 import 'dotenv/config';
@@ -28,7 +28,6 @@ if (!/@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL || '')) {
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-test-secret-123';
 process.env.NODE_ENV = 'test';
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERIFY = fs.readFileSync(path.join(here, '../scripts/verify-tcz-backfill.sql'), 'utf8');
 
 const { app } = await import('../src/app.js');
 const { prisma } = await import('../src/config/prisma.js');                // the application's own, pinned client
@@ -77,7 +76,7 @@ await test('APPLICATION POOL: still UTC after the pool reconnects (all its backe
   rows.forEach((r) => { assert.equal(r[0].tz, 'UTC'); assert.ok(!pids.includes(r[0].pid), 'new backend expected after termination'); });
 });
 
-let saleId; const t0 = Date.now();
+let saleId; const t0 = Date.now(); // saleId = the bill's DocEntry
 await test('real checkout succeeds', async () => {
   const r = await fetch(`${base}/sales`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ customerName: 'Walk-in Customer', cashierName: 'c1', paymentMethod: 'cash', receivedAmount: 1000, lines: [{ productId: product.id, qty: 2 }] }) });
@@ -85,21 +84,12 @@ await test('real checkout succeeds', async () => {
 });
 const t1 = Date.now();
 await test('REAL CHECKOUT: CreateDate is the exact instant (not shifted) and CreateTime is the IST time of it, in every database zone', async () => {
-  const r = (await db.query(`select (h."CreateDate") cd, (s."createdAt" at time zone 'UTC') sc, to_char(h."CreateTime",'HH24:MI:SS.MS') ct,
-       to_char((h."CreateDate" at time zone 'Asia/Kolkata'),'HH24:MI:SS.MS') ist,
-       extract(epoch from h."CreateDate") * 1000 - extract(epoch from (s."createdAt" at time zone 'UTC')) * 1000 shift_ms
-     from "TCZ_OPOS" h join "Sale" s on s.id = h."SaleId" where s.id = $1`, [saleId])).rows[0];
-  assert.ok(r.sc.getTime() >= t0 - 5000 && r.sc.getTime() <= t1 + 5000, 'Sale.createdAt is the real instant');
-  assert.ok(Math.abs(Number(r.shift_ms)) < 60000, `CreateDate is ${r.shift_ms} ms away from the real instant (database zone ${DB_TZ})`);
-  assert.ok(r.cd.getTime() >= t0 - 5000 && r.cd.getTime() <= t1 + 5000, `CreateDate ${r.cd.toISOString()} outside the checkout window`);
+  const r = (await db.query(`select (h."CreateDate") cd, to_char(h."CreateTime",'HH24:MI:SS.MS') ct,
+       to_char((h."CreateDate" at time zone 'Asia/Kolkata'),'HH24:MI:SS.MS') ist
+     from "Linesales" h where h."DocEntry" = $1`, [saleId])).rows[0];
+  assert.ok(r.cd.getTime() >= t0 - 5000 && r.cd.getTime() <= t1 + 5000, `CreateDate ${r.cd.toISOString()} outside the checkout window (database zone ${DB_TZ})`);
   assert.equal(r.ct, r.ist, 'CreateTime is the IST time of CreateDate');
 });
-await test('verify script is clean (every PROBLEM row 0) when read from a plain session in the database zone', async () => {
-  const rows = (await db.query(VERIFY)).rows; const problems = rows.filter((x) => x.check.startsWith('PROBLEM'));
-  assert.ok(problems.length >= 25);
-  problems.forEach((p) => assert.equal(Number(p.n), 0, `${p.check} = ${p.n}`));
-});
-
 // explicit instants: IST midnight, year boundary, leap day, ordinary day
 const INSTANTS = [
   ['2026-10-27T14:11:21.300Z', '19:41:21.300'],
@@ -112,7 +102,7 @@ await test('EXACT INSTANT through the application client at IST-midnight / year 
   for (const [stamp, ist] of INSTANTS) {
     const when = new Date(stamp);
     const h = await prisma.tczOpos.create({ data: { tenantId: tenant.id, docNum: `INST-${stamp}`, createDate: when, createTime: istTimeOfDay(when) } });
-    const r = (await db.query(`select ${iso('"CreateDate"')} utc, to_char("CreateTime",'HH24:MI:SS.MS') ct from "TCZ_OPOS" where "DocEntry"=$1`, [h.docEntry])).rows[0];
+    const r = (await db.query(`select ${iso('"CreateDate"')} utc, to_char("CreateTime",'HH24:MI:SS.MS') ct from "Linesales" where "DocEntry"=$1`, [h.docEntry])).rows[0];
     assert.deepEqual([r.utc, r.ct], [stamp, ist], `instant ${stamp}`);
     assert.equal((await prisma.tczOpos.findUnique({ where: { docEntry: h.docEntry } })).createDate.toISOString(), stamp);
   }
@@ -124,7 +114,7 @@ await test('NEGATIVE CONTROL: a Prisma client WITHOUT the UTC pin stores the sam
     const stamp = '2026-10-27T14:11:21.300Z';
     const h = await unpinned.tczOpos.create({ data: { tenantId: tenant.id, docNum: 'UNPINNED-1', createDate: new Date(stamp) } });
     const r = (await db.query(`select ${iso('"CreateDate"')} utc, extract(epoch from "CreateDate") * 1000 - extract(epoch from $2::timestamptz) * 1000 as shift_ms,
-         (select current_setting('TimeZone')) tz from "TCZ_OPOS" where "DocEntry"=$1`, [h.docEntry, stamp])).rows[0];
+         (select current_setting('TimeZone')) tz from "Linesales" where "DocEntry"=$1`, [h.docEntry, stamp])).rows[0];
     // what Postgres does with the zone-less string "2026-10-27 14:11:21.300" in this database's zone:
     const expected = (await db.query(`select extract(epoch from '2026-10-27 14:11:21.300'::timestamptz) * 1000 - extract(epoch from '2026-10-27 14:11:21.300+00'::timestamptz) * 1000 as ms`)).rows[0].ms;
     assert.equal(Number(r.shift_ms), Number(expected), `unpinned shift ${r.shift_ms} ms, expected ${expected} ms for zone ${DB_TZ}`);

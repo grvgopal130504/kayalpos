@@ -6,12 +6,11 @@ import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, Alert,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { logout, selectCurrentUser, selectActiveOutletId } from '../../features/auth/authSlice';
+import { selectCurrentUser, selectActiveOutletId } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
@@ -82,6 +81,7 @@ export default function ShiftOpeningPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
+  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
   const outletId = useAppSelector(selectActiveOutletId);
   const [attachmentName, setAttachmentName] = useState('');
 
@@ -117,10 +117,6 @@ export default function ShiftOpeningPage() {
 
   const handleBack = () => navigate('/cashier-panel');
   const handleAttachmentChange = (e) => setAttachmentName(e.target.files?.[0]?.name || '');
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const onOpenShift = handleSubmit(
     async (values) => {
@@ -148,7 +144,6 @@ export default function ShiftOpeningPage() {
     },
   );
 
-  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
 
   return (
     <Stack spacing={2}>
@@ -161,21 +156,6 @@ export default function ShiftOpeningPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Shift Opening</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {cashierLabel}
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       {isStatusError && (

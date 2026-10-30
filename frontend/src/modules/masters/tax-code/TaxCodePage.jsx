@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
   TextField, MenuItem, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -16,7 +15,6 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
@@ -25,7 +23,6 @@ import { formatPickerDate } from '../../../components/form/FormDatePicker';
 import TaxCodeTable from './components/TaxCodeTable';
 import TaxCodeFormDialog from './components/TaxCodeFormDialog';
 import TaxCodeViewDialog from './components/TaxCodeViewDialog';
-import { CASHIER } from '../mastersMockData';
 import { TAX_TYPE_OPTIONS, TAX_CATEGORY_OPTIONS } from './createTaxCodeSchema';
 import { useGetTaxCodesQuery, useDeleteTaxCodeMutation } from '../../../api/taxCodeApi';
 
@@ -41,7 +38,6 @@ import { useGetTaxCodesQuery, useDeleteTaxCodeMutation } from '../../../api/taxC
  */
 export default function TaxCodePage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState('');
   const [taxType, setTaxType] = useState('All');
   const [taxCategory, setTaxCategory] = useState('All');
@@ -60,10 +56,6 @@ export default function TaxCodePage() {
   });
   const [deleteTaxCode] = useDeleteTaxCodeMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewTaxCode = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Tax Codes is coming soon', 'info'));
@@ -130,21 +122,6 @@ export default function TaxCodePage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Tax Code</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>

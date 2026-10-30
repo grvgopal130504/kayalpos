@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
   TextField, MenuItem,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -16,11 +15,9 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import ReceiptOutlinedIcon from '@mui/icons-material/ReceiptOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
-import { CASHIER } from '../mastersMockData';
 import {
   useGetUomGroupsQuery, useGetUomsQuery, useDeleteUomGroupMutation, useDeleteUomMutation,
 } from '../../../api/uomApi';
@@ -45,7 +42,6 @@ import UomViewDialog from './components/UomViewDialog';
  */
 export default function UomPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
 
   const [groupSearchInput, setGroupSearchInput] = useState('');
   const [groupAppliedSearch, setGroupAppliedSearch] = useState('');
@@ -81,10 +77,6 @@ export default function UomPage() {
   });
   const [deleteUom] = useDeleteUomMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewUom = () => setUomFormDialog({ open: true, mode: 'add', row: null });
   const handleNewUomGroup = () => setGroupFormDialog({ open: true, mode: 'add', row: null });
@@ -190,21 +182,6 @@ export default function UomPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>UOM / UOM Group</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>

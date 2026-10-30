@@ -14,7 +14,6 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:held-bills": "node test/heldBill.integration.mjs",
     "test:tcz-billing": "node test/tczBilling.integration.mjs",
-    "test:tcz-backfill": "node test/tczBackfill.integration.mjs",
     "test:tcz-createtime": "node test/tczCreateTime.unit.mjs",
     "test:tcz-timezone": "node test/tczTimezone.integration.mjs",
     "test:shift-variance": "node test/shiftVariance.integration.mjs"

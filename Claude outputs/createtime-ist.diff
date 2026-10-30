@@ -1,0 +1,464 @@
+--- a/backend/src/modules/sale/tczBilling.service.js
++++ b/backend/src/modules/sale/tczBilling.service.js
+@@ -14,6 +14,33 @@
+ const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
+ const round6 = (value) => Math.round((Number(value) || 0) * 1e6) / 1e6;
+ 
++// Business time zone for TCZ bill times: Tamil Nadu, India (IST, UTC+05:30, no
++// daylight saving). TCZ_OPOS.CreateDate keeps the exact instant (timestamptz);
++// TCZ_OPOS.CreateTime is the wall-clock time of day in THIS zone (TIME, no zone),
++// so a bill printed at 11:50 in Tamil Nadu reads 11:50 whatever time zone the
++// server or the database session runs in. The business date of a bill is
++// (CreateDate AT TIME ZONE 'Asia/Kolkata')::date. The backfill SQL and the verify
++// script use the same zone name; keep the three in step.
++export const TCZ_TIME_ZONE = 'Asia/Kolkata';
++const istClock = new Intl.DateTimeFormat('en-GB', {
++  timeZone: TCZ_TIME_ZONE, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit',
++});
++
++/**
++ * The IST wall-clock time of day of `date`, as a Date on 1970-01-01 whose UTC
++ * fields carry that wall-clock time. That is the shape Prisma needs for a
++ * `@db.Time` column: it writes the Date's UTC time of day, so the stored TIME is
++ * the IST time (e.g. 18:30:00.000Z -> 00:00:00.000, the start of the next IST day).
++ * Milliseconds are preserved. Independent of the process time zone.
++ */
++export function istTimeOfDay(date) {
++  const ms = date.getTime();
++  if (!Number.isFinite(ms)) throw new TypeError('istTimeOfDay needs a valid Date');
++  const part = Object.fromEntries(istClock.formatToParts(date).map((p) => [p.type, p.value]));
++  const milli = ((ms % 1000) + 1000) % 1000;
++  return new Date(Date.UTC(1970, 0, 1, Number(part.hour) % 24, Number(part.minute), Number(part.second), milli));
++}
++
+ // Tenders whose meaning matches a TCZ_OPOS payment column one-to-one. Every
+ // other tender the app accepts (credit, store-credit, gift-card, cheque,
+ // bank-transfer) has NO TCZ column: those amounts stay on the Sale row
+@@ -59,8 +86,8 @@
+       clientToken: clientToken || null,
+       docNum: sale.billNo,
+       createDate: now,
+-      // UTC time-of-day of createDate (no business time zone is defined anywhere).
+-      createTime: now,
++      // IST (Asia/Kolkata) wall-clock time of the SAME instant as createDate.
++      createTime: istTimeOfDay(now),
+       createdBy: sale.cashierName,
+       object: OBJECT,
+       customerMobileNumber: customer?.mobile || null,
+--- a/backend/scripts/backfill-tcz-billing.sql
++++ b/backend/scripts/backfill-tcz-billing.sql
+@@ -15,7 +15,12 @@
+ --
+ -- Mapping = the same as backend/src/modules/sale/tczBilling.service.js, using the
+ -- values already STORED on the sale (nothing recomputed from today's products):
+---   header : DocNum=billNo, CreateDate/Time=Sale.createdAt (UTC), CreatedBy=cashierName,
++--   header : DocNum=billNo, CreatedBy=cashierName,
++--            CreateDate = Sale.createdAt as the exact instant (stored UTC; timestamptz),
++--            CreateTime = the IST (Asia/Kolkata, UTC+05:30) wall-clock time of that same instant
++--                         (TIME, no zone; same convention as the live writer: tczBilling.service.js
++--                         istTimeOfDay). Business date = (CreateDate AT TIME ZONE 'Asia/Kolkata')::date,
++--                         so 18:30 UTC is 00:00 IST of the NEXT calendar day,
+ --            customer fields, HeadDiscTyp/HeaderDiscount=discountType/discountValue,
+ --            GrandTotal, Cash/Card/UPI/Wallet (only if that was the tender), Paid, Balance
+ --   lines  : LineId = 1..n in SaleLine.id order (cuid = creation order), Price, Quantity,
+@@ -79,7 +84,9 @@
+ )
+ SELECT
+   s."tenantId", s."outletId", s.id, NULL, s."billNo",
+-  s."createdAt" AT TIME ZONE 'UTC', s."createdAt"::time, LEFT(s."cashierName", 500), 'TCZ_OPOS',
++  s."createdAt" AT TIME ZONE 'UTC',
++  (s."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::time,   -- IST wall-clock time of the same instant
++  LEFT(s."cashierName", 500), 'TCZ_OPOS',
+   LEFT(c.mobile, 20), LEFT(s."customerName", 255), LEFT(c.name, 255), LEFT(c.code, 255),
+   s."discountType", s."discountValue", s.grand,
+   CASE WHEN s."paymentMethod" = 'cash'   THEN LEAST(s.received, s.grand) ELSE 0 END,
+--- a/backend/scripts/verify-tcz-backfill.sql
++++ b/backend/scripts/verify-tcz-backfill.sql
+@@ -10,7 +10,7 @@
+ --
+ -- What it proves, per header joined to its Sale (SaleId):
+ --   missing / orphan / duplicate headers, bill-number collisions, wrong tenant,
+---   DocNum, outlet, CreateDate/CreateTime, totals (GrandTotal, Paid, Balance,
++--   DocNum, outlet, CreateDate (exact instant) / CreateTime (IST time of day), totals (GrandTotal, Paid, Balance,
+ --   sum of line totals), line count, LineId 1..n without gaps, quantities, the
+ --   exact multiset of products, and the tender columns versus Sale.paymentMethod;
+ --   plus the unique indexes that make duplicates impossible are still present.
+@@ -83,8 +83,11 @@
+   -- live rows stamp CreateDate a few ms after the sale insert; 60 s absorbs that, a timezone slip (hours) does not
+   UNION ALL SELECT 33, 'PROBLEM: CreateDate missing or more than 60 s away from Sale.createdAt', count(*) FROM hb
+     WHERE sid IS NOT NULL AND ("CreateDate" IS NULL OR abs(extract(epoch FROM ("CreateDate" - (s_created AT TIME ZONE 'UTC')))) > 60)
+-  UNION ALL SELECT 34, 'PROBLEM: CreateTime missing or not the UTC time of day of CreateDate (to the minute)', count(*) FROM hb
+-    WHERE sid IS NOT NULL AND ("CreateTime" IS NULL OR date_trunc('minute', "CreateTime"::interval) IS DISTINCT FROM date_trunc('minute', ("CreateDate" AT TIME ZONE 'UTC')::time::interval))
++  -- CreateTime is the IST (Asia/Kolkata) wall-clock time of the SAME instant as CreateDate (exact match, to the
++  -- microsecond). A value left in UTC is 5h30 off and fails here. The zone is named explicitly, so the result does not
++  -- depend on the session's TimeZone setting.
++  UNION ALL SELECT 34, 'PROBLEM: CreateTime missing or not the IST (Asia/Kolkata) time of day of CreateDate', count(*) FROM hb
++    WHERE sid IS NOT NULL AND ("CreateDate" IS NULL OR "CreateTime" IS DISTINCT FROM ("CreateDate" AT TIME ZONE 'Asia/Kolkata')::time)
+   UNION ALL SELECT 35, 'PROBLEM: GrandTotal differs from Sale', count(*) FROM hb WHERE sid IS NOT NULL AND "GrandTotal" IS DISTINCT FROM s_grand
+   UNION ALL SELECT 36, 'PROBLEM: Paid <> min(received, grand)', count(*) FROM hb WHERE sid IS NOT NULL AND "Paid" IS DISTINCT FROM LEAST(s_recv, s_grand)
+   UNION ALL SELECT 37, 'PROBLEM: Balance <> max(grand - received, 0)', count(*) FROM hb WHERE sid IS NOT NULL AND "Balance" IS DISTINCT FROM GREATEST(round(s_grand - s_recv, 2), 0)
+@@ -116,6 +119,9 @@
+        OR EXISTS (SELECT 1 FROM "SaleLine" l WHERE l."saleId" = s.id AND (length(l.name) > 255 OR length(l.code) > 255)))
+   UNION ALL SELECT 62, 'INFO: TCZ_POS2 rows (expected 0)', count(*) FROM "TCZ_POS2"
+   UNION ALL SELECT 63, 'INFO: headers whose Object is not TCZ_OPOS', count(*) FROM "TCZ_OPOS" WHERE "Object" IS DISTINCT FROM 'TCZ_OPOS'
++  -- Prisma (adapter-pg) writes a timestamptz instant as a zone-less string, so the DATABASE TimeZone must be UTC for
++  -- live CreateDate values to be exact (check 33 above catches live rows that were shifted). n = current UTC offset in seconds.
++  UNION ALL SELECT 65, 'INFO: database TimeZone = ' || current_setting('TimeZone') || ' (n = UTC offset in seconds; must be 0 for exact live CreateDate)', extract(timezone FROM now())::bigint
+   UNION ALL SELECT 64, 'INFO: lines with InStock NULL (expected for backfilled bills)', count(*) FROM "TCZ_POS1" WHERE "InStock" IS NULL
+ 
+   -- ---- tenant level --------------------------------------------------------
+--- a/backend/scripts/diagnose-tcz-backfill.sql
++++ b/backend/scripts/diagnose-tcz-backfill.sql
+@@ -1,6 +1,7 @@
+ -- READ-ONLY diagnostics to run BEFORE the backfill (and whenever verify reports a
+--- PROBLEM). Changes nothing. It prints three result sets:
++-- PROBLEM). Changes nothing. It prints four result sets:
+ --
++--   0. TIMEZONE     the database TimeZone (must be UTC for exact live CreateDate instants)
+ --   1. DRY RUN      what the next backfill run would copy / skip, and why
+ --   2. COLLISIONS   completed sales the backfill will keep skipping because another
+ --                   TCZ header already uses their (tenant, bill number)
+@@ -15,6 +16,10 @@
+ -- Decide per row: keep the existing header (then link it to the right sale yourself),
+ -- or move it aside; only then re-run the backfill.
+ 
++\echo '== 0. DATABASE TIME ZONE (CreateDate is a timestamptz written by Prisma; the database TimeZone must be UTC)'
++SELECT current_setting('TimeZone') AS database_timezone, extract(timezone FROM now())::int AS utc_offset_seconds,
++       CASE WHEN extract(timezone FROM now()) = 0 THEN 'ok (offset 0 now)' ELSE 'NOT UTC: live CreateDate would be shifted by this offset; fix the server TimeZone first' END AS note;
++
+ \echo '== 1. DRY RUN: what the next backfill run would do'
+ SELECT 'would copy (completed, has lines, no header, no bill-number clash)' AS what, count(*) AS sales
+ FROM "Sale" s
+--- a/backend/test/tczBackfill.integration.mjs
++++ b/backend/test/tczBackfill.integration.mjs
+@@ -2,6 +2,8 @@
+ // Creates sales through the REAL checkout (so TCZ rows are written live), then
+ // "ages" them (deletes their TCZ rows to look like pre-migration sales), runs the
+ // backfill, and compares the backfilled rows with the live-written ones.
++// CreateTime convention under test: CreateDate = exact instant (timestamptz); CreateTime = the IST (Asia/Kolkata,
++// UTC+05:30) wall-clock time of that same instant, written identically by the live checkout and by the backfill.
+ // REFUSES to run unless DATABASE_URL is a LOCAL database.
+ //   DATABASE_URL=postgresql://postgres@localhost:5432/nexora_test npm run test:tcz-backfill
+ import 'dotenv/config';
+@@ -153,6 +155,25 @@
+     assert.equal(row.InStock, null);
+   });
+ });
++const normT = (t) => { const [hms, f = ''] = String(t).split('.'); return `${hms}.${(f + '000').slice(0, 3)}`; };
++const istOracle = (d) => new Date(d.getTime() + 5.5 * 3600 * 1000).toISOString().slice(11, 23); // fixed UTC+05:30, no DST
++await test('CreateTime is IST for LIVE-written rows and for BACKFILLED rows; CreateDate keeps the exact instant', async () => {
++  // live-written (snapshot taken before the sales were aged)
++  for (const sid of live) {
++    const r = snapshot.h[sid];
++    assert.equal(normT(r.CreateTime), istOracle(new Date(r.CreateDate)), `live ${r.DocNum}: CreateTime ${r.CreateTime} vs CreateDate ${r.CreateDate.toISOString()}`);
++    assert.notEqual(normT(r.CreateTime), new Date(r.CreateDate).toISOString().slice(11, 23), 'must not be the UTC time of day');
++  }
++  // backfilled: exact instant preserved and IST time of day, for every copied sale
++  const rows = (await db.query(`select h."DocNum", to_char(h."CreateTime",'HH24:MI:SS.MS') t, h."CreateDate" cd,
++      (extract(epoch from h."CreateDate") = extract(epoch from (s."createdAt" at time zone 'UTC'))) same_instant
++    from "TCZ_OPOS" h join "Sale" s on s.id=h."SaleId" where h."TenantId"=$1`, [tenant.id])).rows;
++  assert.ok(rows.length >= 11);
++  for (const r of rows) {
++    assert.equal(r.same_instant, true, `${r.DocNum}: CreateDate must equal Sale.createdAt exactly`);
++    assert.equal(r.t, istOracle(new Date(r.cd)), `${r.DocNum}: CreateTime ${r.t} vs IST of ${r.cd.toISOString()}`);
++  }
++});
+ await test('InStock is NULL (never guessed), TCZ_POS2 stays empty, Object = TCZ_OPOS', async () => {
+   assert.equal(await count('select count(*) n from "TCZ_POS1" p join "TCZ_OPOS" o using("DocEntry") where o."TenantId"=$1 and p."InStock" is not null', [tenant.id]), 0);
+   assert.equal(await count('select count(*) n from "TCZ_POS2"'), 0);
+@@ -194,7 +215,11 @@
+     ['wrong outlet', 'outlet differs', `update "TCZ_OPOS" set "OutletId"=null where "SaleId"='${S1}'`],
+     ['CreateDate shifted 5h30', 'CreateDate missing or more than 60 s', `update "TCZ_OPOS" set "CreateDate"="CreateDate"+interval '5 hours 30 minutes' where "SaleId"='${S1}'`],
+     ['CreateDate NULL', 'CreateDate missing or more than 60 s', `update "TCZ_OPOS" set "CreateDate"=null where "SaleId"='${S1}'`],
+-    ['CreateTime shifted 5h30', 'CreateTime missing or not', `update "TCZ_OPOS" set "CreateTime"="CreateTime"+interval '5 hours 30 minutes' where "SaleId"='${S1}'`],
++    ['CreateTime left in UTC (the old convention)', 'CreateTime missing or not the IST', `update "TCZ_OPOS" set "CreateTime"=("CreateDate" AT TIME ZONE 'UTC')::time where "SaleId"='${S1}'`],
++    ['CreateTime off by one hour', 'CreateTime missing or not the IST', `update "TCZ_OPOS" set "CreateTime"="CreateTime"+interval '1 hour' where "SaleId"='${S1}'`],
++    ['CreateTime off by one second', 'CreateTime missing or not the IST', `update "TCZ_OPOS" set "CreateTime"="CreateTime"+interval '1 second' where "SaleId"='${S1}'`],
++    ['CreateTime NULL', 'CreateTime missing or not the IST', `update "TCZ_OPOS" set "CreateTime"=null where "SaleId"='${S1}'`],
++    ['CreateDate moved 30 min while CreateTime did not (they must agree)', 'CreateTime missing or not the IST', `update "TCZ_OPOS" set "CreateDate"="CreateDate"+interval '30 minutes' where "SaleId"='${S1}'`],
+     ['GrandTotal NULL', 'GrandTotal differs', `update "TCZ_OPOS" set "GrandTotal"=null where "SaleId"='${S1}'`],
+     ['GrandTotal changed', 'GrandTotal differs', `update "TCZ_OPOS" set "GrandTotal"="GrandTotal"+1 where "SaleId"='${S1}'`],
+     ['Paid changed', 'Paid <>', `update "TCZ_OPOS" set "Paid"="Paid"+1 where "SaleId"='${S1}'`],
+@@ -243,7 +268,8 @@
+   assert.deepEqual([b.SaleId, Number(b.GrandTotal), b.CreatedBy], [null, 999, 'imported'], 'blocking header must be untouched');
+   assert.equal(await count('select count(*) n from "TCZ_POS1" where "DocEntry"=$1', [blocker]), 0);
+   assert.deepEqual(await fp(), salesBefore, 'no sale data changed');
+-  const [dry, coll, pay] = await db.query(DIAGNOSE);
++  const [tz, dry, coll, pay] = await db.query(DIAGNOSE);
++  assert.equal(tz.rows.length, 1); assert.ok(tz.rows[0].database_timezone);
+   assert.ok(Number(dry.rows.find((r) => r.what.startsWith('skipped: bill-number collision')).sales) >= 1);
+   const row = coll.rows.find((r) => r.sale_id === sale.id);
+   assert.ok(row, 'collision list must contain the sale');
+@@ -268,7 +294,7 @@
+   assert.equal((await prisma.sale.findUnique({ where: { id: sale.id } })).paymentMethod, 'CASH ');
+   const m = await verifyMap();
+   assert.equal(m.get([...m.keys()].find((k) => k.includes('not one of the 9 known values'))), 1);
+-  const pay = (await db.query(DIAGNOSE))[2].rows.find((r) => r.payment_method_as_stored === '[CASH ]');
++  const pay = (await db.query(DIAGNOSE))[3].rows.find((r) => r.payment_method_as_stored === '[CASH ]');
+   assert.match(pay.tcz_treatment, /UNRECOGNISED/);
+   // clean up so later checks stay green: restore the value a person would fix, re-copy
+   await db.query(`update "Sale" set "paymentMethod"='cash' where id=$1`, [sale.id]);
+@@ -276,6 +302,51 @@
+   problemRows(await verifyMap()).forEach(([k, n]) => assert.equal(n, 0, `${k} = ${n}`));
+ });
+ 
++// ---- CreateTime IST: midnight / year / leap-day boundaries through the real backfill --------------
++const BOUNDARIES = [
++  ['2026-10-27T06:20:42.689Z', '11:50:42.689', '2026-10-27'],
++  ['2026-10-27T18:29:59.999Z', '23:59:59.999', '2026-10-27'], // last ms of the IST day
++  ['2026-10-27T18:30:00.000Z', '00:00:00.000', '2026-10-28'], // IST midnight (UTC date still the 27th)
++  ['2026-10-27T23:59:59.999Z', '05:29:59.999', '2026-10-28'], // UTC day end
++  ['2026-10-28T00:00:00.000Z', '05:30:00.000', '2026-10-28'], // UTC midnight
++  ['2026-12-31T18:29:59.999Z', '23:59:59.999', '2026-12-31'], // last ms of 2026 IST
++  ['2026-12-31T18:30:00.000Z', '00:00:00.000', '2027-01-01'], // year boundary
++  ['2026-12-31T23:59:59.999Z', '05:29:59.999', '2027-01-01'],
++  ['2028-02-28T18:30:00.000Z', '00:00:00.000', '2028-02-29'], // leap day starts
++  ['2028-02-29T18:29:59.999Z', '23:59:59.999', '2028-02-29'],
++  ['2028-02-29T18:30:00.000Z', '00:00:00.000', '2028-03-01'], // leap day ends
++  ['2027-02-28T18:30:00.000Z', '00:00:00.000', '2027-03-01'], // non-leap Feb -> Mar
++];
++await test('IST CreateTime at midnight, year-end and leap-day boundaries (backfill): time, IST date and exact instant', async () => {
++  const sales = [];
++  for (const [i, [iso]] of BOUNDARIES.entries()) sales.push(await oldSale(`BND-${i}`, { createdAt: new Date(iso) }));
++  await run();
++  for (const [i, [iso, time, date]] of BOUNDARIES.entries()) {
++    const r = (await db.query(`select to_char("CreateTime",'HH24:MI:SS.MS') t,
++        ("CreateDate" at time zone 'Asia/Kolkata')::date::text ist_date,
++        to_char("CreateDate" at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') utc_instant
++      from "TCZ_OPOS" where "SaleId"=$1`, [sales[i].id])).rows[0];
++    assert.deepEqual([r.t, r.ist_date, r.utc_instant], [time, date, iso], `boundary ${iso}`);
++  }
++  problemRows(await verifyMap()).forEach(([k, n]) => assert.equal(n, 0, `${k} = ${n}`));
++});
++await test('verify results and stored CreateTime do not depend on the database SESSION time zone (only the TimeZone INFO row reports it)', async () => {
++  const isTzRow = ([k]) => k.startsWith('INFO: database TimeZone');
++  const base = [...(await verifyMap())].filter((r) => !isTzRow(r));
++  const baseTimes = (await db.query(`select "DocNum", "CreateTime"::text t from "TCZ_OPOS" order by "DocEntry"`)).rows;
++  const offsets = { UTC: 0, 'Asia/Kolkata': 19800, 'America/Los_Angeles': -25200 };
++  for (const zone of ['America/Los_Angeles', 'Asia/Kolkata', 'Pacific/Auckland', 'UTC']) {
++    await db.query(`set timezone = '${zone}'`);
++    try {
++      const m = await verifyMap();
++      assert.deepEqual([...m].filter((r) => !isTzRow(r)), base, `verify output changes under session zone ${zone}`);
++      const row = [...m].find(isTzRow); assert.ok(row[0].includes(zone), `INFO row names the zone ${zone}`);
++      if (zone in offsets && zone !== 'America/Los_Angeles') assert.equal(row[1], offsets[zone]);
++      assert.deepEqual((await db.query(`select "DocNum", "CreateTime"::text t from "TCZ_OPOS" order by "DocEntry"`)).rows, baseTimes);
++    } finally { await db.query('reset timezone'); }
++  }
++});
++
+ // ---- concurrency -----------------------------------------------------------------------------
+ const mkClient = async () => { const c = new pg.Client({ connectionString: process.env.DATABASE_URL }); await c.connect(); return c; };
+ const slowCommit = (sql) => sql.replace(/^COMMIT;/m, 'SELECT pg_sleep(3);\nCOMMIT;');
+--- a/backend/test/tczBilling.integration.mjs
++++ b/backend/test/tczBilling.integration.mjs
+@@ -119,6 +119,9 @@
+   for (const f of NULL_HEADER_FIELDS) assert.equal(t[f], null, `${f} must stay NULL (meaning undefined)`);
+   assert.equal(n(t.points), 0); assert.equal(n(t.earnedPoints), 0); assert.equal(n(t.redeemValue), 0); assert.equal(n(t.roundOff), 0);
+   assert.ok(t.createDate instanceof Date && t.createTime instanceof Date);
++  // CreateDate = exact instant; CreateTime = the IST (UTC+05:30) wall-clock time of that same instant, to the millisecond.
++  assert.equal(t.createTime.getTime(), (t.createDate.getTime() + 5.5 * 3600 * 1000) % 86400000, 'CreateTime must be the IST time of day of CreateDate');
++  assert.ok(Math.abs(t.createDate.getTime() - Date.now()) < 60000, 'CreateDate is the real checkout instant');
+   // lines
+   assert.equal(t.lines.length, 2);
+   assert.deepEqual(t.lines.map((l) => l.lineId), [1, 2]);
+--- /dev/null
++++ b/backend/test/tczCreateTime.unit.mjs
+@@ -0,0 +1,88 @@
++// Unit test (no database) for the IST CreateTime helper used by the live TCZ checkout.
++//   node test/tczCreateTime.unit.mjs
++// Run it under several server time zones to prove the result does not depend on them:
++//   TZ=UTC node test/tczCreateTime.unit.mjs
++//   TZ=America/New_York node test/tczCreateTime.unit.mjs
++//   TZ=Asia/Kolkata node test/tczCreateTime.unit.mjs
++import assert from 'node:assert/strict';
++import { istTimeOfDay, TCZ_TIME_ZONE } from '../src/modules/sale/tczBilling.service.js';
++
++let passed = 0; const failures = [];
++const test = (name, fn) => { try { fn(); passed += 1; console.log(`  ok   ${name}`); } catch (e) { failures.push(name); console.log(`  FAIL ${name}\n       ${e.message}`); } };
++
++const HHMMSSmmm = (d) => d.toISOString().slice(11, 23); // the Date carries the wall-clock time in its UTC fields
++const OFFSET_MS = 5.5 * 3600 * 1000;                    // independent oracle: IST is exactly UTC+05:30, no DST
++const istDate = (iso) => new Date(Date.parse(iso) + OFFSET_MS).toISOString().slice(0, 10);
++
++console.log(`\nTCZ CreateTime (IST) helper — process TZ=${process.env.TZ ?? '(unset)'} / ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
++
++test('zone is Asia/Kolkata', () => assert.equal(TCZ_TIME_ZONE, 'Asia/Kolkata'));
++
++// [UTC instant, expected IST time of day, expected IST calendar date, why it matters]
++const CASES = [
++  ['2026-10-27T06:20:42.689Z', '11:50:42.689', '2026-10-27', 'ordinary daytime sale (the local test row)'],
++  ['2026-10-27T18:29:59.999Z', '23:59:59.999', '2026-10-27', 'last millisecond of the IST day'],
++  ['2026-10-27T18:30:00.000Z', '00:00:00.000', '2026-10-28', 'IST MIDNIGHT: UTC date is still 27th, IST date is already 28th'],
++  ['2026-10-27T18:30:00.001Z', '00:00:00.001', '2026-10-28', 'first millisecond after IST midnight'],
++  ['2026-10-27T23:59:59.999Z', '05:29:59.999', '2026-10-28', 'last millisecond of the UTC day'],
++  ['2026-10-28T00:00:00.000Z', '05:30:00.000', '2026-10-28', 'UTC MIDNIGHT'],
++  ['2026-10-27T05:29:59.999Z', '10:59:59.999', '2026-10-27', 'just before 11:00 IST'],
++  ['2026-12-31T18:29:59.999Z', '23:59:59.999', '2026-12-31', 'YEAR END: last millisecond of 2026 IST'],
++  ['2026-12-31T18:30:00.000Z', '00:00:00.000', '2027-01-01', 'YEAR BOUNDARY: new year starts at 18:30 UTC on 31 Dec'],
++  ['2026-12-31T23:59:59.999Z', '05:29:59.999', '2027-01-01', 'UTC year end is already 2027 in IST'],
++  ['2027-01-01T00:00:00.000Z', '05:30:00.000', '2027-01-01', 'UTC new year'],
++  ['2028-02-28T18:30:00.000Z', '00:00:00.000', '2028-02-29', 'LEAP DAY starts (2028 is a leap year)'],
++  ['2028-02-29T18:29:59.999Z', '23:59:59.999', '2028-02-29', 'last millisecond of the leap day'],
++  ['2028-02-29T18:30:00.000Z', '00:00:00.000', '2028-03-01', 'LEAP DAY ends -> 1 March'],
++  ['2027-02-28T18:30:00.000Z', '00:00:00.000', '2027-03-01', 'non-leap year: 28 Feb -> 1 Mar'],
++  ['2026-01-31T18:30:00.000Z', '00:00:00.000', '2026-02-01', 'month boundary'],
++  ['1970-01-01T00:00:00.000Z', '05:30:00.000', '1970-01-01', 'epoch'],
++  ['2026-03-08T07:00:00.000Z', '12:30:00.000', '2026-03-08', 'US DST start day: IST must not move'],
++  ['2026-11-01T06:00:00.000Z', '11:30:00.000', '2026-11-01', 'US DST end day: IST must not move'],
++];
++for (const [iso, time, date, why] of CASES) {
++  test(`${iso} -> ${time} IST (${date})  [${why}]`, () => {
++    const d = new Date(iso);
++    const r = istTimeOfDay(d);
++    assert.equal(HHMMSSmmm(r), time);
++    assert.equal(istDate(iso), date, 'oracle IST date');
++    // the Date handed to Prisma must sit on 1970-01-01 so only the time of day is stored
++    assert.equal(r.toISOString().slice(0, 10), '1970-01-01');
++    // never the 24:00 quirk
++    assert.ok(!HHMMSSmmm(r).startsWith('24'));
++    // the original instant is not mutated
++    assert.equal(d.toISOString(), iso);
++  });
++}
++
++test('UTC-versus-IST regression: the result is NOT the UTC time of day (5h30 apart) and NOT the input itself', () => {
++  const d = new Date('2026-10-27T06:20:42.689Z');
++  const utcTod = d.toISOString().slice(11, 23);
++  assert.equal(utcTod, '06:20:42.689');
++  assert.notEqual(HHMMSSmmm(istTimeOfDay(d)), utcTod);
++  assert.equal(((istTimeOfDay(d).getTime() - Date.UTC(1970, 0, 1, 6, 20, 42, 689)) / 60000), 330);
++});
++
++test('every minute-of-day boundary around IST midnight (18:25..18:35 UTC, every 30 s)', () => {
++  const base = Date.parse('2026-10-27T18:25:00.000Z');
++  for (let i = 0; i <= 20; i += 1) {
++    const ms = base + i * 30000;
++    assert.equal(HHMMSSmmm(istTimeOfDay(new Date(ms))), new Date(ms + OFFSET_MS).toISOString().slice(11, 23));
++  }
++});
++
++test('20,000 random instants 1970..2100 agree with the fixed +05:30 oracle; time of day always 0 <= t < 24h', () => {
++  let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
++  const lo = Date.UTC(1970, 0, 1); const hi = Date.UTC(2100, 0, 1);
++  for (let i = 0; i < 20000; i += 1) {
++    const ms = Math.floor(lo + rnd() * (hi - lo));
++    const r = istTimeOfDay(new Date(ms));
++    assert.equal(r.getTime(), (ms + OFFSET_MS) % 86400000, `instant ${new Date(ms).toISOString()}`);
++    assert.ok(r.getTime() >= 0 && r.getTime() < 86400000);
++  }
++});
++
++test('invalid Date is rejected, not silently stored', () => assert.throws(() => istTimeOfDay(new Date('nope')), TypeError));
++
++console.log(`\n${passed} passed, ${failures.length} failed`);
++process.exit(failures.length ? 1 : 0);
+--- /dev/null
++++ b/backend/test/tczTimezone.integration.mjs
+@@ -0,0 +1,100 @@
++// Time-zone behaviour of the TCZ CreateDate / CreateTime columns, on a DISPOSABLE LOCAL database.
++//   TCZ_TEST_DB_TZ=America/Los_Angeles DATABASE_URL=postgresql://postgres@localhost:5432/nexora_tz node test/tczTimezone.integration.mjs
++// It sets the database-level TimeZone parameter of the test database (ALTER DATABASE ... SET timezone) BEFORE the app
++// connects, does a real checkout, then resets the parameter. REFUSES to run on anything but a local database.
++//
++// What it documents (and asserts, for ANY database TimeZone):
++//   * CreateTime is always the IST (Asia/Kolkata) wall-clock time of the real checkout instant.
++//   * Sale.createdAt (timestamp without zone) is always the real UTC instant.
++//   * CreateDate (timestamptz) equals the real instant ONLY when the database TimeZone is UTC: Prisma 7.10's pg adapter
++//     sends the Date as a zone-less string, so a non-UTC database shifts it by its own offset. That is not an IST
++//     problem; it is a deployment requirement (database TimeZone = UTC), which verify-tcz-backfill.sql reports and
++//     checks (check 33 flags a shifted live row; INFO row shows the TimeZone).
++import 'dotenv/config';
++import assert from 'node:assert/strict';
++import http from 'node:http';
++import fs from 'node:fs';
++import { fileURLToPath } from 'node:url';
++import path from 'node:path';
++import pg from 'pg';
++
++if (!/@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL || '')) {
++  console.error('Refusing to run: DATABASE_URL must point at a LOCAL test database.'); process.exit(2);
++}
++const ZONE = process.env.TCZ_TEST_DB_TZ || 'UTC';
++process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-test-secret-123';
++process.env.NODE_ENV = 'test';
++const here = path.dirname(fileURLToPath(import.meta.url));
++const VERIFY = fs.readFileSync(path.join(here, '../scripts/verify-tcz-backfill.sql'), 'utf8');
++
++const admin = new pg.Client({ connectionString: process.env.DATABASE_URL }); await admin.connect();
++const dbName = (await admin.query('select current_database() d')).rows[0].d;
++assert.match(dbName, /nexora|test|scratch|tz|bf|m\d/i, `unexpected database name ${dbName}`);
++await admin.query(`ALTER DATABASE "${dbName}" SET timezone = '${ZONE}'`);
++
++let passed = 0; const failures = [];
++const test = async (n, f) => { try { await f(); passed += 1; console.log(`  ok   ${n}`); } catch (e) { failures.push(n); console.log(`  FAIL ${n}\n       ${e.message}`); } };
++let server; let prisma;
++try {
++  const { app } = await import('../src/app.js');
++  ({ prisma } = await import('../src/config/prisma.js'));
++  const jwt = (await import('jsonwebtoken')).default;
++  server = http.createServer(app); await new Promise((r) => server.listen(0, r));
++  const base = `http://127.0.0.1:${server.address().port}/api`;
++  const db = new pg.Client({ connectionString: process.env.DATABASE_URL }); await db.connect(); // new session: picks up the DB-level TimeZone
++
++  const sfx = Date.now().toString(36);
++  const tenant = await prisma.tenant.create({ data: { name: `TZ-${sfx}`, slug: `tz-${sfx}` } });
++  const outlet = await prisma.outlet.create({ data: { tenantId: tenant.id, code: 'A', name: 'Outlet A' } });
++  const product = await prisma.product.create({ data: { tenantId: tenant.id, code: 'P1', name: 'Item P1', group: 'G', uom: 'KG', salePrice: 50, availableQty: 1000 } });
++  const token = jwt.sign({ id: 'u1', tenantId: tenant.id, username: 'u1', name: 'Name u1', role: 'ADMIN', outletId: outlet.id }, process.env.JWT_SECRET);
++
++  console.log(`\nTCZ time zone — database TimeZone = ${ZONE}, node TZ = ${process.env.TZ ?? '(unset)'}`);
++  let saleId; const t0 = Date.now();
++  await test('real checkout succeeds', async () => {
++    const r = await fetch(`${base}/sales`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
++      body: JSON.stringify({ customerName: 'Walk-in Customer', cashierName: 'c1', paymentMethod: 'cash', receivedAmount: 1000, lines: [{ productId: product.id, qty: 2 }] }) });
++    const j = await r.json(); assert.equal(r.status, 201, JSON.stringify(j)); saleId = j.data.id;
++  });
++  const t1 = Date.now();
++  const row = async () => (await db.query(`select h."CreateDate" cd, to_char(h."CreateTime",'HH24:MI:SS.MS') ct, (s."createdAt" at time zone 'UTC') sc,
++      to_char(s."createdAt" at time zone 'UTC' at time zone 'Asia/Kolkata','HH24:MI:SS.MS') sale_ist,
++      extract(epoch from h."CreateDate") * 1000 - extract(epoch from (s."createdAt" at time zone 'UTC')) * 1000 as shift_ms,
++      current_setting('TimeZone') tz, extract(timezone from now())::int offset_s
++    from "TCZ_OPOS" h join "Sale" s on s.id=h."SaleId" where s.id=$1`, [saleId])).rows[0];
++
++  await test('Sale.createdAt is the real UTC instant under any database TimeZone', async () => {
++    const r = await row();
++    assert.ok(r.sc.getTime() >= t0 - 5000 && r.sc.getTime() <= t1 + 5000, `createdAt ${r.sc.toISOString()} not within the test window`);
++  });
++  await test('CreateTime is the IST wall-clock time of the real checkout instant under any database TimeZone', async () => {
++    const r = await row();
++    // CreateTime is stamped a few ms after the sale insert; compare to the second
++    assert.equal(r.ct.slice(0, 8), r.sale_ist.slice(0, 8), `CreateTime ${r.ct} vs IST of Sale.createdAt ${r.sale_ist}`);
++  });
++  await test(`CreateDate is the exact instant iff the database TimeZone is UTC (offset ${ZONE === 'UTC' ? 0 : '!= 0'}); otherwise shifted by minus the offset`, async () => {
++    const r = await row(); const off = r.offset_s;
++    const shifted = Math.abs(Number(r.shift_ms)) > 60000;
++    if (off === 0) assert.equal(shifted, false, `UTC database but CreateDate is ${r.shift_ms} ms off`);
++    else { assert.equal(shifted, true, 'non-UTC database: expected the known shift'); assert.ok(Math.abs(Number(r.shift_ms) + off * 1000) < 60000, `shift ${r.shift_ms} ms vs -offset ${-off * 1000} ms`); }
++  });
++  await test('verify flags a shifted CreateDate (check 33) exactly when CreateDate is shifted; CreateTime check 34 stays clean for the IST value of the real time', async () => {
++    const r = await row(); const shifted = Math.abs(Number(r.shift_ms)) > 60000;
++    const m = new Map((await db.query(VERIFY)).rows.map((x) => [x.check, Number(x.n)]));
++    const k33 = [...m.keys()].find((k) => k.includes('CreateDate missing or more than 60 s'));
++    assert.equal(m.get(k33), shifted ? 1 : 0);
++    // check 34 compares CreateTime with the IST view of CreateDate itself: a shifted CreateDate also trips it, a correct one does not
++    const k34 = [...m.keys()].find((k) => k.includes('CreateTime missing or not the IST'));
++    assert.equal(m.get(k34), shifted ? 1 : 0);
++    const info = [...m.keys()].find((k) => k.startsWith('INFO: database TimeZone'));
++    assert.ok(info.includes(r.tz)); assert.equal(m.get(info), r.offset_s);
++  });
++  await db.end();
++} finally {
++  await admin.query(`ALTER DATABASE "${dbName}" RESET timezone`);
++  await admin.end();
++  if (prisma) await prisma.$disconnect();
++  if (server) server.close();
++}
++console.log(`\n${passed} passed, ${failures.length} failed`);
++process.exit(failures.length ? 1 : 0);
+--- a/backend/package.json
++++ b/backend/package.json
+@@ scripts @@
+     "test:tcz-backfill": "node test/tczBackfill.integration.mjs",
++    "test:tcz-createtime": "node test/tczCreateTime.unit.mjs",
++    "test:tcz-timezone": "node test/tczTimezone.integration.mjs",

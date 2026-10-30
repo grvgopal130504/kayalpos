@@ -28,7 +28,7 @@ export default function AmountPayableCard({ billNo, lines, totals }) {
         <Typography noWrap sx={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.65)' }}>{billNo}</Typography>
       </Stack>
 
-      <Typography sx={{ fontSize: 46, fontWeight: 800, lineHeight: 1.15, my: 1.25, letterSpacing: -0.5 }}>{money(totals.grandTotal)}</Typography>
+      <Typography sx={{ fontSize: 40, fontWeight: 800, lineHeight: 1.2, my: 1 }}>{money(totals.grandTotal)}</Typography>
 
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.14)', my: 1.5 }} />
 
@@ -46,15 +46,12 @@ export default function AmountPayableCard({ billNo, lines, totals }) {
 
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.14)', my: 1.5 }} />
 
-      <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        {[['Sub total', totals.subTotal], ['Discount', totals.discountAmount], [gstLabel, totals.tax]].map(([label, value]) => (
-          <Box key={label} sx={{ px: 1.25, py: 1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.08)', minWidth: 0 }}>
-            <Typography noWrap sx={{ fontSize: 10.5, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>{label}</Typography>
-            <Typography noWrap sx={{ fontSize: 13, fontWeight: 800 }}>{money(value)}</Typography>
-          </Box>
-        ))}
-      </Box>
-      <Typography sx={{ mt: 1.25, fontSize: 11.5, color: 'rgba(255,255,255,0.55)' }}>{lines.length} item{lines.length === 1 ? '' : 's'} in this bill</Typography>
+      <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', fontSize: 12 }}>
+        <Typography sx={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Sub <b style={{ color: '#fff' }}>{money(totals.subTotal)}</b></Typography>
+        <Typography sx={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Disc <b style={{ color: '#fff' }}>{money(totals.discountAmount)}</b></Typography>
+        <Typography sx={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{gstLabel} <b style={{ color: '#fff' }}>{money(totals.tax)}</b></Typography>
+        <Typography sx={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{lines.length} item{lines.length === 1 ? '' : 's'}</Typography>
+      </Stack>
     </Box>
   );
 }

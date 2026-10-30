@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink } from "react-router-dom";
 import {
   Stack,
   Box,
@@ -17,7 +17,6 @@ import {
   Pagination,
 } from "@mui/material";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
-import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import MoveToInboxOutlinedIcon from "@mui/icons-material/MoveToInboxOutlined";
 import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
@@ -32,7 +31,6 @@ import ApartmentOutlinedIcon from "@mui/icons-material/ApartmentOutlined";
 import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
 
 import { useAppDispatch } from "../../../app/hooks";
-import { logout } from "../../../features/auth/authSlice";
 import { showToast } from "../../../features/ui/uiSlice";
 import StatCard from "../../../components/common/StatCard";
 import { formatNumber } from "../../../utils/format";
@@ -40,7 +38,6 @@ import { formatNumber } from "../../../utils/format";
 import BatchSerialTable from "./components/BatchSerialTable";
 import BatchSerialFormDialog from "./components/BatchSerialFormDialog";
 import BatchSerialViewDialog from "./components/BatchSerialViewDialog";
-import { CASHIER } from "../mastersMockData";
 import { BATCH_SERIAL_TYPE_OPTIONS } from "./batchSerialMockData";
 import { useGetWarehousesQuery } from "../../../api/warehouseApi";
 import {
@@ -64,7 +61,6 @@ const PAGE_SIZE = 20;
  */
 export default function BatchSerialPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [moreAnchor, setMoreAnchor] = useState(null);
   const [searchInput, setSearchInput] = useState("");
   const [batchSerialType, setBatchSerialType] = useState("All");
@@ -105,10 +101,6 @@ export default function BatchSerialPage() {
     totalAvailableQty: 0,
   };
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate("/login", { replace: true });
-  };
 
   const handleNewBatchSerial = () =>
     setFormDialog({ open: true, mode: "add", row: null });
@@ -213,30 +205,6 @@ export default function BatchSerialPage() {
             </Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-          <Typography
-            variant="body2"
-            sx={{ fontWeight: 700, color: "#2563EB" }}
-          >
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{
-              fontWeight: 700,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 0.5,
-              color: "#2563EB",
-            }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Stack

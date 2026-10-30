@@ -282,14 +282,14 @@ async function throwNotAvailable(tx, user, id) {
 /**
  * Called by createSale INSIDE its transaction when the cart being paid was
  * resumed from a held bill: stamps the held bill COMPLETED and links the new
- * Sale. The guard demands the bill is RESUMED by this very user, so it can
+ * TCZ bill (Linesales.DocEntry). The guard demands the bill is RESUMED by this very user, so it can
  * settle exactly once — a second payment attempt matches zero rows, throws,
  * and rolls the whole sale (and its stock deduction) back.
  */
-export async function completeHeldBill(tx, { user, heldBillId, saleId }) {
+export async function completeHeldBill(tx, { user, heldBillId, docEntry }) {
   const claimed = await tx.heldBill.updateMany({
     where: { id: heldBillId, ...accessScope(user), status: 'RESUMED', resumedById: user.id },
-    data: { status: 'COMPLETED', completedAt: new Date(), saleId },
+    data: { status: 'COMPLETED', completedAt: new Date(), tczDocEntry: docEntry },
   });
   if (claimed.count !== 1) {
     throw new ApiError(409, 'This held bill has already been paid, discarded, or is open on another screen — no payment was taken.');

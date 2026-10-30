@@ -1,21 +1,19 @@
 import { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, ButtonBase,
   TextField, MenuItem, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 
 import {
-  CASHIER, OUTLET_OPTIONS, SYNC_SOURCE_OPTIONS, DEFAULT_DATE_RANGE, SAP_REPORT_ITEMS,
+  OUTLET_OPTIONS, SYNC_SOURCE_OPTIONS, DEFAULT_DATE_RANGE, SAP_REPORT_ITEMS,
 } from './sapReportsMockData';
 
 function formatDisplayDate(iso) {
@@ -85,16 +83,11 @@ function ReportTypeCard({ item, onOpen }) {
  */
 export default function SapReportsPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [dateFrom, setDateFrom] = useState(DEFAULT_DATE_RANGE.from);
   const [dateTo, setDateTo] = useState(DEFAULT_DATE_RANGE.to);
   const [outlet, setOutlet] = useState('All Outlets');
   const [syncSource, setSyncSource] = useState('All');
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleDatePick = () => dispatch(showToast('Date range picker is coming soon', 'info'));
   const handleSearch = () => dispatch(showToast('SAP report filters are coming soon', 'info'));
@@ -117,21 +110,6 @@ export default function SapReportsPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>SAP Reports</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>

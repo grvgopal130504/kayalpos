@@ -7,7 +7,6 @@ import {
   Paper, TextField, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
@@ -15,8 +14,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { logout, selectCurrentUser } from '../../features/auth/authSlice';
+import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
@@ -74,7 +72,6 @@ function TotalAmountField() {
 export default function AddExpensePage({ onBack }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const user = useAppSelector(selectCurrentUser);
   const [attachmentName, setAttachmentName] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [createExpense, { isLoading: isSaving }] = useCreateExpenseMutation();
@@ -86,13 +83,8 @@ export default function AddExpensePage({ onBack }) {
   });
   const { handleSubmit, reset } = methods;
 
-  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
 
   const handleBack = () => (onBack ? onBack() : navigate('/expenses-book'));
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleFile = (file) => setAttachmentName(file?.name || '');
   const handleFileInputChange = (e) => handleFile(e.target.files?.[0]);
@@ -133,21 +125,6 @@ export default function AddExpensePage({ onBack }) {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Add Expense</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {cashierLabel}
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>

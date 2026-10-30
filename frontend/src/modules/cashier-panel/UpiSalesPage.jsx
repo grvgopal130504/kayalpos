@@ -1,17 +1,15 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Divider, Alert, Skeleton,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined';
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { logout, selectCurrentUser } from '../../features/auth/authSlice';
+import { useAppDispatch } from '../../app/hooks';
 import { showToast } from '../../features/ui/uiSlice';
 import StatCard from '../../components/common/StatCard';
 import DonutChart from '../../components/common/DonutChart';
@@ -61,8 +59,6 @@ function toDateKey(pickerValue) {
  */
 export default function UpiSalesPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
-  const user = useAppSelector(selectCurrentUser);
   const [page, setPage] = useState(1);
   const [selectedDate, setSelectedDate] = useState(() => formatPickerDate(new Date()));
 
@@ -71,13 +67,8 @@ export default function UpiSalesPage() {
     data: report, isLoading, isFetching, isError, refetch,
   } = useUpiSalesReportQuery({ date: dateKey, page, pageSize: PAGE_SIZE });
 
-  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
 
   const handleViewAll = () => dispatch(showToast('Full UPI sales list is coming soon', 'info'));
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
   const handleDateChange = (value) => {
     setSelectedDate(value || formatPickerDate(new Date()));
     setPage(1);
@@ -117,21 +108,6 @@ export default function UpiSalesPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>UPI Sales</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {cashierLabel}
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       {isLoading || !report ? (

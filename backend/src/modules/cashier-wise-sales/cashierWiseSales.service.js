@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../middleware/errorHandler.js';
+import { asSale } from '../sale/tczSaleView.js';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -70,7 +71,7 @@ function trendCategories() {
  */
 export async function getCashierWiseSalesReport(tenantId, outletId, params = {}) {
   const outletFilter = outletId ? { outletId } : {};
-  const saleOutletFilter = outletId ? { sale: { outletId } } : {};
+  const saleOutletFilter = outletId ? { tczBill: { outletId } } : {};
   const { start: dayStart, end: dayEnd } = dayBounds(params.date);
   const { start: todayStart, end: todayEnd } = dayBounds();
   const page = params.page || 1;
@@ -80,41 +81,41 @@ export async function getCashierWiseSalesReport(tenantId, outletId, params = {})
   const [
     allTimeAgg, allTimeQtyAgg, todayAgg, allTimeCashierNames, dayRows,
   ] = await Promise.all([
-    prisma.sale.aggregate({
+    prisma.tczOpos.aggregate({
       where: { tenantId, ...outletFilter },
       _sum: { grandTotal: true },
       _count: true,
     }),
-    prisma.saleLine.aggregate({
-      where: { sale: { tenantId, ...outletFilter } },
-      _sum: { qty: true },
+    prisma.tczPos1.aggregate({
+      where: { header: { tenantId, ...outletFilter } },
+      _sum: { quantity: true },
     }),
-    prisma.sale.aggregate({
-      where: { tenantId, ...outletFilter, createdAt: { gte: todayStart, lte: todayEnd } },
+    prisma.tczOpos.aggregate({
+      where: { tenantId, ...outletFilter, createDate: { gte: todayStart, lte: todayEnd } },
       _sum: { grandTotal: true },
       _count: true,
     }),
-    prisma.sale.findMany({
+    prisma.tczOpos.findMany({
       where: { tenantId, ...outletFilter },
-      select: { cashierName: true },
-      distinct: ['cashierName'],
-      orderBy: { cashierName: 'asc' },
-    }),
-    prisma.sale.findMany({
-      where: { tenantId, ...outletFilter, createdAt: { gte: dayStart, lte: dayEnd } },
+      select: { createdBy: true },
+      distinct: ['createdBy'],
+      orderBy: { createdBy: 'asc' },
+    }).then((rows) => rows.map((r) => ({ cashierName: r.createdBy }))),
+    prisma.tczOpos.findMany({
+      where: { tenantId, ...outletFilter, createDate: { gte: dayStart, lte: dayEnd } },
       select: {
-        id: true, cashierName: true, grandTotal: true, discountAmount: true, taxAmount: true, createdAt: true,
+        docEntry: true, createdBy: true, grandTotal: true, discountAmount: true, taxAmount: true, createDate: true,
       },
-    }),
+    }).then((rows) => rows.map(asSale)),
   ]);
 
   // Batch 2 — runs strictly sequentially, after batch 1 has resolved and
   // freed its connections, so the two batches together never exceed the
   // pool's max of 5 truly concurrent queries.
-  const dayLines = await prisma.saleLine.findMany({
-    where: { sale: { tenantId, ...outletFilter, createdAt: { gte: dayStart, lte: dayEnd } } },
-    select: { qty: true, saleId: true },
-  });
+  const dayLines = (await prisma.tczPos1.findMany({
+    where: { header: { tenantId, ...outletFilter, createDate: { gte: dayStart, lte: dayEnd } } },
+    select: { quantity: true, docEntry: true },
+  })).map((line) => ({ qty: Number(line.quantity), saleId: String(line.docEntry) }));
   const dayReturns = await prisma.salesReturn.findMany({
     where: { tenantId, ...saleOutletFilter, createdAt: { gte: dayStart, lte: dayEnd } },
     select: { cashierName: true, grandTotal: true },
@@ -236,7 +237,7 @@ export async function getCashierWiseSalesReport(tenantId, outletId, params = {})
   return {
     stats: {
       totalSalesAllCashiers: { value: round2(allTimeSales), transactions: allTimeInvoices },
-      totalInvoices: { value: allTimeInvoices, quantity: allTimeQtyAgg._sum.qty || 0 },
+      totalInvoices: { value: allTimeInvoices, quantity: Number(allTimeQtyAgg._sum.quantity || 0) },
       avgInvoiceValue: { value: allTimeInvoices > 0 ? round2(allTimeSales / allTimeInvoices) : 0 },
       todaysSales: { value: round2(Number(todayAgg._sum.grandTotal || 0)), transactions: todayAgg._count },
       selectedDateSales: { value: totalSalesRounded, date: formatDayLabel(dayStart) },
