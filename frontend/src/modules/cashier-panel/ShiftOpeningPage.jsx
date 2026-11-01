@@ -6,15 +6,15 @@ import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, Alert,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { logout, selectCurrentUser, selectActiveOutletId } from '../../features/auth/authSlice';
+import { selectCurrentUser, selectActiveOutletId } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 import FormTextField from '../../components/form/FormTextField';
 import FormDatePicker from '../../components/form/FormDatePicker';
+import FormTimePicker from '../../components/form/FormTimePicker';
 import FormCheckbox from '../../components/form/FormCheckbox';
 import { useGetOutletQuery } from '../../api/outletApi';
 import { useShiftSessionStatusQuery, useOpenShiftMutation } from '../../api/shiftSessionApi';
@@ -81,6 +81,7 @@ export default function ShiftOpeningPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
+  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
   const outletId = useAppSelector(selectActiveOutletId);
   const [attachmentName, setAttachmentName] = useState('');
 
@@ -116,10 +117,6 @@ export default function ShiftOpeningPage() {
 
   const handleBack = () => navigate('/cashier-panel');
   const handleAttachmentChange = (e) => setAttachmentName(e.target.files?.[0]?.name || '');
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const onOpenShift = handleSubmit(
     async (values) => {
@@ -147,7 +144,6 @@ export default function ShiftOpeningPage() {
     },
   );
 
-  const cashierLabel = user ? `${user.name}${user.username ? ` (${user.username})` : ''}` : '—';
 
   return (
     <Stack spacing={2}>
@@ -160,21 +156,6 @@ export default function ShiftOpeningPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Shift Opening</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {cashierLabel}
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       {isStatusError && (
@@ -252,18 +233,8 @@ export default function ShiftOpeningPage() {
                     <FormDatePicker name="shiftDate" label="Shift Date *" />
                     <FormTextField name="shiftNo" label="Shift No *" disabled slotProps={{ input: { readOnly: true } }} />
                     <FormTextField name="shiftName" label="Shift Name" />
-                    <FormTextField
-                      name="startTime"
-                      label="Shift Start Time *"
-                      type="time"
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    />
-                    <FormTextField
-                      name="endTime"
-                      label="Expected End Time"
-                      type="time"
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    />
+                    <FormTimePicker name="startTime" label="Shift Start Time *" valueFormat="24h" />
+                    <FormTimePicker name="endTime" label="Expected End Time" valueFormat="24h" />
                     <FormTextField name="description" label="Shift Description" multiline minRows={3} placeholder="Enter description (optional)" />
                   </Stack>
                 </Paper>

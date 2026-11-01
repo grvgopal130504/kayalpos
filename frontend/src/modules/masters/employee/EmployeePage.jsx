@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, Menu, MenuItem,
   TextField, InputAdornment, Pagination,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -19,7 +17,6 @@ import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
@@ -28,7 +25,6 @@ import { formatPickerDate } from '../../../components/form/FormDatePicker';
 import EmployeeTable from './components/EmployeeTable';
 import EmployeeFormDialog from './components/EmployeeFormDialog';
 import EmployeeViewDialog from './components/EmployeeViewDialog';
-import { CASHIER } from '../mastersMockData';
 import { EMPLOYEE_TYPE_OPTIONS } from './employeeMockData';
 import { useGetOutletsQuery } from '../../../api/outletApi';
 import { useGetEmployeesQuery, useDeleteEmployeeMutation } from '../../../api/employeeApi';
@@ -66,7 +62,6 @@ function toViewRow(row) {
  */
 export default function EmployeePage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [moreAnchor, setMoreAnchor] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [employeeType, setEmployeeType] = useState('All');
@@ -86,10 +81,6 @@ export default function EmployeePage() {
   const { data: employeeRows = [], isLoading, isError } = useGetEmployeesQuery(queryParams);
   const [deleteEmployee] = useDeleteEmployeeMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewEmployee = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Employees is coming soon', 'info'));
@@ -150,48 +141,9 @@ export default function EmployeePage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Employee</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'space-between' }}>
-        <Paper
-          variant="outlined"
-          sx={{
-            borderRadius: 3, p: { xs: 1.75, sm: 2 }, display: 'flex', alignItems: 'center', gap: 1.5, flex: 1,
-            bgcolor: 'rgba(37,99,235,0.06)', borderColor: 'rgba(37,99,235,0.25)',
-          }}
-        >
-          <Box
-            sx={{
-              width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              bgcolor: '#2563EB', color: '#fff',
-            }}
-          >
-            <InfoOutlinedIcon sx={{ fontSize: 18 }} />
-          </Box>
-          <Box>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>Create and manage employees.</Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              These users can access POS and perform transactions.
-            </Typography>
-          </Box>
-        </Paper>
-
+      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
           <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={handleNewEmployee}>
             New Employee

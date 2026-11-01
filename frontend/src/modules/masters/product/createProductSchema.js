@@ -9,6 +9,7 @@ export const PRODUCT_TYPE_SELECT_OPTIONS = [
 export const UOM_SELECT_OPTIONS = UOM_OPTIONS.map((v) => ({ value: v, label: v }));
 
 export const BRAND_PLACEHOLDER_OPTION = { value: '', label: 'Select Brand', disabled: true };
+export const TAX_CODE_PLACEHOLDER_OPTION = { value: '', label: 'Select Tax Code', disabled: true };
 
 export const STATUS_OPTIONS = [
   { value: 'Active', label: 'Active' },

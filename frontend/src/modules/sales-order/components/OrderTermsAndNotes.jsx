@@ -11,10 +11,16 @@ const DEFAULT_TERMS = [
  * Full-width "Terms & Conditions" / "Notes" pair shown below the order list
  * + details panels, mirroring QuotationTermsAndNotes exactly.
  */
-export default function OrderTermsAndNotes({ terms = DEFAULT_TERMS, notes, onNotesChange }) {
+export default function OrderTermsAndNotes({
+  terms = DEFAULT_TERMS, notes, onNotesChange, summary = null,
+}) {
+  // With a `summary` node (the Create/Edit form's totals card) the three
+  // panels share one row on wide screens; without it (list/status pages)
+  // it stays the original two-up Terms | Notes layout.
+  const columnSize = { xs: 12, md: 6, lg: summary ? 4 : 6 };
   return (
     <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
-      <Grid size={{ xs: 12, md: 6 }}>
+      <Grid size={columnSize}>
         <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>Terms &amp; Conditions</Typography>
           <Stack component="ul" spacing={0.5} sx={{ m: 0, pl: 2.5 }}>
@@ -26,7 +32,7 @@ export default function OrderTermsAndNotes({ terms = DEFAULT_TERMS, notes, onNot
           </Stack>
         </Paper>
       </Grid>
-      <Grid size={{ xs: 12, md: 6 }}>
+      <Grid size={columnSize}>
         <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>Notes</Typography>
           <TextField
@@ -39,6 +45,11 @@ export default function OrderTermsAndNotes({ terms = DEFAULT_TERMS, notes, onNot
           />
         </Paper>
       </Grid>
+      {summary && (
+        <Grid size={{ xs: 12, md: 12, lg: 4 }}>
+          {summary}
+        </Grid>
+      )}
     </Grid>
   );
 }

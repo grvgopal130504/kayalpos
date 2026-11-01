@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../middleware/errorHandler.js';
+import { asSaleGroup } from '../sale/tczSaleView.js';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const PAYMENT_METHOD_LABELS = { cash: 'Cash', card: 'Card', upi: 'UPI' };
@@ -156,13 +157,13 @@ export async function getShiftClosingReport(tenantId, outletId, params = {}) {
   // regardless of how many rows are on the page.
   const transactions = [];
   for (const row of pageRows) {
-    const salesByMethod = await prisma.sale.groupBy({
-      by: ['paymentMethod'],
+    const salesByMethod = (await prisma.tczOpos.groupBy({
+      by: ['payMode'],
       where: {
-        tenantId, ...outletFilter, createdAt: { gte: row.openedAt, lte: row.closedAt },
+        tenantId, ...outletFilter, createDate: { gte: row.openedAt, lte: row.closedAt },
       },
       _sum: { grandTotal: true },
-    });
+    })).map(asSaleGroup);
     transactions.push({
       dateTime: row.closedAt,
       referenceNo: displayReferenceNo(row),

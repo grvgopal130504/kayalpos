@@ -1,69 +1,79 @@
-import { Stack, Button, FormControlLabel, Checkbox, Typography, IconButton } from '@mui/material';
+import { Stack, Button, FormControlLabel, Checkbox, Typography, Paper, IconButton, Tooltip, Box } from '@mui/material';
 import LocalPrintshopOutlinedIcon from '@mui/icons-material/LocalPrintshopOutlined';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
-import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import EmailWhatsappButtons from '../../../components/common/EmailWhatsappButtons';
+
+const keyHint = (label) => (
+  <Box component="span" sx={{ ml: 1, px: 0.75, py: 0.1, borderRadius: 1, fontSize: 10.5, fontWeight: 700, bgcolor: 'rgba(255,255,255,0.22)' }}>{label}</Box>
+);
 
 /**
- * Right-most column of the bottom row: the final "settle the sale" actions.
- * Kept as its own component (rather than folded into PaymentMethodsCard) so
- * it can sit in its own Grid slot, matching the reference's 3-column split.
+ * Right column of the payment step, under the amount-payable card: the final
+ * "settle the sale" actions. The Email / WhatsApp buttons (shared component)
+ * only render when enabled in Settings.
  */
 export default function PaymentActionsCard({
-  onPayAndPrint, onPrintInvoice, onEmailOrWhatsapp,
+  onPayAndPrint, onPrintInvoice, onBack,
   printSettingsEnabled, onTogglePrintSettings, disabled,
 }) {
   return (
-    <Stack spacing={1.5} sx={{ height: '100%', justifyContent: 'flex-start' }}>
-      <Button
-        variant="contained"
-        size="large"
-        fullWidth
-        disabled={disabled}
-        startIcon={<LocalPrintshopOutlinedIcon />}
-        onClick={onPayAndPrint}
-        sx={{ py: 1.5, fontSize: 15 }}
-      >
-        Pay &amp; Print (F9)
-      </Button>
+    <Paper variant="outlined" sx={{ borderRadius: 4, p: 2.5 }}>
+      <Stack spacing={1.5}>
+        <Button
+          variant="contained"
+          size="large"
+          fullWidth
+          disabled={disabled}
+          startIcon={<LocalPrintshopOutlinedIcon />}
+          onClick={onPayAndPrint}
+          sx={{ py: 1.5, fontSize: 15, fontWeight: 800, borderRadius: 3 }}
+        >
+          Pay &amp; Print{keyHint('F9')}
+        </Button>
 
-      <Button
-        variant="outlined"
-        size="large"
-        fullWidth
-        startIcon={<PrintOutlinedIcon />}
-        onClick={onPrintInvoice}
-      >
-        Print Invoice (F10)
-      </Button>
+        <Button
+          variant="outlined"
+          size="large"
+          fullWidth
+          startIcon={<PrintOutlinedIcon />}
+          onClick={onPrintInvoice}
+          sx={{ py: 1.25, fontWeight: 700, borderRadius: 3 }}
+        >
+          Print Invoice
+          <Box component="span" sx={{ ml: 1, px: 0.75, py: 0.1, borderRadius: 1, fontSize: 10.5, fontWeight: 700, bgcolor: 'action.selected' }}>F10</Box>
+        </Button>
 
-      <Button
-        variant="outlined"
-        size="large"
-        fullWidth
-        color="success"
-        startIcon={<WhatsAppIcon />}
-        onClick={onEmailOrWhatsapp}
-      >
-        Email / WhatsApp
-      </Button>
+        <EmailWhatsappButtons />
 
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', pt: 0.5 }}>
-        <FormControlLabel
-          sx={{ flex: 1, minWidth: 0, mr: 0 }}
-          control={
-            <Checkbox
-              size="small"
-              checked={printSettingsEnabled}
-              onChange={(e) => onTogglePrintSettings(e.target.checked)}
-            />
-          }
-          label={<Typography variant="body2">Print settings</Typography>}
-        />
-        <IconButton size="small">
-          <SettingsOutlinedIcon fontSize="small" />
-        </IconButton>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <FormControlLabel
+            sx={{ mr: 0 }}
+            control={(
+              <Checkbox
+                size="small"
+                checked={printSettingsEnabled}
+                onChange={(e) => onTogglePrintSettings(e.target.checked)}
+              />
+            )}
+            label={<Typography variant="body2">Print settings</Typography>}
+          />
+          <Tooltip title="Print settings">
+            <IconButton size="small" aria-label="Print settings"><SettingsOutlinedIcon fontSize="small" /></IconButton>
+          </Tooltip>
+        </Stack>
+
+        <Button
+          variant="text"
+          size="small"
+          startIcon={<ArrowBackIcon sx={{ fontSize: 14 }} />}
+          onClick={onBack}
+          sx={{ alignSelf: 'center', fontWeight: 700 }}
+        >
+          Back to cart
+        </Button>
       </Stack>
-    </Stack>
+    </Paper>
   );
 }

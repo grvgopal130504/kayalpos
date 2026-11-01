@@ -20,7 +20,6 @@ export const createUomSchema = z.object({
   code: z.string().trim().min(1, 'UOM code is required'),
   name: z.string().trim().min(1, 'UOM name is required'),
   groupId: optionalGroupId,
-  baseUom: z.string().trim().optional(),
   conversionFactor: optionalDecimalString,
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
 });

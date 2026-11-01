@@ -12,10 +12,10 @@ import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
 import FormTextField from '../../../../components/form/FormTextField';
 import FormSelect from '../../../../components/form/FormSelect';
-import { useCreateUomMutation, useUpdateUomMutation, useGetUomGroupsQuery, useGetUomsQuery } from '../../../../api/uomApi';
+import { useCreateUomMutation, useUpdateUomMutation, useGetUomGroupsQuery } from '../../../../api/uomApi';
 import {
   createUomSchema, createUomDefaultValues, uomToFormValues, uomFormValuesToPayload, STATUS_OPTIONS,
-  GROUP_PLACEHOLDER_OPTION, BASE_UOM_PLACEHOLDER_OPTION,
+  GROUP_PLACEHOLDER_OPTION,
 } from '../createUomSchema';
 
 /**
@@ -24,10 +24,9 @@ import {
  * Unlike those, UOM Code is a real editable field on Add (disabled on Edit)
  * since it's a short user-chosen abbreviation (KG, PC, ...), not
  * server-generated. The UOM Group dropdown is backed by the real UOM Group
- * master (active groups); Base UOM is backed by the other UOMs already in
- * the catalog (excluding this row itself when editing) with a "None"
- * option, same "keep the existing value selectable even if it's fallen out
- * of the active list" fallback ProductFormDialog uses for Brand.
+ * master (active groups), with the "keep the existing value selectable even
+ * if it's fallen out of the active list" fallback ProductFormDialog uses for
+ * Brand. (Base UOM now lives on the UOM Group form.)
  */
 export default function UomFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
@@ -36,7 +35,6 @@ export default function UomFormDialog({ open, mode = 'add', initialValues, onClo
   const [createUom] = useCreateUomMutation();
   const [updateUom] = useUpdateUomMutation();
   const { data: groups = [] } = useGetUomGroupsQuery(open ? { status: 'ACTIVE' } : undefined, { skip: !open });
-  const { data: allUoms = [] } = useGetUomsQuery(open ? {} : undefined, { skip: !open });
 
   const groupOptions = useMemo(() => {
     const options = [GROUP_PLACEHOLDER_OPTION, ...groups.map((g) => ({ value: g.id, label: g.name }))];
@@ -47,16 +45,6 @@ export default function UomFormDialog({ open, mode = 'add', initialValues, onClo
     }
     return options;
   }, [groups, isEdit, initialValues]);
-
-  const baseUomOptions = useMemo(() => {
-    const others = allUoms.filter((u) => u.code !== initialValues?.code);
-    const options = [BASE_UOM_PLACEHOLDER_OPTION, ...others.map((u) => ({ value: u.code, label: `${u.code} — ${u.name}` }))];
-    const existingBaseUom = isEdit ? initialValues?.baseUom : '';
-    if (existingBaseUom && !options.some((o) => o.value === existingBaseUom)) {
-      options.push({ value: existingBaseUom, label: existingBaseUom });
-    }
-    return options;
-  }, [allUoms, isEdit, initialValues]);
 
   const methods = useForm({
     resolver: zodResolver(createUomSchema),
@@ -106,9 +94,6 @@ export default function UomFormDialog({ open, mode = 'add', initialValues, onClo
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <FormSelect name="groupId" label="UOM Group" options={groupOptions} />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <FormSelect name="baseUom" label="Base UOM" options={baseUomOptions} />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <FormTextField name="conversionFactor" label="Conversion Factor" placeholder="1" />

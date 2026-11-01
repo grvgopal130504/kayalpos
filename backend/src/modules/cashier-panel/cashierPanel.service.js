@@ -1,4 +1,5 @@
 import { prisma } from '../../config/prisma.js';
+import { asSale } from '../sale/tczSaleView.js';
 
 // Same three "named" tenders every payment-method report in this app
 // splits out — everything else (wallet/credit/store-credit/gift-card/
@@ -98,7 +99,7 @@ function displayShiftId(shift) {
  */
 export async function getCashierPanelSummary(tenantId, outletId) {
   const outletFilter = outletId ? { outletId } : {};
-  const saleOutletFilter = outletId ? { sale: { outletId } } : {};
+  const saleOutletFilter = outletId ? { tczBill: { outletId } } : {};
   const { start: todayStart, end: todayEnd } = todayBounds();
 
   // Batch 1 — 5 concurrent queries, at the pool's real max: 5.
@@ -109,10 +110,10 @@ export async function getCashierPanelSummary(tenantId, outletId) {
       where: { tenantId, ...outletFilter, status: 'OPEN' },
       orderBy: { openedAt: 'desc' },
     }),
-    prisma.sale.groupBy({
-      by: ['paymentMethod'],
-      where: { tenantId, ...outletFilter, createdAt: { gte: todayStart, lte: todayEnd } },
-      _sum: { grandTotal: true, receivedAmount: true },
+    prisma.tczOpos.groupBy({
+      by: ['payMode'],
+      where: { tenantId, ...outletFilter, createDate: { gte: todayStart, lte: todayEnd } },
+      _sum: { grandTotal: true, received: true },
       _count: true,
     }),
     prisma.salesReturn.aggregate({
@@ -120,11 +121,11 @@ export async function getCashierPanelSummary(tenantId, outletId) {
       _sum: { grandTotal: true },
       _count: true,
     }),
-    prisma.sale.findMany({
+    prisma.tczOpos.findMany({
       where: { tenantId, ...outletFilter },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createDate: 'desc' },
       take: 5,
-      select: { billNo: true, paymentMethod: true, grandTotal: true, createdAt: true },
+      select: { docNum: true, payMode: true, grandTotal: true, createDate: true },
     }),
     prisma.cashWithdrawal.findMany({
       where: { tenantId, ...outletFilter },
@@ -149,11 +150,11 @@ export async function getCashierPanelSummary(tenantId, outletId) {
   ];
   if (shift) {
     batch2.push(
-      prisma.sale.aggregate({
+      prisma.tczOpos.aggregate({
         where: {
-          tenantId, ...outletFilter, paymentMethod: 'cash', createdAt: { gte: shift.openedAt },
+          tenantId, ...outletFilter, payMode: 'cash', createDate: { gte: shift.openedAt },
         },
-        _sum: { receivedAmount: true },
+        _sum: { received: true },
       }),
       prisma.cashWithdrawal.aggregate({ where: { tenantId, shiftSessionId: shift.id }, _sum: { amount: true } }),
       prisma.cashDeposit.aggregate({ where: { tenantId, shiftSessionId: shift.id }, _sum: { amount: true } }),
@@ -173,11 +174,11 @@ export async function getCashierPanelSummary(tenantId, outletId) {
   let transactionsToday = 0;
   todaySalesByMethod.forEach((row) => {
     const grand = Number(row._sum.grandTotal || 0);
-    receivedToday += Number(row._sum.receivedAmount || 0);
+    receivedToday += Number(row._sum.received || 0);
     transactionsToday += row._count;
-    if (row.paymentMethod === 'cash') cashValue += grand;
-    else if (row.paymentMethod === 'card') cardValue += grand;
-    else if (row.paymentMethod === 'upi') upiValue += grand;
+    if (row.payMode === 'cash') cashValue += grand;
+    else if (row.payMode === 'card') cardValue += grand;
+    else if (row.payMode === 'upi') upiValue += grand;
     else otherValue += grand;
   });
   const totalSalesToday = round2(cashValue + cardValue + upiValue + otherValue);
@@ -198,7 +199,7 @@ export async function getCashierPanelSummary(tenantId, outletId) {
   let expectedCashInHand = 0;
   if (shift) {
     const openingCash = round2(Number(shift.openingCash));
-    const cashReceived = round2(cashSalesAgg._sum.receivedAmount || 0);
+    const cashReceived = round2(cashSalesAgg._sum.received || 0);
     const cashWithdrawal = round2(withdrawalsAgg._sum.amount || 0);
     const cashDeposit = round2(depositsAgg._sum.amount || 0);
     const cashTransferOut = round2(transfersAgg._sum.amount || 0);
@@ -226,7 +227,7 @@ export async function getCashierPanelSummary(tenantId, outletId) {
     return { type: 'Other Sale', color: '#1F2A3C' };
   };
   const merged = [
-    ...recentSales.map((row) => {
+    ...recentSales.map(asSale).map((row) => {
       const { type, color } = saleTypeFor(row.paymentMethod);
       return {
         id: row.billNo, type, ref: row.billNo, time: timeOnly(row.createdAt), amount: round2(row.grandTotal), color, at: row.createdAt,

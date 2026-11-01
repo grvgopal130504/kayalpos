@@ -187,7 +187,7 @@ export default function PromotionStatusPage({ status, embedded = false }) {
           linkLabel="View Full History"
           columns={[
             { key: 'date', label: 'Date' },
-            { key: 'action', label: 'Action' },
+            { key: 'action', label: 'Action', sticky: false },
             { key: 'user', label: 'User' },
           ]}
           rows={status === 'expired' ? EXPIRED_PROMOTION_HISTORY : PROMOTION_HISTORY}

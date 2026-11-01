@@ -9,6 +9,7 @@ const COLUMNS = [
   { key: 'code', label: 'UOM Group Code' },
   { key: 'name', label: 'UOM Group Name' },
   { key: 'description', label: 'Description' },
+  { key: 'baseUom', label: 'Base UOM' },
   { key: 'totalUoms', label: 'Total UOMs' },
   { key: 'status', label: 'Status' },
   { key: 'action', label: 'Action' },
@@ -26,7 +27,7 @@ export default function UomGroupTable({ rows, onViewRow, onEditRow, onDeleteRow 
         <TableHead>
           <TableRow>
             {COLUMNS.map((col) => (
-              <TableCell key={col.key} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
+              <TableCell key={col.key} className={col.key === 'action' ? 'sticky-action' : undefined} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
                 {col.label}
               </TableCell>
             ))}
@@ -38,6 +39,7 @@ export default function UomGroupTable({ rows, onViewRow, onEditRow, onDeleteRow 
               <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.description}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.baseUom}</TableCell>
               <TableCell>{row.totalUoms}</TableCell>
               <TableCell>
                 <Chip
@@ -50,7 +52,7 @@ export default function UomGroupTable({ rows, onViewRow, onEditRow, onDeleteRow 
                   }}
                 />
               </TableCell>
-              <TableCell>
+              <TableCell className="sticky-action">
                 <Stack direction="row" spacing={0.5}>
                   <IconButton size="small" onClick={() => onViewRow?.(row)} aria-label={`View ${row.name}`}>
                     <VisibilityOutlinedIcon fontSize="small" />

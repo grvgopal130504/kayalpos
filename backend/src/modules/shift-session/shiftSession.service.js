@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../middleware/errorHandler.js';
+import { asSaleGroup } from '../sale/tczSaleView.js';
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -81,12 +82,12 @@ export async function getShiftStatus(tenantId, outletId) {
   let currentShiftExpectedCash = null;
   if (currentShift) {
     const [cashSalesAgg, withdrawalsAgg, depositsAgg, transfersAgg] = await Promise.all([
-      prisma.sale.aggregate({
+      prisma.tczOpos.aggregate({
         where: {
-          tenantId, outletId, paymentMethod: 'cash', createdAt: { gte: currentShift.openedAt },
+          tenantId, outletId, payMode: 'cash', createDate: { gte: currentShift.openedAt },
         },
-        _sum: { receivedAmount: true },
-      }),
+        _sum: { received: true },
+      }).then(asSaleGroup),
       prisma.cashWithdrawal.aggregate({
         where: { tenantId, shiftSessionId: currentShift.id },
         _sum: { amount: true },
@@ -221,17 +222,17 @@ export async function closeShift(tenantId, outletId, data, actor) {
     }
 
     const [cashSalesAgg, withdrawalsAgg, depositsAgg, transfersAgg, allSalesAgg] = await Promise.all([
-      tx.sale.aggregate({
+      tx.tczOpos.aggregate({
         where: {
-          tenantId, outletId, paymentMethod: 'cash', createdAt: { gte: shift.openedAt },
+          tenantId, outletId, payMode: 'cash', createDate: { gte: shift.openedAt },
         },
-        _sum: { receivedAmount: true },
-      }),
+        _sum: { received: true },
+      }).then(asSaleGroup),
       tx.cashWithdrawal.aggregate({ where: { tenantId, shiftSessionId: shift.id }, _sum: { amount: true } }),
       tx.cashDeposit.aggregate({ where: { tenantId, shiftSessionId: shift.id }, _sum: { amount: true } }),
       tx.cashTransfer.aggregate({ where: { tenantId, shiftSessionId: shift.id }, _sum: { amount: true } }),
-      tx.sale.aggregate({
-        where: { tenantId, outletId, createdAt: { gte: shift.openedAt } },
+      tx.tczOpos.aggregate({
+        where: { tenantId, outletId, createDate: { gte: shift.openedAt } },
         _sum: { grandTotal: true },
       }),
     ]);

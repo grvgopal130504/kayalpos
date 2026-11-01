@@ -1,21 +1,19 @@
 import { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, Divider,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 
 import { useAppDispatch } from '../../app/hooks';
-import { logout } from '../../features/auth/authSlice';
 import { showToast } from '../../features/ui/uiSlice';
 import StatusBadge from '../../components/common/StatusBadge';
 
-import { CASHIER, MASTER_SYNC_ITEMS } from './masterSyncMockData';
+import { MASTER_SYNC_ITEMS } from './masterSyncMockData';
 
 function formatSyncTimestamp(iso) {
   const d = new Date(iso);
@@ -106,13 +104,8 @@ function MasterSyncCard({ item, onSync }) {
  */
 export default function MasterSyncPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [items, setItems] = useState(MASTER_SYNC_ITEMS);
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleSync = (item) => {
     setItems((prev) => prev.map((it) => (it.key === item.key ? { ...it, status: 'syncing' } : it)));
@@ -137,21 +130,6 @@ export default function MasterSyncPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Master Sync</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Paper

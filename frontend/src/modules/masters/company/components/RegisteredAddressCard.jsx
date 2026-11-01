@@ -1,5 +1,6 @@
-import { Paper, Stack, Box, Typography, IconButton } from '@mui/material';
+import { Paper, Stack, Box, Typography, IconButton, Button } from '@mui/material';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 
 import FormTextField from '../../../../components/form/FormTextField';
 
@@ -12,8 +13,12 @@ import FormTextField from '../../../../components/form/FormTextField';
  * top-level Edit button, saved by the page's top-level Save button.
  * `disabledProps` is the same `{ disabled: !isEditing }` object CompanyPage
  * passes to its other fields.
+ *
+ * The Edit button at the bottom-right is the same action as the page's top
+ * Edit button (`onEdit` unlocks the whole form); it is disabled while the
+ * form is already being edited (`isEditing`).
  */
-export default function RegisteredAddressCard({ disabledProps }) {
+export default function RegisteredAddressCard({ disabledProps, onEdit, isEditing }) {
   return (
     <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
       <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', mb: 1.5 }}>
@@ -37,6 +42,19 @@ export default function RegisteredAddressCard({ disabledProps }) {
         <FormTextField name="addressLine3" label="Address Line 3" {...disabledProps} />
         <FormTextField name="addressLine4" label="Address Line 4" {...disabledProps} />
         <FormTextField name="addressLandmark" label="Landmark" {...disabledProps} />
+      </Stack>
+
+      <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: 2 }}>
+        <Button
+          variant="outlined"
+          color="primary"
+          size="small"
+          startIcon={<EditOutlinedIcon fontSize="small" />}
+          onClick={onEdit}
+          disabled={isEditing}
+        >
+          Edit
+        </Button>
       </Stack>
     </Paper>
   );

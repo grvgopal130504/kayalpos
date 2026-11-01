@@ -94,8 +94,8 @@ export function createCrudApi({ entity, path }) {
 /**
  * Live preview of the code a new record will get, shown in the disabled
  * "Code" field on an Add form instead of a bare "Auto generated" label — so
- * the user sees e.g. "CUS-0011" before they even save. Mirrors the backend's
- * own count-based nextCode() in crudFactory.js exactly (same PREFIX-NNNN
+ * the user sees e.g. "CUS0011" before they even save. Mirrors the backend's
+ * own count-based nextCode() in crudFactory.js exactly (same PREFIXNNNN
  * shape, same "count of existing tenant rows + 1" logic), so the preview
  * matches what gets saved in the common case; it's still only a preview,
  * not a reservation, so a second admin saving at the same moment could in
@@ -116,7 +116,7 @@ export function useNextCodePreview(useListPageQuery, { prefix, codeLength = 4, e
   const { data, isFetching } = useListPageQuery({ page: 1, pageSize: 1 }, { skip: !enabled });
   if (!enabled || isFetching || !data) return null;
   const total = data.meta?.total ?? 0;
-  return `${prefix}-${String(total + 1).padStart(codeLength, '0')}`;
+  return `${prefix}${String(total + 1).padStart(codeLength, '0')}`;
 }
 
 /**

@@ -1,12 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
   TextField, MenuItem, InputAdornment, IconButton, Pagination,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -18,7 +16,6 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
@@ -26,7 +23,6 @@ import { formatNumber } from '../../../utils/format';
 import PriceListTable from './components/PriceListTable';
 import PriceListFormDialog from './components/PriceListFormDialog';
 import PriceListViewDialog from './components/PriceListViewDialog';
-import { CASHIER } from '../mastersMockData';
 import { PRICE_LIST_TYPE_OPTIONS, APPLICABLE_TO_OPTIONS } from './priceListMockData';
 import { useGetPriceListsPageQuery, useDeletePriceListMutation } from '../../../api/priceListApi';
 
@@ -58,7 +54,6 @@ function formatDdMmYyyy(isoValue) {
  */
 export default function PriceListPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState('');
   const [priceListType, setPriceListType] = useState('All');
   const [applicableTo, setApplicableTo] = useState('All');
@@ -88,10 +83,6 @@ export default function PriceListPage() {
     totalPriceLists: 0, activePriceLists: 0, inactivePriceLists: 0, totalItemsInPriceLists: 0,
   };
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewPriceList = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Price Lists is coming soon', 'info'));
@@ -139,50 +130,9 @@ export default function PriceListPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Price List</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'space-between' }}>
-        <Paper
-          variant="outlined"
-          sx={{
-            borderRadius: 3, p: { xs: 1.75, sm: 2 }, display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1,
-            bgcolor: 'rgba(37,99,235,0.06)', borderColor: 'rgba(37,99,235,0.25)',
-          }}
-        >
-          <Box
-            sx={{
-              width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              bgcolor: '#2563EB', color: '#fff',
-            }}
-          >
-            <InfoOutlinedIcon sx={{ fontSize: 18 }} />
-          </Box>
-          <Box>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              Create and manage price lists for different customer groups, outlets and sales channels.
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Price lists help define selling prices for items.
-            </Typography>
-          </Box>
-        </Paper>
-
+      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
           <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={handleNewPriceList}>
             New Price List
@@ -197,8 +147,8 @@ export default function PriceListPage() {
       </Stack>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
-        <Grid container spacing={1.5} sx={{ alignItems: 'flex-end' }}>
-          <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+        <Grid container spacing={1.5} sx={{ alignItems: 'flex-end', flexWrap: { md: 'nowrap' } }}>
+          <Grid size={{ xs: 12, sm: 6, md: 'grow' }} sx={{ minWidth: { md: 190 } }}>
             <TextField
               label="Search Price List"
               placeholder="Search by price list name or code..."
@@ -209,26 +159,26 @@ export default function PriceListPage() {
               slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 'grow' }} sx={{ minWidth: { md: 130 } }}>
             <TextField select label="Price List Type" value={priceListType} onChange={(e) => setPriceListType(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               {PRICE_LIST_TYPE_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 'grow' }} sx={{ minWidth: { md: 130 } }}>
             <TextField select label="Applicable To" value={applicableTo} onChange={(e) => setApplicableTo(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               {APPLICABLE_TO_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.4 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 'grow' }} sx={{ minWidth: { md: 110 } }}>
             <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               <MenuItem value="Active">Active</MenuItem>
               <MenuItem value="Inactive">Inactive</MenuItem>
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.6 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 'grow' }} sx={{ minWidth: { md: 150 } }}>
             <TextField
               label="Effective Date"
               placeholder="dd-mm-yyyy"
@@ -259,7 +209,7 @@ export default function PriceListPage() {
               }}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.6 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 'grow' }} sx={{ minWidth: { md: 150 } }}>
             <TextField
               label="To"
               placeholder="dd-mm-yyyy"
@@ -290,12 +240,12 @@ export default function PriceListPage() {
               }}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 6, md: 1.2 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 'auto' }} sx={{ flexShrink: 0 }}>
             <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleSearch} fullWidth>
               Search
             </Button>
           </Grid>
-          <Grid size={{ xs: 6, sm: 6, md: 1.2 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 'auto' }} sx={{ flexShrink: 0 }}>
             <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleReset} fullWidth>
               Reset
             </Button>

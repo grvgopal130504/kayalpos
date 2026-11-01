@@ -6,6 +6,7 @@ export const createUomGroupSchema = z.object({
   code: z.string().trim().min(1).optional(),
   name: z.string().trim().min(1, 'Group name is required'),
   description: z.string().trim().optional().nullable(),
+  baseUom: z.string().trim().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
 });
 

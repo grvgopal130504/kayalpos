@@ -29,6 +29,8 @@ const saleApi = baseApi.injectEndpoints({
       invalidatesTags: (result, error, arg) => [
         { type: 'Product', id: 'LIST' },
         { type: 'Sale', id: 'NEXT' },
+        // Paying a resumed bill closes its held bill out server-side.
+        { type: 'HeldBill', id: 'LIST' },
         { type: 'Sale', id: 'DISCOUNT_SUMMARY' },
         { type: 'Sale', id: 'OVERVIEW_SUMMARY' },
         { type: 'Sale', id: 'CUSTOMER_SUMMARIES' },

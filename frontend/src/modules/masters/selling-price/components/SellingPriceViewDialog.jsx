@@ -9,9 +9,9 @@ import { formatCurrency } from '../../../../utils/format';
 import { formatPickerDate } from '../../../../components/form/FormDatePicker';
 import { PRICING_METHOD_OPTIONS } from '../sellingPriceMockData';
 
-function Field({ label, value }) {
+function Field({ label, value, full = false }) {
   return (
-    <Grid size={{ xs: 12, sm: 6 }}>
+    <Grid size={{ xs: 12, sm: full ? 12 : 6 }}>
       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>{label}</Typography>
       <Typography variant="body2" sx={{ fontWeight: 600 }}>{value ?? '-'}</Typography>
     </Grid>
@@ -20,6 +20,14 @@ function Field({ label, value }) {
 
 function pricingMethodLabel(value) {
   return PRICING_METHOD_OPTIONS.find((o) => o.value === value)?.label || value;
+}
+
+// Margin Amount isn't stored — derive it the same way the server's
+// computePricing does for each pricing method.
+function marginAmountOf(row) {
+  const excl = Number(row.sellingPriceExclTax) || 0;
+  if (row.pricingMethod === 'MARGIN_FROM_COST') return excl - (Number(row.purchaseCost) || 0);
+  return (Number(row.mrp) || 0) - excl;
 }
 
 function statusLabel(value) {
@@ -47,15 +55,16 @@ export default function SellingPriceViewDialog({ open, row, onClose, onEdit }) {
         <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
       </DialogTitle>
       <DialogContent dividers>
-        <Grid container spacing={2}>
+        <Grid container rowSpacing={2.5} columnSpacing={3}>
           <Field label="Item Code" value={row.product?.code} />
           <Field label="Item Name" value={row.product?.name} />
           <Field label="Price List" value={row.priceList} />
           <Field label="Outlet / Branch" value={row.outlet?.name || 'All Outlets'} />
           <Field label="MRP" value={formatCurrency(row.mrp, { decimals: true })} />
           <Field label="Purchase Cost" value={formatCurrency(row.purchaseCost, { decimals: true })} />
-          <Field label="Pricing Method" value={pricingMethodLabel(row.pricingMethod)} />
+          <Field full label="Pricing Method" value={pricingMethodLabel(row.pricingMethod)} />
           <Field label="Margin %" value={`${Number(row.marginPercent).toFixed(2)}%`} />
+          <Field label="Margin Amount" value={formatCurrency(marginAmountOf(row), { decimals: true })} />
           <Field label="Selling Price (Excl. Tax)" value={formatCurrency(row.sellingPriceExclTax, { decimals: true })} />
           <Field label="Selling Price (Incl. Tax)" value={formatCurrency(row.sellingPriceInclTax, { decimals: true })} />
           <Field label="Effective From" value={row.effectiveFrom ? formatPickerDate(new Date(row.effectiveFrom)) : '-'} />
@@ -73,7 +82,13 @@ export default function SellingPriceViewDialog({ open, row, onClose, onEdit }) {
               }}
             />
           </Grid>
-          {row.priceUpdateReason && <Field label="Price Update Reason" value={row.priceUpdateReason} />}
+          {row.priceUpdateReason && (
+            <>
+              {/* spacer keeps the reason in the right-hand column, in line with Margin Amount / Selling Price (Incl. Tax) */}
+              <Grid size={{ xs: 0, sm: 6 }} sx={{ display: { xs: 'none', sm: 'block' } }} />
+              <Field label="Price Update Reason" value={row.priceUpdateReason} />
+            </>
+          )}
         </Grid>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>

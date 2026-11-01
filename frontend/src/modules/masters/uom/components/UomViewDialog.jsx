@@ -31,7 +31,6 @@ export default function UomViewDialog({ open, row, onClose, onEdit }) {
           <Field label="UOM Code" value={row.code} />
           <Field label="UOM Name" value={row.name} />
           <Field label="UOM Group" value={row.group} />
-          <Field label="Base UOM" value={row.baseUom} />
           <Field label="Conversion Factor" value={row.conversionFactor} />
           <Grid size={{ xs: 12, sm: 6 }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>Status</Typography>

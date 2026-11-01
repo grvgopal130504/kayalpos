@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton,
   Stack, Typography, Button, Grid, TextField, CircularProgress,
@@ -12,9 +12,9 @@ import { useAppDispatch } from '../../../../app/hooks';
 import { showToast } from '../../../../features/ui/uiSlice';
 import FormTextField from '../../../../components/form/FormTextField';
 import FormSelect from '../../../../components/form/FormSelect';
-import { useCreateUomGroupMutation, useUpdateUomGroupMutation, useNextUomGroupCode } from '../../../../api/uomApi';
+import { useCreateUomGroupMutation, useUpdateUomGroupMutation, useNextUomGroupCode, useGetUomsQuery } from '../../../../api/uomApi';
 import {
-  createUomGroupSchema, createUomGroupDefaultValues, uomGroupToFormValues, uomGroupFormValuesToPayload, STATUS_OPTIONS,
+  createUomGroupSchema, createUomGroupDefaultValues, uomGroupToFormValues, uomGroupFormValuesToPayload, STATUS_OPTIONS, BASE_UOM_PLACEHOLDER_OPTION,
 } from '../createUomGroupSchema';
 
 /**
@@ -29,6 +29,21 @@ export default function UomGroupFormDialog({ open, mode = 'add', initialValues, 
   const [createUomGroup] = useCreateUomGroupMutation();
   const [updateUomGroup] = useUpdateUomGroupMutation();
   const nextCode = useNextUomGroupCode(open && !isEdit);
+  const { data: allUoms = [] } = useGetUomsQuery(open ? {} : undefined, { skip: !open });
+
+  // Base UOM is one of the UOMs in the catalog (those already in this group
+  // when editing, otherwise all) with a "None" option; the existing value
+  // stays selectable even if that UOM is no longer in the list.
+  const baseUomOptions = useMemo(() => {
+    const groupId = isEdit ? initialValues?.id : null;
+    const candidates = groupId ? allUoms.filter((u) => (u.groupId || u.group?.id) === groupId) : allUoms;
+    const options = [BASE_UOM_PLACEHOLDER_OPTION, ...candidates.map((u) => ({ value: u.code, label: `${u.code} — ${u.name}` }))];
+    const existingBaseUom = isEdit ? initialValues?.baseUom : '';
+    if (existingBaseUom && !options.some((o) => o.value === existingBaseUom)) {
+      options.push({ value: existingBaseUom, label: existingBaseUom });
+    }
+    return options;
+  }, [allUoms, isEdit, initialValues]);
 
   const methods = useForm({
     resolver: zodResolver(createUomGroupSchema),
@@ -84,6 +99,9 @@ export default function UomGroupFormDialog({ open, mode = 'add', initialValues, 
               </Grid>
               <Grid size={12}>
                 <FormTextField name="description" label="Description" placeholder="Enter description" multiline minRows={2} />
+              </Grid>
+              <Grid size={12}>
+                <FormSelect name="baseUom" label="Base UOM" options={baseUomOptions} />
               </Grid>
               <Grid size={12}>
                 <FormSelect name="status" label="Status *" options={STATUS_OPTIONS} />

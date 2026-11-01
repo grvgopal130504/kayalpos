@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Divider, Tooltip } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useNavSections } from './navConfig';
@@ -38,6 +38,10 @@ const NAV_ICON_WIDTH = 40;
 const NAV_ICON_FONT_SIZE = 20;
 const NAV_LABEL_FONT_SIZE = 13;
 
+// Left inset that lines the logo up with the menu icons: list padding
+// (px: 1.25 = 10px) + row padding + the icon's centering gap in its box.
+const NAV_LOGO_PADDING_X = 10 + NAV_ITEM_PADDING_X + (NAV_ICON_WIDTH - NAV_ICON_FONT_SIZE) / 2;
+
 // Entrance animation for the menu list: each row fades and slides in from
 // the left, staggered slightly so the sidebar feels like it "builds"
 // itself instead of popping in all at once. Delay is capped (see
@@ -51,6 +55,7 @@ function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebar
   // Tamil or Hindi — see src/i18n) so the whole menu, including every
   // submenu section below, follows the Topbar language switcher.
   const navSections = useNavSections();
+  const { pathname } = useLocation();
   const itemColor = isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.82)';
   const hoverBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
   const dividerColor = isDark ? 'rgba(255,255,255,0.08)' : 'divider';
@@ -97,6 +102,8 @@ function NavList({ collapsed, onNavigate, activeBackground, sidebarFont, sidebar
                   key={item.key}
                   component={NavLink}
                   to={item.path}
+                  // Parent menus (Marketing) stay highlighted on their sub-module routes.
+                  className={item.childPaths?.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ? 'active' : undefined}
                   onClick={onNavigate}
                   sx={{
                     borderRadius: `${NAV_ITEM_RADIUS}px`,
@@ -246,8 +253,9 @@ export default function Sidebar({ variant, collapsed = false, open, onClose, onN
         sx={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: collapsed ? 'center' : 'center',
-          px: collapsed ? 1 : 2.5,
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          // Expanded: start the logo at the same x as the menu icons.
+          px: collapsed ? 1 : `${NAV_LOGO_PADDING_X}px`,
           py: 2.5,
           minHeight: 72,
         }}

@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
-  TextField, MenuItem, InputAdornment,
+  TextField, MenuItem,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -17,11 +15,9 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import ReceiptOutlinedIcon from '@mui/icons-material/ReceiptOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
-import { CASHIER } from '../mastersMockData';
 import {
   useGetUomGroupsQuery, useGetUomsQuery, useDeleteUomGroupMutation, useDeleteUomMutation,
 } from '../../../api/uomApi';
@@ -35,10 +31,10 @@ import UomViewDialog from './components/UomViewDialog';
 
 /**
  * UOM / UOM Group — reached from the Masters page's "UOM" card. Two panels
- * side by side: UOM Group List (its own search box + table) and the larger
- * UOM List (a fuller filter bar + table), wired to the real UOM/UOM Group
- * API (see api/uomApi.js) — list/search/status run server-side; UOM Group
- * and Base UOM filters run client-side over whatever the current
+ * stacked one below the other: UOM Group List (search + status filter + table) on top and the
+ * UOM List (a fuller filter bar + table) below, wired to the real UOM/UOM Group
+ * API (see api/uomApi.js) — list/search/status run server-side; the UOM Group
+ * filter (UOM list) and Base UOM filter (UOM Group list) run client-side over whatever the current
  * search/status filter returned (no backend aggregation endpoint for
  * those), same convention as ProductPage's Brand/Product Type filters.
  * "Total UOMs" per group is likewise computed client-side by counting UOMs
@@ -46,15 +42,16 @@ import UomViewDialog from './components/UomViewDialog';
  */
 export default function UomPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
 
-  const [groupSearch, setGroupSearch] = useState('');
+  const [groupSearchInput, setGroupSearchInput] = useState('');
+  const [groupAppliedSearch, setGroupAppliedSearch] = useState('');
+  const [groupStatus, setGroupStatus] = useState('All');
   const [groupFormDialog, setGroupFormDialog] = useState({ open: false, mode: 'add', row: null });
   const [viewGroupRow, setViewGroupRow] = useState(null);
 
   const [uomGroupFilter, setUomGroupFilter] = useState('All');
   const [uomStatus, setUomStatus] = useState('All');
-  const [baseUomFilter, setBaseUomFilter] = useState('All');
+  const [groupBaseUomFilter, setGroupBaseUomFilter] = useState('All');
   const [uomSearchInput, setUomSearchInput] = useState('');
   const [uomAppliedSearch, setUomAppliedSearch] = useState('');
   const [uomFormDialog, setUomFormDialog] = useState({ open: false, mode: 'add', row: null });
@@ -64,7 +61,10 @@ export default function UomPage() {
     data: groupRows = [],
     isLoading: isGroupLoading,
     isError: isGroupError,
-  } = useGetUomGroupsQuery({ search: groupSearch.trim() || undefined });
+  } = useGetUomGroupsQuery({
+    search: groupAppliedSearch || undefined,
+    status: groupStatus !== 'All' ? groupStatus.toUpperCase() : undefined,
+  });
   const [deleteUomGroup] = useDeleteUomGroupMutation();
 
   const {
@@ -77,10 +77,6 @@ export default function UomPage() {
   });
   const [deleteUom] = useDeleteUomMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewUom = () => setUomFormDialog({ open: true, mode: 'add', row: null });
   const handleNewUomGroup = () => setGroupFormDialog({ open: true, mode: 'add', row: null });
@@ -112,12 +108,18 @@ export default function UomPage() {
     }
   };
   const closeUomFormDialog = () => setUomFormDialog((prev) => ({ ...prev, open: false }));
+  const handleGroupSearch = () => setGroupAppliedSearch(groupSearchInput.trim());
+  const handleGroupReset = () => {
+    setGroupSearchInput('');
+    setGroupStatus('All');
+    setGroupBaseUomFilter('All');
+    setGroupAppliedSearch('');
+  };
   const handleUomSearch = () => setUomAppliedSearch(uomSearchInput.trim());
   const handleUomReset = () => {
     setUomSearchInput('');
     setUomGroupFilter('All');
     setUomStatus('All');
-    setBaseUomFilter('All');
     setUomAppliedSearch('');
   };
 
@@ -129,6 +131,7 @@ export default function UomPage() {
     code: g.code,
     name: g.name,
     description: g.description || '',
+    baseUom: g.baseUom || '',
     totalUoms: uomRows.filter((u) => (u.groupId || u.group?.id) === g.id).length,
     status: g.status === 'ACTIVE' ? 'Active' : 'Inactive',
   })), [groupRows, uomRows]);
@@ -142,20 +145,23 @@ export default function UomPage() {
     name: u.name,
     groupId: u.groupId || u.group?.id || '',
     group: u.group?.name || '',
-    baseUom: u.baseUom || '',
     conversionFactor: u.conversionFactor != null ? Number(u.conversionFactor) : null,
     status: u.status === 'ACTIVE' ? 'Active' : 'Inactive',
   })), [uomRows]);
 
   const filteredUomRows = useMemo(() => uomViewRows.filter((row) => {
     if (uomGroupFilter !== 'All' && row.groupId !== uomGroupFilter) return false;
-    if (baseUomFilter !== 'All' && row.baseUom !== baseUomFilter) return false;
     return true;
-  }), [uomViewRows, uomGroupFilter, baseUomFilter]);
+  }), [uomViewRows, uomGroupFilter]);
 
-  const baseUomFilterOptions = useMemo(
-    () => Array.from(new Set(uomViewRows.map((r) => r.baseUom).filter(Boolean))).sort(),
-    [uomViewRows],
+  const filteredGroupRows = useMemo(
+    () => groupViewRows.filter((row) => groupBaseUomFilter === 'All' || row.baseUom === groupBaseUomFilter),
+    [groupViewRows, groupBaseUomFilter],
+  );
+
+  const groupBaseUomFilterOptions = useMemo(
+    () => Array.from(new Set(groupViewRows.map((r) => r.baseUom).filter(Boolean))).sort(),
+    [groupViewRows],
   );
 
   const stats = useMemo(() => ({
@@ -176,48 +182,9 @@ export default function UomPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>UOM / UOM Group</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'space-between' }}>
-        <Paper
-          variant="outlined"
-          sx={{
-            borderRadius: 3, p: { xs: 1.75, sm: 2 }, display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1,
-            bgcolor: 'rgba(37,99,235,0.06)', borderColor: 'rgba(37,99,235,0.25)',
-          }}
-        >
-          <Box
-            sx={{
-              width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              bgcolor: '#2563EB', color: '#fff',
-            }}
-          >
-            <InfoOutlinedIcon sx={{ fontSize: 18 }} />
-          </Box>
-          <Box>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>Manage Units of Measure (UOM) and UOM Groups.</Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              UOM helps to define how items are measured and used in transactions.
-            </Typography>
-          </Box>
-        </Paper>
-
+      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
           <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={handleNewUom}>
             New UOM
@@ -235,19 +202,46 @@ export default function UomPage() {
       </Stack>
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
-        <Grid size={{ xs: 12, lg: 4 }}>
+        <Grid size={12}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>UOM Group List</Typography>
-              <TextField
-                size="small"
-                placeholder="Search UOM Group..."
-                value={groupSearch}
-                onChange={(e) => setGroupSearch(e.target.value)}
-                slotProps={{ input: { endAdornment: <InputAdornment position="end"><SearchIcon fontSize="small" /></InputAdornment> } }}
-                sx={{ width: { xs: '100%', sm: 220 } }}
-              />
-            </Stack>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>UOM Group List</Typography>
+
+            <Grid container spacing={1.5} sx={{ alignItems: 'flex-end', mb: 2 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <TextField
+                  label="Search UOM Group"
+                  placeholder="Search by group code or name..."
+                  value={groupSearchInput}
+                  onChange={(e) => setGroupSearchInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleGroupSearch(); }}
+                  fullWidth
+                  size="small"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+                <TextField select label="Status" value={groupStatus} onChange={(e) => setGroupStatus(e.target.value)} fullWidth size="small">
+                  <MenuItem value="All">All</MenuItem>
+                  <MenuItem value="Active">Active</MenuItem>
+                  <MenuItem value="Inactive">Inactive</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+                <TextField select label="Base UOM" value={groupBaseUomFilter} onChange={(e) => setGroupBaseUomFilter(e.target.value)} fullWidth size="small">
+                  <MenuItem value="All">All</MenuItem>
+                  {groupBaseUomFilterOptions.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3, md: 1.5 }}>
+                <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleGroupSearch} fullWidth>
+                  Search
+                </Button>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3, md: 1.5 }}>
+                <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleGroupReset} fullWidth>
+                  Reset
+                </Button>
+              </Grid>
+            </Grid>
 
             {isGroupError ? (
               <Typography variant="body2" sx={{ color: 'error.main', textAlign: 'center', py: 3 }}>
@@ -255,17 +249,17 @@ export default function UomPage() {
               </Typography>
             ) : (
               <Box sx={{ opacity: isGroupLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
-                <UomGroupTable rows={groupViewRows} onViewRow={handleViewGroupRow} onEditRow={handleEditGroupRow} onDeleteRow={handleDeleteGroupRow} />
+                <UomGroupTable rows={filteredGroupRows} onViewRow={handleViewGroupRow} onEditRow={handleEditGroupRow} onDeleteRow={handleDeleteGroupRow} />
               </Box>
             )}
 
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
-              Showing {groupViewRows.length} of {groupViewRows.length} records
+              Showing {filteredGroupRows.length} of {groupViewRows.length} records
             </Typography>
           </Paper>
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 8 }}>
+        <Grid size={12}>
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 }, height: '100%' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>UOM List</Typography>
 
@@ -294,18 +288,12 @@ export default function UomPage() {
                   <MenuItem value="Inactive">Inactive</MenuItem>
                 </TextField>
               </Grid>
-              <Grid size={{ xs: 12, sm: 4, md: 2 }}>
-                <TextField select label="Base UOM" value={baseUomFilter} onChange={(e) => setBaseUomFilter(e.target.value)} fullWidth size="small">
-                  <MenuItem value="All">All</MenuItem>
-                  {baseUomFilterOptions.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-                </TextField>
-              </Grid>
-              <Grid size={{ xs: 6, sm: 6, md: 1.2 }}>
+              <Grid size={{ xs: 6, sm: 6, md: 2 }}>
                 <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleUomSearch} fullWidth>
                   Search
                 </Button>
               </Grid>
-              <Grid size={{ xs: 6, sm: 6, md: 1.3 }}>
+              <Grid size={{ xs: 6, sm: 6, md: 2 }}>
                 <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleUomReset} fullWidth>
                   Reset
                 </Button>

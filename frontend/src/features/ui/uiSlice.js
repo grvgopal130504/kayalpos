@@ -11,6 +11,8 @@ const LANGUAGE_STORAGE_KEY = 'nexora-language';
 const MAX_OPEN_TABS_STORAGE_KEY = 'nexora-max-open-tabs';
 const SIDEBAR_ICON_COLORS_STORAGE_KEY = 'nexora-sidebar-icon-colors';
 const SIDEBAR_ANIMATIONS_STORAGE_KEY = 'nexora-sidebar-animations';
+const EMAIL_BUTTON_STORAGE_KEY = 'nexora-email-button';
+const WHATSAPP_BUTTON_STORAGE_KEY = 'nexora-whatsapp-button';
 
 // Hard ceiling the slider can't exceed — tabsSlice.js enforces this same
 // number regardless of what's stored, so a corrupted/tampered localStorage
@@ -157,6 +159,26 @@ function persistSidebarAnimationsEnabled(enabled) {
   }
 }
 
+// The Email / WhatsApp buttons (all pages) are opt-in: default OFF, so an absent
+// key (first run, or storage blocked) keeps them hidden.
+function readStoredFlag(key) {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(key) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function persistFlag(key, enabled) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, String(enabled));
+  } catch {
+    // Ignore write failures (e.g. private browsing storage restrictions).
+  }
+}
+
 function readStoredMaxOpenTabs() {
   if (typeof window === 'undefined') return DEFAULT_MAX_OPEN_TABS;
   try {
@@ -179,6 +201,8 @@ const initialState = {
   language: readStoredValue(LANGUAGE_STORAGE_KEY, DEFAULT_LANGUAGE),
   maxOpenTabs: readStoredMaxOpenTabs(),
   sidebarIconColorsEnabled: readStoredSidebarIconColorsEnabled(), // each sidebar menu's icon shows its own unique color when true
+  emailButtonEnabled: readStoredFlag(EMAIL_BUTTON_STORAGE_KEY), // show the Email button on every page that offers it
+  whatsappButtonEnabled: readStoredFlag(WHATSAPP_BUTTON_STORAGE_KEY), // show the WhatsApp button on every page that offers it
   sidebarAnimationsEnabled: readStoredSidebarAnimationsEnabled(), // entrance stagger, 3D hover tilt, and active transitions on the sidebar menus
 };
 
@@ -190,8 +214,10 @@ const uiSlice = createSlice({
       reducer(state, action) {
         state.toast = action.payload;
       },
-      prepare(message, severity = 'info') {
-        return { payload: { id: nanoid(), message, severity } };
+      // `options` (optional): { duration: ms before auto-hide (default 4000),
+      // closable: false hides the close (x) button }.
+      prepare(message, severity = 'info', options = {}) {
+        return { payload: { id: nanoid(), message, severity, ...options } };
       },
     },
     clearToast(state) {
@@ -249,6 +275,14 @@ const uiSlice = createSlice({
       state.sidebarIconColorsEnabled = Boolean(action.payload);
       persistSidebarIconColorsEnabled(state.sidebarIconColorsEnabled);
     },
+    setEmailButtonEnabled(state, action) {
+      state.emailButtonEnabled = Boolean(action.payload);
+      persistFlag(EMAIL_BUTTON_STORAGE_KEY, state.emailButtonEnabled);
+    },
+    setWhatsappButtonEnabled(state, action) {
+      state.whatsappButtonEnabled = Boolean(action.payload);
+      persistFlag(WHATSAPP_BUTTON_STORAGE_KEY, state.whatsappButtonEnabled);
+    },
     setSidebarAnimationsEnabled(state, action) {
       state.sidebarAnimationsEnabled = Boolean(action.payload);
       persistSidebarAnimationsEnabled(state.sidebarAnimationsEnabled);
@@ -259,7 +293,7 @@ const uiSlice = createSlice({
 export const {
   showToast, clearToast, toggleSidebar, setSidebarOpen, toggleThemeMode, setThemeMode, setAccentTheme,
   setSidebarFont, setBodyFont, toggleSidebarFontStyle, toggleBodyFontStyle, setLanguage, setMaxOpenTabs,
-  setSidebarIconColorsEnabled, setSidebarAnimationsEnabled,
+  setSidebarIconColorsEnabled, setSidebarAnimationsEnabled, setEmailButtonEnabled, setWhatsappButtonEnabled,
 } = uiSlice.actions;
 export default uiSlice.reducer;
 
@@ -274,4 +308,6 @@ export const selectBodyFontStyle = (state) => state.ui.bodyFontStyle;
 export const selectLanguage = (state) => state.ui.language;
 export const selectMaxOpenTabs = (state) => state.ui.maxOpenTabs;
 export const selectSidebarIconColorsEnabled = (state) => state.ui.sidebarIconColorsEnabled;
+export const selectEmailButtonEnabled = (state) => state.ui.emailButtonEnabled;
+export const selectWhatsappButtonEnabled = (state) => state.ui.whatsappButtonEnabled;
 export const selectSidebarAnimationsEnabled = (state) => state.ui.sidebarAnimationsEnabled;

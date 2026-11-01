@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../middleware/errorHandler.js';
+import { asSaleGroup } from '../sale/tczSaleView.js';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -97,12 +98,12 @@ export async function createCashTransfer(tenantId, outletId, data, actor) {
     }
 
     const [cashSalesAgg, withdrawalsAgg, depositsAgg, transfersAgg] = await Promise.all([
-      tx.sale.aggregate({
+      tx.tczOpos.aggregate({
         where: {
-          tenantId, outletId, paymentMethod: 'cash', createdAt: { gte: shift.openedAt },
+          tenantId, outletId, payMode: 'cash', createDate: { gte: shift.openedAt },
         },
-        _sum: { receivedAmount: true },
-      }),
+        _sum: { received: true },
+      }).then(asSaleGroup),
       tx.cashWithdrawal.aggregate({
         where: { tenantId, shiftSessionId: shift.id },
         _sum: { amount: true },
@@ -196,11 +197,11 @@ export async function getCashTransferReport(tenantId, outletId, params = {}) {
     }),
     // One groupBy instead of two separate aggregate() calls ("all modes"
     // and "cash only") for the selected day — same result, one connection.
-    prisma.sale.groupBy({
-      by: ['paymentMethod'],
-      where: { tenantId, ...outletFilter, createdAt: { gte: dayStart, lte: dayEnd } },
-      _sum: { grandTotal: true, receivedAmount: true },
-    }),
+    prisma.tczOpos.groupBy({
+      by: ['payMode'],
+      where: { tenantId, ...outletFilter, createDate: { gte: dayStart, lte: dayEnd } },
+      _sum: { grandTotal: true, received: true },
+    }).then((rows) => rows.map(asSaleGroup)),
   ]);
   // Deliberately NOT folded into the Promise.all above — the pool's real
   // cap is max: 5 (see config/prisma.js), and that batch already uses all

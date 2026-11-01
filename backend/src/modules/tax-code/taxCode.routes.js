@@ -7,7 +7,6 @@ const router = createCrudRouter({
   createSchema: createTaxCodeSchema,
   updateSchema: updateTaxCodeSchema,
   searchFields: ['code', 'name'],
-  codePrefix: 'TAX',
 });
 
 export default router;

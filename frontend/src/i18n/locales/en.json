@@ -2,8 +2,12 @@
   "nav": {
     "home": "Home",
     "dashboard": "Dashboard",
+    "sales": "Sales",
+    "inventory": "Inventory",
+    "synchronization": "Synchronization",
     "lineSale": "Line Sale",
     "salesReturn": "Sales Return",
+    "marketing": "Marketing",
     "promotion": "Promotion",
     "giftVoucher": "Gift Voucher",
     "loyalty": "Loyalty",
@@ -11,6 +15,7 @@
     "salesQuotation": "Sales Quotation",
     "salesOrder": "Sales Order",
     "salesInvoice": "Sales Invoice",
+    "dayClose": "Day Close",
     "barcodeLabel": "Barcode & Label",
     "stockIndent": "Stock Indent",
     "stockTransfer": "Stock Transfer",
@@ -25,6 +30,34 @@
     "masterSync": "Master Sync",
     "stockSync": "Stock Sync",
     "sapSync": "SAP Sync"
+  },
+  "marketing": {
+    "promotion": "Create and manage promotions and offers.",
+    "gift-voucher": "Issue and track gift vouchers.",
+    "loyalty": "Manage loyalty programs and points.",
+    "customer": "Manage customer records and details."
+  },
+  "sales": {
+    "line-sale": "Ring up quick point-of-sale transactions.",
+    "sales-quotation": "Create and track customer quotations.",
+    "sales-order": "Manage customer sales orders.",
+    "sales-return": "Process and track sales returns.",
+    "sales-invoice": "Create and manage sales invoices.",
+    "day-close": "Review the day's sales and close the shift."
+  },
+  "inventory": {
+    "barcode-label": "Generate and print barcode labels.",
+    "stock-indent": "Raise and track stock indents.",
+    "stock-transfer": "Transfer stock between outlets and warehouses.",
+    "stock-receipt": "Record incoming stock receipts.",
+    "stock-return": "Return stock to suppliers or warehouses.",
+    "stock-wastage": "Record damaged or wasted stock.",
+    "stock-count": "Run and reconcile stock counts."
+  },
+  "synchronization": {
+    "master-sync": "Sync master data with the server.",
+    "stock-sync": "Sync stock levels and movements.",
+    "sap-sync": "Sync transactions with SAP."
   },
   "masters": {
     "company": { "label": "Company", "description": "Manage company details and settings." },

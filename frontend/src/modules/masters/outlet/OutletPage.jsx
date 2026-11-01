@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Tabs, Tab,
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper,
   Button, Menu, MenuItem, CircularProgress,
   TextField, InputAdornment, IconButton, Table, TableHead, TableBody, TableRow, TableCell, Chip,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
@@ -22,7 +21,6 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
@@ -38,14 +36,13 @@ import RegisteredAddressCard from '../company/components/RegisteredAddressCard';
 import ContactPersonTable from '../company/components/ContactPersonTable';
 import ContactPersonFormDialog from '../company/components/ContactPersonFormDialog';
 import OutletLogoCard from './components/OutletLogoCard';
-import { CASHIER } from '../mastersMockData';
 import {
   createOutletSchema, createOutletDefaultValues, outletToFormValues, outletFormValuesToPayload,
   OUTLET_TYPE_OPTIONS, COMPANY_OPTIONS, STATE_OPTIONS, CITY_OPTIONS, STATUS_OPTIONS,
 } from './createOutletSchema';
 
 const LIST_COLUMNS = ['Code', 'Name', 'Type', 'City', 'State', 'Phone', 'Status', 'Action'];
-const DETAIL_TABS = ['Outlet Details', 'Additional Information', 'Financial Information', 'Settings', 'Document', 'Activity Log'];
+const DETAIL_TABS = ['Outlet Details'];
 
 /**
  * Outlet — the Masters > Outlet master, ALL in one page and one route
@@ -60,16 +57,14 @@ const DETAIL_TABS = ['Outlet Details', 'Additional Information', 'Financial Info
  * Information/Contact Person on the left, Logo/Registered Address on the
  * right, view-then-Edit-to-unlock-fields screen — reached by clicking
  * "New Outlet" (blank form, already in edit mode) or a row's
- * View/Edit action (loads that outlet, starts read-only). Only the
- * "Outlet Details" sub-tab has real content; the other five are
- * placeholders, same as Company's page. The Contact Person grid is its
+ * View/Edit action (loads that outlet, starts read-only). It has a
+ * single "Outlet Details" tab. The Contact Person grid is its
  * own real CRUD against the Outlet Contact endpoints, independent of the
  * main form's Edit/Save toggle, and only available once the outlet has
  * been saved at least once (a contact needs a real outletId to attach to).
  */
 export default function OutletPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
 
   const [view, setView] = useState('list');
   const [activeId, setActiveId] = useState(null);
@@ -91,7 +86,6 @@ export default function OutletPage() {
   const [deleteOutlet] = useDeleteOutletMutation();
 
   // ---- Detail state ----
-  const [activeTab, setActiveTab] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [moreAnchor, setMoreAnchor] = useState(null);
@@ -136,10 +130,6 @@ export default function OutletPage() {
 
   const contacts = outlet?.contacts || [];
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   // ---- List actions ----
   const goToList = () => { setView('list'); setActiveId(null); };
@@ -147,13 +137,11 @@ export default function OutletPage() {
     reset(createOutletDefaultValues);
     setLogoName('');
     setIsEditing(true);
-    setActiveTab(0);
     setActiveId(null);
     setView('detail');
   };
   const openOutlet = (row) => {
     setIsEditing(false);
-    setActiveTab(0);
     setActiveId(row.id);
     setView('detail');
   };
@@ -257,21 +245,6 @@ export default function OutletPage() {
           {crumb && <Typography variant="caption" sx={{ color: 'text.secondary' }}>{crumb}</Typography>}
         </Breadcrumbs>
       </Box>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-        <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-          Cashier : {CASHIER.name} ({CASHIER.code})
-        </Typography>
-        <MuiLink
-          component="button"
-          type="button"
-          variant="body2"
-          underline="hover"
-          onClick={handleLogout}
-          sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-        >
-          <LogoutOutlinedIcon fontSize="inherit" /> Logout
-        </MuiLink>
-      </Stack>
     </Stack>
   );
 
@@ -342,7 +315,7 @@ export default function OutletPage() {
                 <TableHead>
                   <TableRow>
                     {LIST_COLUMNS.map((col) => (
-                      <TableCell key={col} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
+                      <TableCell key={col} className={col === 'Action' ? 'sticky-action' : undefined} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
                         {col}
                       </TableCell>
                     ))}
@@ -377,7 +350,7 @@ export default function OutletPage() {
                           }}
                         />
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="sticky-action" onClick={(e) => e.stopPropagation()}>
                         <Stack direction="row" spacing={0.5}>
                           <IconButton size="small" color="primary" onClick={() => openOutlet(row)} aria-label={`Open ${row.name}`}>
                             <VisibilityOutlinedIcon fontSize="small" />
@@ -415,17 +388,9 @@ export default function OutletPage() {
           spacing={1.5}
           sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'space-between', py: { xs: 1, lg: 0 } }}
         >
-          <Tabs
-            value={activeTab}
-            onChange={(_e, value) => setActiveTab(value)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ minHeight: 48 }}
-          >
-            {DETAIL_TABS.map((label) => (
-              <Tab key={label} label={label} sx={{ fontWeight: 700, textTransform: 'none', minHeight: 48 }} />
-            ))}
-          </Tabs>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', px: 1.5, py: { xs: 0.5, lg: 1.5 } }}>
+            {DETAIL_TABS[0]}
+          </Typography>
 
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', py: { xs: 1, lg: 1.5 }, justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
             <Button variant="outlined" color="inherit" onClick={goToList}>
@@ -455,109 +420,100 @@ export default function OutletPage() {
         </Stack>
       </Paper>
 
-      {activeTab === 0 ? (
-        !isNew && (isLoading || !outlet) ? (
-          <Paper variant="outlined" sx={{ borderRadius: 3, p: 4, display: 'flex', justifyContent: 'center' }}>
-            <CircularProgress size={28} />
-          </Paper>
-        ) : (
-          <FormProvider {...methods}>
-            <Stack spacing={2} component="form" noValidate>
-              <Grid container spacing={2} sx={{ alignItems: 'flex-start' }}>
-                <Grid size={{ xs: 12, lg: 8 }}>
-                  <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 2 }}>Basic Information</Typography>
-                    <Grid container spacing={2}>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="outletCode" label="Outlet Code *" {...disabledProps} disabled={disabledProps.disabled || isNew} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormSelect name="outletType" label="Outlet Type *" options={OUTLET_TYPE_OPTIONS} {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="outletName" label="Outlet Name *" {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormSelect name="company" label="Company *" options={COMPANY_OPTIONS} {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="registrationNo" label="Registration No." {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormSelect name="state" label="State *" options={STATE_OPTIONS} {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="gstin" label="GSTIN *" {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormSelect name="city" label="City *" options={CITY_OPTIONS} {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="panNo" label="PAN No." {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="phone" label="Phone *" {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="email" label="Email" {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="mobile" label="Mobile *" {...disabledProps} />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormTextField name="website" label="Website" {...disabledProps} />
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormSelect name="status" label="Status *" options={STATUS_OPTIONS} {...disabledProps} />
-                      </Grid>
+      {!isNew && (isLoading || !outlet) ? (
+        <Paper variant="outlined" sx={{ borderRadius: 3, p: 4, display: 'flex', justifyContent: 'center' }}>
+          <CircularProgress size={28} />
+        </Paper>
+      ) : (
+        <FormProvider {...methods}>
+          <Stack spacing={2} component="form" noValidate>
+            <Grid container spacing={2} sx={{ alignItems: 'flex-start' }}>
+              <Grid size={{ xs: 12, lg: 8 }}>
+                <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 2 }}>Basic Information</Typography>
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="outletCode" label="Outlet Code *" {...disabledProps} disabled={disabledProps.disabled || isNew} />
                     </Grid>
-                  </Paper>
-                </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormSelect name="outletType" label="Outlet Type *" options={OUTLET_TYPE_OPTIONS} {...disabledProps} />
+                    </Grid>
 
-                <Grid size={{ xs: 12, lg: 4 }}>
-                  <Stack spacing={2}>
-                    <OutletLogoCard
-                      outletName={outlet?.name}
-                      logoName={logoName}
-                      onUpload={handleLogoUpload}
-                      onRemove={handleLogoRemove}
-                    />
-                    <RegisteredAddressCard disabledProps={disabledProps} />
-                  </Stack>
-                </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="outletName" label="Outlet Name *" {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormSelect name="company" label="Company *" options={COMPANY_OPTIONS} {...disabledProps} />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="registrationNo" label="Registration No." {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormSelect name="state" label="State *" options={STATE_OPTIONS} {...disabledProps} />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="gstin" label="GSTIN *" {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormSelect name="city" label="City *" options={CITY_OPTIONS} {...disabledProps} />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="panNo" label="PAN No." {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="phone" label="Phone *" {...disabledProps} />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="email" label="Email" {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="mobile" label="Mobile *" {...disabledProps} />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormTextField name="website" label="Website" {...disabledProps} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormSelect name="status" label="Status *" options={STATUS_OPTIONS} {...disabledProps} />
+                    </Grid>
+                  </Grid>
+                </Paper>
               </Grid>
 
-              <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 2 }}>Contact Person</Typography>
-                {isNew ? (
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Save this outlet first, then add contact persons here.
-                  </Typography>
-                ) : (
-                  <ContactPersonTable
-                    rows={contacts}
-                    onAdd={handleAddContact}
-                    onEditRow={handleEditContact}
-                    onDeleteRow={handleDeleteContact}
+              <Grid size={{ xs: 12, lg: 4 }}>
+                <Stack spacing={2}>
+                  <OutletLogoCard
+                    outletName={outlet?.name}
+                    logoName={logoName}
+                    onUpload={handleLogoUpload}
+                    onRemove={handleLogoRemove}
                   />
-                )}
-              </Paper>
-            </Stack>
-          </FormProvider>
-        )
-      ) : (
-        <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 3, sm: 4 }, textAlign: 'center' }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{DETAIL_TABS[activeTab]}</Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            This section is coming soon.
-          </Typography>
-        </Paper>
+                  <RegisteredAddressCard disabledProps={disabledProps} />
+                </Stack>
+              </Grid>
+            </Grid>
+
+            <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 2 }}>Contact Person</Typography>
+              {isNew ? (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Save this outlet first, then add contact persons here.
+                </Typography>
+              ) : (
+                <ContactPersonTable
+                  rows={contacts}
+                  onAdd={handleAddContact}
+                  onEditRow={handleEditContact}
+                  onDeleteRow={handleDeleteContact}
+                />
+              )}
+            </Paper>
+          </Stack>
+        </FormProvider>
       )}
 
       {!isNew && (

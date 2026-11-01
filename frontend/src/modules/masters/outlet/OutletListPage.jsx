@@ -5,7 +5,6 @@ import {
   TextField, MenuItem, InputAdornment, IconButton, Table, TableHead, TableBody, TableRow, TableCell, Chip,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
@@ -17,12 +16,10 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
 import { useGetOutletsQuery, useDeleteOutletMutation } from '../../../api/outletApi';
-import { CASHIER } from '../mastersMockData';
 
 const COLUMNS = ['Code', 'Name', 'Type', 'City', 'State', 'Phone', 'Status', 'Action'];
 
@@ -57,10 +54,6 @@ export default function OutletListPage() {
   });
   const [deleteOutlet] = useDeleteOutletMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewOutlet = () => navigate('/masters/outlet/new');
   const handleSearch = () => setAppliedSearch(searchInput.trim());
@@ -97,21 +90,6 @@ export default function OutletListPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Outlet</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
       <Grid container spacing={2}>
@@ -176,7 +154,7 @@ export default function OutletListPage() {
               <TableHead>
                 <TableRow>
                   {COLUMNS.map((col) => (
-                    <TableCell key={col} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
+                    <TableCell key={col} className={col === 'Action' ? 'sticky-action' : undefined} sx={{ color: 'text.secondary', fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>
                       {col}
                     </TableCell>
                   ))}
@@ -211,7 +189,7 @@ export default function OutletListPage() {
                         }}
                       />
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell className="sticky-action" onClick={(e) => e.stopPropagation()}>
                       <Stack direction="row" spacing={0.5}>
                         <IconButton size="small" color="primary" onClick={() => handleViewRow(row)} aria-label={`Open ${row.name}`}>
                           <VisibilityOutlinedIcon fontSize="small" />

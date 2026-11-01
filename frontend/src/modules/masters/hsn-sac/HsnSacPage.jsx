@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
   TextField, MenuItem, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -18,7 +16,6 @@ import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
@@ -27,7 +24,6 @@ import { formatPickerDate } from '../../../components/form/FormDatePicker';
 import HsnSacTable from './components/HsnSacTable';
 import HsnSacFormDialog from './components/HsnSacFormDialog';
 import HsnSacViewDialog from './components/HsnSacViewDialog';
-import { CASHIER } from '../mastersMockData';
 import { TYPE_OPTIONS, CHAPTER_OPTIONS, TAX_RATE_OPTIONS } from './createHsnSacSchema';
 import { useGetHsnSacCodesQuery, useDeleteHsnSacMutation } from '../../../api/hsnSacApi';
 
@@ -44,7 +40,6 @@ import { useGetHsnSacCodesQuery, useDeleteHsnSacMutation } from '../../../api/hs
  */
 export default function HsnSacPage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState('');
   const [type, setType] = useState('All');
   const [chapter, setChapter] = useState('All');
@@ -64,10 +59,6 @@ export default function HsnSacPage() {
   });
   const [deleteHsnSac] = useDeleteHsnSacMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewHsnSac = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import HSN / SAC codes is coming soon', 'info'));
@@ -138,50 +129,9 @@ export default function HsnSacPage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>HSN / SAC</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'space-between' }}>
-        <Paper
-          variant="outlined"
-          sx={{
-            borderRadius: 3, p: { xs: 1.75, sm: 2 }, display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1,
-            bgcolor: 'rgba(37,99,235,0.06)', borderColor: 'rgba(37,99,235,0.25)',
-          }}
-        >
-          <Box
-            sx={{
-              width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              bgcolor: '#2563EB', color: '#fff',
-            }}
-          >
-            <InfoOutlinedIcon sx={{ fontSize: 18 }} />
-          </Box>
-          <Box>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              Create and manage HSN (Harmonized System of Nomenclature) / SAC (Service Accounting Code) for items and services.
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              HSN/SAC codes are used for GST reporting and invoicing.
-            </Typography>
-          </Box>
-        </Paper>
-
+      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
           <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={handleNewHsnSac}>
             New HSN / SAC
@@ -197,7 +147,7 @@ export default function HsnSacPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Grid container spacing={1.5} sx={{ alignItems: 'flex-end' }}>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 2.6 }}>
             <TextField
               label="Search HSN / SAC"
               placeholder="Search by HSN / SAC code or description..."
@@ -208,38 +158,37 @@ export default function HsnSacPage() {
               slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.6 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
             <TextField select label="Type" value={type} onChange={(e) => setType(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               {TYPE_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2.6 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 2.3 }}>
             <TextField select label="Chapter" value={chapter} onChange={(e) => setChapter(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               {CHAPTER_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.6 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
             <TextField select label="Tax Rate (%)" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               {TAX_RATE_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 1.6 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
             <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               <MenuItem value="Active">Active</MenuItem>
               <MenuItem value="Inactive">Inactive</MenuItem>
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 6, md: 1.2 }}>
-            <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleSearch} fullWidth>
+          {/* Search + Reset share one cell so they always stay on the same row. */}
+          <Grid size={{ xs: 12, sm: 12, md: 2.6 }} sx={{ display: 'flex', gap: 1 }}>
+            <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleSearch} fullWidth sx={{ whiteSpace: 'nowrap' }}>
               Search
             </Button>
-          </Grid>
-          <Grid size={{ xs: 6, sm: 6, md: 1 }}>
-            <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleReset} fullWidth>
+            <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleReset} fullWidth sx={{ whiteSpace: 'nowrap' }}>
               Reset
             </Button>
           </Grid>

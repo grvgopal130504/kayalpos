@@ -116,46 +116,54 @@ export default function HomePage() {
         </Grid>
       </Grid>
 
+      {/* Two equal-height columns (Grid items stretch by default; each column is a
+          flex column whose cards grow to fill the leftover height). */}
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, lg: 8 }}>
-          <Stack spacing={2}>
-            <InfoCard title="Quick Access">
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <Stack spacing={2} sx={{ height: '100%' }}>
+            <InfoCard title="Quick Access" sx={{ height: 'auto', flex: '0 0 auto' }}>
               <QuickAccessGrid items={quickAccessItems} />
             </InfoCard>
 
-            <InfoCard
-              title="Top Selling Items"
-              action={<PeriodSelect value={topSellingPeriod} onChange={setTopSellingPeriod} options={[{ value: 'month', label: 'This Month' }, { value: 'week', label: 'This Week' }]} />}
-              link={{ label: 'View All', to: '/reports' }}
-            >
-              <TopSellingList items={topSellingItems} />
-            </InfoCard>
-
-            <InfoCard title="Recent Transactions">
+            <InfoCard title="Recent Transactions" sx={{ height: 'auto', flex: '1 1 auto' }}>
               <DataTable columns={transactionColumns} rows={recentTransactions} getRowKey={(r) => r.id} />
             </InfoCard>
           </Stack>
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 4 }}>
-          <Stack spacing={2}>
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <Stack spacing={2} sx={{ height: '100%' }}>
             <InfoCard
               title="Sales Overview"
               action={<PeriodSelect value={salesPeriod} onChange={setSalesPeriod} options={[{ value: 'month', label: 'This Month' }, { value: 'week', label: 'This Week' }]} />}
+              sx={{ height: 'auto', flex: '1 1 auto' }}
             >
               <TrendChart categories={salesOverview.categories} values={salesOverview.values} height={220} />
             </InfoCard>
 
-            <InfoCard title="Payment Summary (Today)">
-              <DonutChart
-                data={paymentSummary.breakdown.map((b) => ({ id: b.method, label: b.method, value: b.amount, color: PAYMENT_COLORS[b.method] }))}
-                centerValue={formatCurrency(paymentSummary.total)}
-                centerLabel="Total"
-                formatValue={(v) => formatCurrency(v)}
-              />
-            </InfoCard>
+            <Grid container spacing={2} sx={{ flex: '1 1 auto' }}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <InfoCard
+                  title="Top Selling Items"
+                  action={<PeriodSelect value={topSellingPeriod} onChange={setTopSellingPeriod} options={[{ value: 'month', label: 'This Month' }, { value: 'week', label: 'This Week' }]} />}
+                  link={{ label: 'View All', to: '/reports' }}
+                >
+                  <TopSellingList items={topSellingItems} />
+                </InfoCard>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <InfoCard title="Payment Summary (Today)">
+                  <DonutChart
+                    data={paymentSummary.breakdown.map((b) => ({ id: b.method, label: b.method, value: b.amount, color: PAYMENT_COLORS[b.method] }))}
+                    centerValue={formatCurrency(paymentSummary.total)}
+                    centerLabel="Total"
+                    formatValue={(v) => formatCurrency(v)}
+                  />
+                </InfoCard>
+              </Grid>
+            </Grid>
 
-            <InfoCard title="Low Stock Items" link={{ label: 'View All', to: '/stock-count' }}>
+            <InfoCard title="Low Stock Items" link={{ label: 'View All', to: '/stock-count' }} sx={{ height: 'auto', flex: '1 1 auto' }}>
               <DataTable columns={lowStockColumns} rows={lowStockDetails} getRowKey={(r) => r.id} dense />
             </InfoCard>
           </Stack>

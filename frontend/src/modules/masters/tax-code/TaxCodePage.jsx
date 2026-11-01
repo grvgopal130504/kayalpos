@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button,
   TextField, MenuItem, InputAdornment,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
@@ -17,7 +15,6 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import CurrencyRupeeOutlinedIcon from '@mui/icons-material/CurrencyRupeeOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
-import { logout } from '../../../features/auth/authSlice';
 import { showToast } from '../../../features/ui/uiSlice';
 import StatCard from '../../../components/common/StatCard';
 import { formatNumber } from '../../../utils/format';
@@ -26,7 +23,6 @@ import { formatPickerDate } from '../../../components/form/FormDatePicker';
 import TaxCodeTable from './components/TaxCodeTable';
 import TaxCodeFormDialog from './components/TaxCodeFormDialog';
 import TaxCodeViewDialog from './components/TaxCodeViewDialog';
-import { CASHIER } from '../mastersMockData';
 import { TAX_TYPE_OPTIONS, TAX_CATEGORY_OPTIONS } from './createTaxCodeSchema';
 import { useGetTaxCodesQuery, useDeleteTaxCodeMutation } from '../../../api/taxCodeApi';
 
@@ -42,7 +38,6 @@ import { useGetTaxCodesQuery, useDeleteTaxCodeMutation } from '../../../api/taxC
  */
 export default function TaxCodePage() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState('');
   const [taxType, setTaxType] = useState('All');
   const [taxCategory, setTaxCategory] = useState('All');
@@ -61,10 +56,6 @@ export default function TaxCodePage() {
   });
   const [deleteTaxCode] = useDeleteTaxCodeMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login', { replace: true });
-  };
 
   const handleNewTaxCode = () => setFormDialog({ open: true, mode: 'add', row: null });
   const handleImport = () => dispatch(showToast('Import Tax Codes is coming soon', 'info'));
@@ -131,48 +122,9 @@ export default function TaxCodePage() {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Tax Code</Typography>
           </Breadcrumbs>
         </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2563EB' }}>
-            Cashier : {CASHIER.name} ({CASHIER.code})
-          </Typography>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="body2"
-            underline="hover"
-            onClick={handleLogout}
-            sx={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: '#2563EB' }}
-          >
-            <LogoutOutlinedIcon fontSize="inherit" /> Logout
-          </MuiLink>
-        </Stack>
       </Stack>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'space-between' }}>
-        <Paper
-          variant="outlined"
-          sx={{
-            borderRadius: 3, p: { xs: 1.75, sm: 2 }, display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1,
-            bgcolor: 'rgba(37,99,235,0.06)', borderColor: 'rgba(37,99,235,0.25)',
-          }}
-        >
-          <Box
-            sx={{
-              width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              bgcolor: '#2563EB', color: '#fff',
-            }}
-          >
-            <InfoOutlinedIcon sx={{ fontSize: 18 }} />
-          </Box>
-          <Box>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>Create and manage tax codes used for purchase and sales transactions.</Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Tax codes are used to calculate tax automatically in invoices.
-            </Typography>
-          </Box>
-        </Paper>
-
+      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, justifyContent: 'flex-end' }}>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: { xs: 'flex-start', lg: 'flex-end' } }}>
           <Button variant="contained" color="primary" startIcon={<AddIcon fontSize="small" />} onClick={handleNewTaxCode}>
             New Tax Code
@@ -188,7 +140,7 @@ export default function TaxCodePage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
         <Grid container spacing={1.5} sx={{ alignItems: 'flex-end' }}>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 2.8 }}>
             <TextField
               label="Search Tax Code"
               placeholder="Search by tax code or name..."
@@ -199,32 +151,31 @@ export default function TaxCodePage() {
               slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 2.2 }}>
             <TextField select label="Tax Type" value={taxType} onChange={(e) => setTaxType(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               {TAX_TYPE_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 2.2 }}>
             <TextField select label="Tax Category" value={taxCategory} onChange={(e) => setTaxCategory(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               {TAX_CATEGORY_OPTIONS.map((opt) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 1.8 }}>
             <TextField select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} fullWidth>
               <MenuItem value="All">All</MenuItem>
               <MenuItem value="Active">Active</MenuItem>
               <MenuItem value="Inactive">Inactive</MenuItem>
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 6, md: 1.4 }}>
-            <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleSearch} fullWidth>
+          {/* Search + Reset share one cell so they always stay on the same row. */}
+          <Grid size={{ xs: 12, sm: 12, md: 3 }} sx={{ display: 'flex', gap: 1 }}>
+            <Button variant="contained" color="primary" startIcon={<SearchIcon fontSize="small" />} onClick={handleSearch} fullWidth sx={{ whiteSpace: 'nowrap' }}>
               Search
             </Button>
-          </Grid>
-          <Grid size={{ xs: 6, sm: 6, md: 1.4 }}>
-            <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleReset} fullWidth>
+            <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleReset} fullWidth sx={{ whiteSpace: 'nowrap' }}>
               Reset
             </Button>
           </Grid>
