@@ -107,7 +107,9 @@ export default function PaymentMethodsCard({
               direction="row"
               sx={{
                 mt: 0.5, px: 1.5, height: 56, alignItems: 'center', gap: 1, borderRadius: 2,
-                bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
+                // Sky Mist fill — matches the search field / table header
+                // treatment used on the billing step for this theme.
+                bgcolor: '#F3F8FF', border: '1px solid', borderColor: '#CFE4FF',
                 '&:focus-within': { borderColor: 'primary.main', boxShadow: (t) => `0 0 0 3px ${alpha(t.palette.primary.main, 0.15)}` },
               }}
             >
@@ -123,20 +125,23 @@ export default function PaymentMethodsCard({
             </Stack>
           </Box>
 
-          <Box
-            sx={{
-              flex: 1, minWidth: 0, px: 2, py: 1, borderRadius: 2, border: '1px solid',
-              display: 'flex', flexDirection: 'column', justifyContent: 'center',
-              borderColor: (t) => alpha(short ? t.palette.error.main : t.palette.success.main, 0.35),
-              bgcolor: (t) => alpha(short ? t.palette.error.main : t.palette.success.main, 0.1),
-            }}
-          >
+          <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="caption" sx={{ color: short ? 'error.main' : 'success.main', fontWeight: 600 }}>
               {short ? 'Amount short' : 'Change to return'}
             </Typography>
-            <Typography sx={{ fontSize: 24, fontWeight: 800, color: short ? 'error.main' : 'success.main', lineHeight: 1.3 }}>
-              {formatCurrency(Math.abs(changeAmount), { decimals: true })}
-            </Typography>
+            <Stack
+              direction="row"
+              sx={{
+                mt: 0.5, px: 1.5, height: 56, alignItems: 'center', borderRadius: 2,
+                border: '1px solid',
+                borderColor: (t) => alpha(short ? t.palette.error.main : t.palette.success.main, 0.35),
+                bgcolor: (t) => alpha(short ? t.palette.error.main : t.palette.success.main, 0.1),
+              }}
+            >
+              <Typography sx={{ fontSize: 24, fontWeight: 800, color: short ? 'error.main' : 'success.main' }}>
+                {formatCurrency(Math.abs(changeAmount), { decimals: true })}
+              </Typography>
+            </Stack>
           </Box>
         </Stack>
 

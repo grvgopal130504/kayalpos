@@ -45,7 +45,13 @@ export default function CustomerPage() {
   const [moreActionsAnchor, setMoreActionsAnchor] = useState(null);
   const [selectedCode, setSelectedCode] = useState(null);
 
-  const { data: customerRows = [] } = useGetCustomersQuery({});
+  const { data: allCustomerRows = [] } = useGetCustomersQuery({});
+  // The tenant's reserved Walk-in Customer row (see
+  // backend/src/modules/customer/customer.service.js) is a real Customer
+  // record now so Line Sale can save walk-in sales against it, but it's a
+  // system record, not one an admin manages here — hide it from the list,
+  // table, and delete/edit actions on this page.
+  const customerRows = useMemo(() => allCustomerRows.filter((row) => row.code !== 'WALKIN'), [allCustomerRows]);
   const [deleteCustomer] = useDeleteCustomerMutation();
   const { data: overviewSummary } = useSalesOverviewSummaryQuery();
   const { data: purchaseSummaries = {} } = useCustomerSalesSummariesQuery();
