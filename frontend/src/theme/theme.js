@@ -9,9 +9,6 @@ import { getAccentTheme, DEFAULT_ACCENT_KEY } from './accentThemes';
 // light/dark mode and accent color at runtime (see uiSlice's `themeMode` /
 // `accentThemeKey` + Topbar's pickers).
 const SHARED = {
-  secondary: {
-    main: '#1F2A3C',
-  },
   success: { main: '#22A06B' },
   warning: { main: '#F5A623' },
   error: { main: '#E5484D' },
@@ -27,6 +24,10 @@ function buildPalette(mode, accentKey) {
     mode,
     ...SHARED,
     primary: { main: primaryMain, contrastText: '#FFFFFF' },
+    // Dark-surface color (Sidebar's collapsed dark state, etc.) travels
+    // with the selected accent preset itself — see accent.secondary in
+    // accentThemes.js — rather than a separate picker.
+    secondary: { main: accent.secondary },
     background: mode === 'dark'
       ? { default: '#12161F', paper: '#1A1F2B' }
       : { default: '#F5F6F8', paper: '#FFFFFF' },
@@ -42,8 +43,14 @@ export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY, bodyFon
   const scrollbarThumb = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.22)';
   const scrollbarThumbHover = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
 
+  const accent = getAccentTheme(accentKey);
+
   return createTheme({
     palette: buildPalette(mode === 'dark' ? 'dark' : 'light', accentKey),
+    // Dark-panel gradient stops for the Amount Payable summary card etc.
+    // (read as `theme.panelGradient` — see AmountPayableCard.jsx), swapped
+    // by the selected accent preset's own `panelGradient`.
+    panelGradient: accent.panelGradient,
     shape: {
       borderRadius: 10,
     },
@@ -94,7 +101,16 @@ export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY, bodyFon
       },
       MuiOutlinedInput: {
         styleOverrides: {
-          root: { borderRadius: 8 },
+          // The 'orange-grey' combo also gets a soft light-blue fill on
+          // every outlined input (search / autocomplete fields on the Line
+          // Sale bar, etc.) instead of the plain paper background, to match
+          // that theme's light-blue table header below.
+          root: ({ theme }) => ({
+            borderRadius: 8,
+            ...(accentKey === 'orange-grey'
+              ? { backgroundColor: theme.palette.mode === 'dark' ? 'rgba(66,133,244,0.10)' : '#F3F8FF' }
+              : null),
+          }),
           input: { paddingTop: 10, paddingBottom: 10 },
         },
       },
@@ -113,20 +129,33 @@ export function getTheme(mode = 'light', accentKey = DEFAULT_ACCENT_KEY, bodyFon
       // scrolling underneath). The nested selector out-specifies the
       // per-table `sx` overrides (color: 'text.secondary', ...) so every
       // table picks it up without editing each one.
+      //
+      // The 'orange-grey' combo breaks from the primary-color tint on
+      // purpose — a flat grey header with plain black text, per request,
+      // instead of an orange-tinted one.
       MuiTableHead: {
         styleOverrides: {
-          root: ({ theme }) => ({
-            '& .MuiTableCell-head': {
-              backgroundColor: theme.palette.mode === 'dark'
-                ? darken(theme.palette.primary.main, 0.65)
-                : lighten(theme.palette.primary.main, 0.88),
-              color: theme.palette.mode === 'dark'
-                ? lighten(theme.palette.primary.main, 0.7)
-                : darken(theme.palette.primary.main, 0.45),
-              fontWeight: 700,
-              borderBottom: `2px solid ${theme.palette.primary.main}`,
-            },
-          }),
+          root: ({ theme }) => (accentKey === 'orange-grey'
+            ? {
+              '& .MuiTableCell-head': {
+                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(66,133,244,0.14)' : '#F3F8FF',
+                color: theme.palette.mode === 'dark' ? '#AFCBFA' : '#1D4E89',
+                fontWeight: 700,
+                borderBottom: '2px solid #CFE4FF',
+              },
+            }
+            : {
+              '& .MuiTableCell-head': {
+                backgroundColor: theme.palette.mode === 'dark'
+                  ? darken(theme.palette.primary.main, 0.65)
+                  : lighten(theme.palette.primary.main, 0.88),
+                color: theme.palette.mode === 'dark'
+                  ? lighten(theme.palette.primary.main, 0.7)
+                  : darken(theme.palette.primary.main, 0.45),
+                fontWeight: 700,
+                borderBottom: `2px solid ${theme.palette.primary.main}`,
+              },
+            }),
         },
       },
       // App-wide thin scrollbar — covers every scrollable table container,

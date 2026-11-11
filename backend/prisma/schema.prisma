@@ -75,6 +75,10 @@ model Tenant {
   priceLists          PriceList[]
   batchSerials        BatchSerial[]
   employees           Employee[]
+  attachments         Attachment[]
+  masterSyncs         MasterSync[]
+  sapSyncs            SAPSync[]
+  stockSyncs          StockSync[]
 }
 
 model Outlet {
@@ -84,8 +88,13 @@ model Outlet {
   code      String   @map("Code")
   name      String   @map("Name")
   isActive  Boolean  @default(true) @map("IsActive")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt DateTime @default(now()) @map("CreatedAt")
   updatedAt DateTime @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   // Masters > Outlet's own detail-screen fields — added alongside the List
   // page (Masters > Outlet was previously a single hand-edited detail view
@@ -101,8 +110,8 @@ model Outlet {
   // truth to keep in sync.
   companyName     String? @map("CompanyName")
   registrationNo  String? @map("RegistrationNo")
-  gstin           String? @map("Gstin")
-  panNo           String? @map("PanNo")
+  gstin           String? @map("GSTIN")
+  panNo           String? @map("PANNo")
   phone           String? @map("Phone")
   email           String? @map("Email")
   mobile          String? @map("Mobile")
@@ -130,6 +139,13 @@ model Outlet {
   warehouses      Warehouse[]
   sellingPrices   SellingPrice[]
   employees       Employee[]
+  masterSyncs     MasterSync[]
+  sapSyncs        SAPSync[]
+  stockSyncs      StockSync[]
+  salesInvoices   SalesInvoice[]
+  salesOrders     SalesOrder[]
+  salesQuotations SalesQuotation[]
+  users           User[]
 
   @@unique([tenantId, code])
 }
@@ -162,8 +178,13 @@ model Warehouse {
   code      String   @map("Code")
   name      String   @map("Name")
   isActive  Boolean  @default(true) @map("IsActive")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt DateTime @default(now()) @map("CreatedAt")
   updatedAt DateTime @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   // Masters > Warehouse's detail-screen fields — same shape as Outlet's own
   // detail fields (see Outlet's doc comment above): `status` on the
@@ -230,16 +251,28 @@ model WarehouseContact {
 }
 
 model User {
-  id           String   @id @default(cuid()) @map("Id")
-  tenantId     String   @map("TenantId")
-  tenant       Tenant   @relation(fields: [tenantId], references: [id])
-  username     String   @unique @map("Username")
-  passwordHash String   @map("PasswordHash")
-  name         String   @map("Name")
-  role         UserRole @default(ADMIN) @map("Role")
-  isActive     Boolean  @default(true) @map("IsActive")
-  createdAt    DateTime @default(now()) @map("CreatedAt")
-  updatedAt    DateTime @updatedAt @map("UpdatedAt")
+  id           String    @id @default(cuid()) @map("Id")
+  tenantId     String    @map("TenantId")
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  code         String?   @map("Code")
+  username     String    @unique @map("UserName")
+  passwordHash String    @map("PasswordHash")
+  pinHash      String?   @map("PinHash")
+  name         String    @map("Name")
+  role         UserRole  @default(ADMIN) @map("Role")
+  employeeId   String?   @map("EmployeeId")
+  employee     Employee? @relation(fields: [employeeId], references: [id])
+  outletId     String?   @map("OutletId")
+  outlet       Outlet?   @relation(fields: [outletId], references: [id])
+  lastLogin    DateTime? @map("LastLogin")
+  isActive     Boolean   @default(true) @map("IsActive")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
+  createdAt    DateTime  @default(now()) @map("CreatedAt")
+  updatedAt    DateTime  @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 }
 
 // ---------------------------------------------------------------------------
@@ -257,8 +290,13 @@ model Brand {
   description String?      @map("Description")
   category    String       @map("Category")
   status      RecordStatus @default(ACTIVE) @map("Status")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt   DateTime     @default(now()) @map("CreatedAt")
   updatedAt   DateTime     @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   @@unique([tenantId, code])
   // Every list query is scoped by tenantId first (multi-tenant isolation),
@@ -280,8 +318,13 @@ model UomGroup {
   description String?      @map("Description")
   baseUom     String?      @map("BaseUom")
   status      RecordStatus @default(ACTIVE) @map("Status")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt   DateTime     @default(now()) @map("CreatedAt")
   updatedAt   DateTime     @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   uoms Uom[]
 
@@ -306,8 +349,13 @@ model Uom {
   group            UomGroup?    @relation(fields: [groupId], references: [id])
   conversionFactor Decimal?     @map("ConversionFactor") @db.Decimal(14, 6)
   status           RecordStatus @default(ACTIVE) @map("Status")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt        DateTime     @default(now()) @map("CreatedAt")
   updatedAt        DateTime     @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -334,8 +382,13 @@ model TaxCode {
   appliesTo       String       @map("AppliesTo")
   effectiveFrom   DateTime?    @map("EffectiveFrom")
   status          RecordStatus @default(ACTIVE) @map("Status")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt       DateTime     @default(now()) @map("CreatedAt")
   updatedAt       DateTime     @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -358,11 +411,16 @@ model HsnSac {
   type          String       @map("Type")
   chapter       String?      @map("Chapter")
   taxRate       Decimal      @map("TaxRate") @db.Decimal(5, 2)
-  uqc           String?      @map("Uqc")
+  uqc           String?      @map("UQC")
   effectiveFrom DateTime?    @map("EffectiveFrom")
   status        RecordStatus @default(ACTIVE) @map("Status")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt     DateTime     @default(now()) @map("CreatedAt")
   updatedAt     DateTime     @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -389,7 +447,7 @@ model Product {
   hsnSac       String?      @map("HsnSac")
   taxCode      String?      @map("TaxCode")
   salePrice    Decimal      @default(0) @map("SalePrice") @db.Decimal(12, 2)
-  mrp          Decimal      @default(0) @map("Mrp") @db.Decimal(12, 2)
+  mrp          Decimal      @default(0) @map("MRP") @db.Decimal(12, 2)
   availableQty Int          @default(0) @map("AvailableQty")
   // Reorder threshold for the Home dashboard's "Low Stock Items" panel — a
   // product is low stock once availableQty <= reorderLevel. Defaults to 10
@@ -398,8 +456,13 @@ model Product {
   // for it (out of scope for this dashboard wiring).
   reorderLevel Int          @default(10) @map("ReorderLevel")
   status       RecordStatus @default(ACTIVE) @map("Status")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt    DateTime     @default(now()) @map("CreatedAt")
   updatedAt    DateTime     @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   heldBillLines HeldBillLine[]
   tczLines      TczPos1[]
@@ -451,8 +514,13 @@ model PriceList {
 
   status RecordStatus @default(ACTIVE) @map("Status")
 
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt DateTime @default(now()) @map("CreatedAt")
   updatedAt DateTime @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -511,8 +579,13 @@ model BatchSerial {
 
   status RecordStatus @default(ACTIVE) @map("Status")
 
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt DateTime @default(now()) @map("CreatedAt")
   updatedAt DateTime @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   // Serial numbers are meant to be unique identifiers, and batch numbers are
   // unique enough per tenant in practice (mfg-date-coded, e.g. "B2505001")
@@ -554,7 +627,7 @@ model SellingPrice {
   outletId String? @map("OutletId")
   outlet   Outlet? @relation(fields: [outletId], references: [id], onDelete: SetNull)
 
-  mrp          Decimal @map("Mrp") @db.Decimal(12, 2)
+  mrp          Decimal @map("MRP") @db.Decimal(12, 2)
   purchaseCost Decimal @default(0) @map("PurchaseCost") @db.Decimal(12, 2)
 
   taxCode String? @map("TaxCode")
@@ -578,8 +651,13 @@ model SellingPrice {
   approvalRequired Boolean      @default(false) @map("ApprovalRequired")
   status           RecordStatus @default(ACTIVE) @map("Status")
 
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt DateTime @default(now()) @map("CreatedAt")
   updatedAt DateTime @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   // One priceList/outlet combination per product shouldn't be entered twice —
   // editing the existing row (not creating a duplicate) is the expected way
@@ -605,7 +683,7 @@ model Customer {
   name                String       @map("Name")
   mobile              String       @map("Mobile")
   email               String?      @map("Email")
-  gstin               String?      @map("Gstin")
+  gstin               String?      @map("GSTIN")
   customerType        String       @map("CustomerType")
   group               String?      @map("Group")
   priceCategory       String?      @map("PriceCategory")
@@ -621,8 +699,13 @@ model Customer {
   notes               String?      @map("Notes")
   loyaltyPoints       Int          @default(0) @map("LoyaltyPoints")
   status              RecordStatus @default(ACTIVE) @map("Status")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt           DateTime     @default(now()) @map("CreatedAt")
   updatedAt           DateTime     @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   tczBills        TczOpos[]
   heldBills       HeldBill[]
@@ -652,13 +735,18 @@ model Supplier {
   group        String?      @map("Group")
   phone        String?      @map("Phone")
   email        String?      @map("Email")
-  gstNo        String?      @map("GstNo")
+  gstNo        String?      @map("GSTNo")
   city         String?      @map("City")
   state        String?      @map("State")
   paymentTerms String?      @map("PaymentTerms")
   status       RecordStatus @default(ACTIVE) @map("Status")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt    DateTime     @default(now()) @map("CreatedAt")
   updatedAt    DateTime     @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -699,8 +787,15 @@ model Employee {
   joiningDate   DateTime? @map("JoiningDate")
 
   status    RecordStatus @default(ACTIVE) @map("Status")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt DateTime     @default(now()) @map("CreatedAt")
   updatedAt DateTime     @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
+
+  users User[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -837,8 +932,13 @@ model Promotion {
   combinable         Boolean   @default(true) @map("Combinable")
   showInInvoice      Boolean   @default(true) @map("ShowInInvoice")
   usageCount         Int       @default(0) @map("UsageCount")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt          DateTime  @default(now()) @map("CreatedAt")
   updatedAt          DateTime  @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   @@unique([tenantId, code])
   @@index([tenantId, createdAt])
@@ -883,8 +983,13 @@ model LoyaltyProgram {
   membersEnrolled               Int      @default(0) @map("MembersEnrolled")
   pointsIssuedTillDate          Int      @default(0) @map("PointsIssuedTillDate")
   pointsRedeemedTillDate        Int      @default(0) @map("PointsRedeemedTillDate")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt                     DateTime @default(now()) @map("CreatedAt")
   updatedAt                     DateTime @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   @@unique([tenantId, code])
   @@index([tenantId, createdAt])
@@ -923,8 +1028,13 @@ model GiftVoucher {
   sendSms                  Boolean   @default(false) @map("SendSms")
   sendEmail                Boolean   @default(false) @map("SendEmail")
   usageCount               Int       @default(0) @map("UsageCount")
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt                DateTime  @default(now()) @map("CreatedAt")
   updatedAt                DateTime  @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   @@unique([tenantId, code])
   @@index([tenantId, createdAt])
@@ -955,6 +1065,8 @@ model SalesQuotation {
   id             String    @id @default(cuid()) @map("Id")
   tenantId       String    @map("TenantId")
   tenant         Tenant    @relation(fields: [tenantId], references: [id])
+  outletId String? @map("OutletId")
+  outlet   Outlet? @relation(fields: [outletId], references: [id])
   code           String    @map("Code")
   customerId     String?   @map("CustomerId")
   customer       Customer? @relation(fields: [customerId], references: [id])
@@ -984,8 +1096,13 @@ model SalesQuotation {
   createdBy      String    @map("CreatedBy")
   convertedOn    DateTime? @map("ConvertedOn")
   convertedTo    String?   @map("ConvertedTo")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt      DateTime  @default(now()) @map("CreatedAt")
   updatedAt      DateTime  @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items SalesQuotationItem[]
 
@@ -1050,6 +1167,8 @@ model SalesOrder {
   id             String    @id @default(cuid()) @map("Id")
   tenantId       String    @map("TenantId")
   tenant         Tenant    @relation(fields: [tenantId], references: [id])
+  outletId String? @map("OutletId")
+  outlet   Outlet? @relation(fields: [outletId], references: [id])
   code           String    @map("Code")
   customerId     String?   @map("CustomerId")
   customer       Customer? @relation(fields: [customerId], references: [id])
@@ -1078,8 +1197,13 @@ model SalesOrder {
   status         String    @default("pending") @map("Status")
   createdBy      String    @map("CreatedBy")
   deliveredOn    DateTime? @map("DeliveredOn")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt      DateTime  @default(now()) @map("CreatedAt")
   updatedAt      DateTime  @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items SalesOrderItem[]
 
@@ -1139,6 +1263,8 @@ model SalesInvoice {
   id             String    @id @default(cuid()) @map("Id")
   tenantId       String    @map("TenantId")
   tenant         Tenant    @relation(fields: [tenantId], references: [id])
+  outletId String? @map("OutletId")
+  outlet   Outlet? @relation(fields: [outletId], references: [id])
   code           String    @map("Code")
   customerId     String?   @map("CustomerId")
   customer       Customer? @relation(fields: [customerId], references: [id])
@@ -1169,8 +1295,13 @@ model SalesInvoice {
   status         String    @default("draft") @map("Status")
   createdBy      String    @map("CreatedBy")
   paidOn         DateTime? @map("PaidOn")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt      DateTime  @default(now()) @map("CreatedAt")
   updatedAt      DateTime  @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items SalesInvoiceItem[]
 
@@ -1255,8 +1386,13 @@ model BarcodeLabelBatch {
   status           String    @default("draft") @map("Status")
   createdBy        String    @map("CreatedBy")
   printedOn        DateTime? @map("PrintedOn")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt        DateTime  @default(now()) @map("CreatedAt")
   updatedAt        DateTime  @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items BarcodeLabelItem[]
 
@@ -1321,8 +1457,14 @@ model SalesReturn {
   discountAmount Decimal   @default(0) @map("DiscountAmount") @db.Decimal(12, 2)
   taxAmount      Decimal   @default(0) @map("TaxAmount") @db.Decimal(12, 2)
   grandTotal     Decimal   @default(0) @map("GrandTotal") @db.Decimal(12, 2)
+  createdBy      String?   @map("CreatedBy")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt      DateTime  @default(now()) @map("CreatedAt")
   updatedAt      DateTime  @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items SalesReturnItem[]
 
@@ -1430,8 +1572,13 @@ model StockIndent {
   createdBy           String    @map("CreatedBy")
   approvedBy          String?   @map("ApprovedBy")
   approvedOn          DateTime? @map("ApprovedOn")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt           DateTime  @default(now()) @map("CreatedAt")
   updatedAt           DateTime  @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items StockIndentItem[]
 
@@ -1528,8 +1675,13 @@ model StockTransfer {
   createdBy           String    @map("CreatedBy")
   receivedBy          String?   @map("ReceivedBy")
   receivedOn          DateTime? @map("ReceivedOn")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt           DateTime  @default(now()) @map("CreatedAt")
   updatedAt           DateTime  @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items StockTransferItem[]
 
@@ -1626,8 +1778,13 @@ model StockReceipt {
   createdBy           String    @map("CreatedBy")
   receivedBy          String?   @map("ReceivedBy")
   receivedOn          DateTime? @map("ReceivedOn")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt           DateTime  @default(now()) @map("CreatedAt")
   updatedAt           DateTime  @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items StockReceiptItem[]
 
@@ -1709,8 +1866,13 @@ model StockReturn {
   createdBy        String    @map("CreatedBy")
   acceptedBy       String?   @map("AcceptedBy")
   acceptedOn       DateTime? @map("AcceptedOn")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt        DateTime  @default(now()) @map("CreatedAt")
   updatedAt        DateTime  @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items StockReturnItem[]
 
@@ -1802,8 +1964,13 @@ model StockWastage {
   totalValue      Decimal  @default(0) @map("TotalValue") @db.Decimal(12, 2)
   status          String   @default("draft") @map("Status")
   createdBy       String   @map("CreatedBy")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt       DateTime @default(now()) @map("CreatedAt")
   updatedAt       DateTime @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items StockWastageItem[]
 
@@ -1896,8 +2063,13 @@ model StockCount {
   totalCountValue    Decimal  @default(0) @map("TotalCountValue") @db.Decimal(12, 2)
   status             String   @default("draft") @map("Status")
   createdBy          String   @map("CreatedBy")
+  termsConditions String?   @map("TermsConditions")
+  sapRef          String?   @map("SapRef")
+  sapSyncStatus   String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate     DateTime? @map("SapSyncDate")
   createdAt          DateTime @default(now()) @map("CreatedAt")
   updatedAt          DateTime @updatedAt @map("UpdatedAt")
+  updatedBy String? @map("UpdatedBy")
 
   items StockCountItem[]
 
@@ -2214,8 +2386,8 @@ model Company {
   companyName        String  @map("CompanyName")
   displayName        String? @map("DisplayName")
   registrationNo     String? @map("RegistrationNo")
-  gstin              String  @map("Gstin")
-  panNo              String? @map("PanNo")
+  gstin              String  @map("GSTIN")
+  panNo              String? @map("PANNo")
   email              String? @map("Email")
   website            String? @map("Website")
   companyType        String? @map("CompanyType")
@@ -2239,8 +2411,13 @@ model Company {
   addressLine4       String? @map("AddressLine4")
   addressLandmark    String? @map("AddressLandmark")
 
+  sapRef        String?   @map("SapRef")
+  sapSyncStatus String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate   DateTime? @map("SapSyncDate")
   createdAt DateTime @default(now()) @map("CreatedAt")
   updatedAt DateTime @updatedAt @map("UpdatedAt")
+  createdBy String? @map("CreatedBy")
+  updatedBy String? @map("UpdatedBy")
 
   contacts CompanyContact[]
 }
@@ -2428,4 +2605,198 @@ model TczPos2 {
 
   @@id([docEntry, lineId])
   @@map("LinesaleOfferDetails")
+}
+// ---------------------------------------------------------------------------
+// Attachments: generic file-attachment store ported from the legacy
+// Attachment.sql reference script. Nothing else in this schema points to
+// these yet (existing modules just keep a plain *Name string, e.g.
+// Expense.attachmentName) — wiring other models to a real AttachmentEntry
+// relation is a separate follow-up, not part of this port.
+// ---------------------------------------------------------------------------
+
+model Attachment {
+  docEntry    Int      @id @default(autoincrement()) @map("DocEntry")
+  tenantId    String   @map("TenantId")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  description String?  @map("Description")
+  createdAt   DateTime @default(now()) @map("CreateDate")
+  updatedAt   DateTime @updatedAt @map("UpdateDate")
+  createdBy   String?  @map("CreatedBy")
+  updatedBy   String?  @map("UpdatedBy")
+
+  files AttachmentFile[]
+
+  @@index([tenantId])
+}
+
+model AttachmentFile {
+  docEntry     Int        @map("DocEntry")
+  attachment   Attachment @relation(fields: [docEntry], references: [docEntry], onDelete: Cascade)
+  lineId       Int        @map("LineId")
+  fileName     String     @map("FileName")
+  filePath     String?    @map("FilePath")
+  contentType  String?    @map("ContentType")
+  fileSize     BigInt?    @map("FileSize")
+  uploadedBy   String?    @map("UploadedBy")
+  uploadedDate DateTime   @default(now()) @map("UploadedDate")
+
+  @@id([docEntry, lineId])
+}
+
+// ---------------------------------------------------------------------------
+// SAP integration sync logs, ported from MasterSync.sql / SAPSync.sql /
+// StockSync.sql. The three scripts are structurally identical in the
+// legacy design (same columns, same child-line shape) — kept as three
+// separate tables here to stay literally faithful to the original script,
+// per explicit instruction, rather than consolidating into one model.
+// ---------------------------------------------------------------------------
+
+model MasterSync {
+  docEntry       Int       @id @default(autoincrement()) @map("DocEntry")
+  tenantId       String    @map("TenantId")
+  tenant         Tenant    @relation(fields: [tenantId], references: [id])
+  docNum         String?   @map("DocNum")
+  docDate        DateTime  @default(now()) @map("DocDate")
+  syncType       String    @default("Master") @map("SyncType")
+  syncObject     String?   @map("SyncObject")
+  direction      String    @default("POS to SAP") @map("Direction")
+  outletId       String?   @map("OutletId")
+  outlet         Outlet?   @relation(fields: [outletId], references: [id])
+  startTime      DateTime? @map("StartTime")
+  endTime        DateTime? @map("EndTime")
+  totalRecords   Int       @default(0) @map("TotalRecords")
+  successRecords Int       @default(0) @map("SuccessRecords")
+  failedRecords  Int       @default(0) @map("FailedRecords")
+  pendingRecords Int       @default(0) @map("PendingRecords")
+  errorMessage   String?   @map("ErrorMessage")
+  requestedBy    String?   @map("RequestedBy")
+  status         String    @default("Pending") @map("Status")
+  docStatus      String    @default("O") @map("DocStatus")
+  canceled       Boolean   @default(false) @map("Canceled")
+  sapRef         String?   @map("SapRef")
+  sapSyncStatus  String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate    DateTime? @map("SapSyncDate")
+  createdAt      DateTime  @default(now()) @map("CreateDate")
+  updatedAt      DateTime  @updatedAt @map("UpdateDate")
+  createdBy      String?   @map("CreatedBy")
+  updatedBy      String?   @map("UpdatedBy")
+
+  lines MasterSyncLine[]
+
+  @@unique([tenantId, docNum])
+  @@index([tenantId, docDate])
+}
+
+model MasterSyncLine {
+  docEntry     Int        @map("DocEntry")
+  masterSync   MasterSync @relation(fields: [docEntry], references: [docEntry], onDelete: Cascade)
+  lineId       Int        @map("LineId")
+  objectType   String?    @map("ObjectType")
+  objectKey    String?    @map("ObjectKey")
+  sapDocEntry  String?    @map("SapDocEntry")
+  syncStatus   String?    @map("SyncStatus")
+  errorMessage String?    @map("ErrorMessage")
+  syncDate     DateTime?  @map("SyncDate")
+
+  @@id([docEntry, lineId])
+}
+
+model SAPSync {
+  docEntry       Int       @id @default(autoincrement()) @map("DocEntry")
+  tenantId       String    @map("TenantId")
+  tenant         Tenant    @relation(fields: [tenantId], references: [id])
+  docNum         String?   @map("DocNum")
+  docDate        DateTime  @default(now()) @map("DocDate")
+  syncType       String    @default("SAP") @map("SyncType")
+  syncObject     String?   @map("SyncObject")
+  direction      String    @default("POS to SAP") @map("Direction")
+  outletId       String?   @map("OutletId")
+  outlet         Outlet?   @relation(fields: [outletId], references: [id])
+  startTime      DateTime? @map("StartTime")
+  endTime        DateTime? @map("EndTime")
+  totalRecords   Int       @default(0) @map("TotalRecords")
+  successRecords Int       @default(0) @map("SuccessRecords")
+  failedRecords  Int       @default(0) @map("FailedRecords")
+  pendingRecords Int       @default(0) @map("PendingRecords")
+  errorMessage   String?   @map("ErrorMessage")
+  requestedBy    String?   @map("RequestedBy")
+  status         String    @default("Pending") @map("Status")
+  docStatus      String    @default("O") @map("DocStatus")
+  canceled       Boolean   @default(false) @map("Canceled")
+  sapRef         String?   @map("SapRef")
+  sapSyncStatus  String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate    DateTime? @map("SapSyncDate")
+  createdAt      DateTime  @default(now()) @map("CreateDate")
+  updatedAt      DateTime  @updatedAt @map("UpdateDate")
+  createdBy      String?   @map("CreatedBy")
+  updatedBy      String?   @map("UpdatedBy")
+
+  lines SAPSyncLine[]
+
+  @@unique([tenantId, docNum])
+  @@index([tenantId, docDate])
+}
+
+model SAPSyncLine {
+  docEntry     Int       @map("DocEntry")
+  sapSync      SAPSync   @relation(fields: [docEntry], references: [docEntry], onDelete: Cascade)
+  lineId       Int       @map("LineId")
+  objectType   String?   @map("ObjectType")
+  objectKey    String?   @map("ObjectKey")
+  sapDocEntry  String?   @map("SapDocEntry")
+  syncStatus   String?   @map("SyncStatus")
+  errorMessage String?   @map("ErrorMessage")
+  syncDate     DateTime? @map("SyncDate")
+
+  @@id([docEntry, lineId])
+}
+
+model StockSync {
+  docEntry       Int       @id @default(autoincrement()) @map("DocEntry")
+  tenantId       String    @map("TenantId")
+  tenant         Tenant    @relation(fields: [tenantId], references: [id])
+  docNum         String?   @map("DocNum")
+  docDate        DateTime  @default(now()) @map("DocDate")
+  syncType       String    @default("Stock") @map("SyncType")
+  syncObject     String?   @map("SyncObject")
+  direction      String    @default("POS to SAP") @map("Direction")
+  outletId       String?   @map("OutletId")
+  outlet         Outlet?   @relation(fields: [outletId], references: [id])
+  startTime      DateTime? @map("StartTime")
+  endTime        DateTime? @map("EndTime")
+  totalRecords   Int       @default(0) @map("TotalRecords")
+  successRecords Int       @default(0) @map("SuccessRecords")
+  failedRecords  Int       @default(0) @map("FailedRecords")
+  pendingRecords Int       @default(0) @map("PendingRecords")
+  errorMessage   String?   @map("ErrorMessage")
+  requestedBy    String?   @map("RequestedBy")
+  status         String    @default("Pending") @map("Status")
+  docStatus      String    @default("O") @map("DocStatus")
+  canceled       Boolean   @default(false) @map("Canceled")
+  sapRef         String?   @map("SapRef")
+  sapSyncStatus  String    @default("Pending") @map("SapSyncStatus")
+  sapSyncDate    DateTime? @map("SapSyncDate")
+  createdAt      DateTime  @default(now()) @map("CreateDate")
+  updatedAt      DateTime  @updatedAt @map("UpdateDate")
+  createdBy      String?   @map("CreatedBy")
+  updatedBy      String?   @map("UpdatedBy")
+
+  lines StockSyncLine[]
+
+  @@unique([tenantId, docNum])
+  @@index([tenantId, docDate])
+}
+
+model StockSyncLine {
+  docEntry     Int        @map("DocEntry")
+  stockSync    StockSync  @relation(fields: [docEntry], references: [docEntry], onDelete: Cascade)
+  lineId       Int        @map("LineId")
+  objectType   String?    @map("ObjectType")
+  objectKey    String?    @map("ObjectKey")
+  sapDocEntry  String?    @map("SapDocEntry")
+  syncStatus   String?    @map("SyncStatus")
+  errorMessage String?    @map("ErrorMessage")
+  syncDate     DateTime?  @map("SyncDate")
+
+  @@id([docEntry, lineId])
 }

@@ -34,10 +34,30 @@ stages:
             displayName: 'Installing Node.js'
           - script: |
               npm ci
+              npx prisma migrate deploy
               npx prisma generate
               npm run build --if-present
             workingDirectory: '$(System.DefaultWorkingDirectory)/$(backendFolderName)'
-            displayName: 'Install Dependencies & Build'
+            displayName: 'Install Dependencies, Apply Migrations & Build'
+            env:
+              # Required so `prisma migrate deploy` can reach the database (prisma.config.ts
+              # reads DATABASE_URL via dotenv/the environment, not from schema.prisma).
+              # Set DATABASE_URL as a secret pipeline variable (or in a linked variable
+              # group) — never commit it here.
+              #
+              # This step is the actual fix for the "column does not exist" / P2022 class
+              # of error we hit on /auth/login: previously nothing in this pipeline ever
+              # ran `prisma migrate deploy`, so the database could only be migrated by
+              # someone running it BY HAND against the shared Azure Postgres instance
+              # (see backend/query.md). That decouples "the DB schema changes" from "the
+              # app gets redeployed with a matching Prisma Client" — exactly what happened
+              # with the User.Username -> User.UserName rename: the DB got migrated by
+              # hand, but the already-deployed Web App kept running a Prisma Client built
+              # from the OLD schema (mapping to the old column name) until its next
+              # redeploy. Running migrate deploy in the same step as prisma generate, on
+              # every build, guarantees the DB and the freshly generated client can never
+              # drift apart again.
+              DATABASE_URL: $(DATABASE_URL)
           - task: ArchiveFiles@2
             inputs:
               rootFolderOrFile: '$(System.DefaultWorkingDirectory)/$(backendFolderName)'

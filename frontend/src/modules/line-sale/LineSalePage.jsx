@@ -4,6 +4,7 @@ import {
   Box,
   Typography,
   Button,
+  ButtonGroup,
   Menu,
   MenuItem,
   Grid,
@@ -23,11 +24,11 @@ import CheckIcon from "@mui/icons-material/Check";
 import { Link as RouterLink } from "react-router-dom";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutlined";
 import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
+import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { selectCurrentUser } from "../../features/auth/authSlice";
@@ -44,15 +45,17 @@ import {
   useDiscardHeldBillMutation,
 } from "../../api/heldBillApi";
 
-import ItemsPanel from "./components/ItemsPanel";
-import CartPanel from "./components/CartPanel";
-import BillSummaryRow, { WALK_IN_CUSTOMER } from "./components/BillSummaryRow";
+import LineSaleTopBar from "./components/LineSaleTopBar";
+import CustomerSearchBar from "./components/CustomerSearchBar";
+import CurrentSaleTable from "./components/CurrentSaleTable";
+import BillSummaryPanel from "./components/BillSummaryPanel";
+import BillInfoCard from "./components/BillInfoCard";
 import CustomerDetailsCard from "./components/CustomerDetailsCard";
 import PaymentMethodsCard from "./components/PaymentMethodsCard";
 import PaymentActionsCard from "./components/PaymentActionsCard";
 import AmountPayableCard from "./components/AmountPayableCard";
 import HeldBillsDialog from "./components/HeldBillsDialog";
-import { PAYMENT_METHODS, TAX_RATE } from "./lineSaleMockData";
+import { PAYMENT_METHODS, WALK_IN_CUSTOMER, TAX_RATE } from "./lineSaleMockData";
 
 // Quick-cash chips next to the "Exact" chip (which fills the bill total).
 const QUICK_AMOUNTS = [100, 500, 2000];
@@ -322,6 +325,14 @@ export default function LineSalePage() {
     [],
   );
 
+  // Rounded to paise before being compared anywhere (the "Exact" chip sets
+  // receivedAmount to this same rounded value) — without this, grandTotal's
+  // raw floating-point sum could sit a fraction of a paise off from the
+  // amount the chip actually fills in, leaving changeAmount very slightly
+  // negative and wrongly flashing the "Amount short" red state even when
+  // the cashier paid the exact bill total.
+  const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
   const totals = useMemo(() => {
     const subTotal = cart.reduce((sum, line) => sum + line.qty * line.price, 0);
     const discountAmount =
@@ -334,11 +345,13 @@ export default function LineSalePage() {
         subTotal > 0 ? ((line.qty * line.price) / subTotal) * taxable : 0;
       return sum + lineTaxable * line.taxRate;
     }, 0);
-    const grandTotal = taxable + tax;
-    return { subTotal, discountAmount, tax, grandTotal };
+    const grandTotal = round2(taxable + tax);
+    return { subTotal: round2(subTotal), discountAmount: round2(discountAmount), taxable: round2(taxable), tax: round2(tax), grandTotal };
   }, [cart, discount, discountType]);
 
-  const changeAmount = receivedAmount - totals.grandTotal;
+  const totalQty = useMemo(() => cart.reduce((sum, line) => sum + line.qty, 0), [cart]);
+
+  const changeAmount = round2(receivedAmount - totals.grandTotal);
 
   const handleAddItem = (code) => {
     const item = productByCode[code];
@@ -374,6 +387,35 @@ export default function LineSalePage() {
         },
       ];
     });
+  };
+
+  // Scan Barcode / Search Item bar on the billing step: exact product-code
+  // match first (what a barcode scan or a typed code gives), falling back
+  // to a name search that only acts when it narrows to exactly one product
+  // — several loose matches surface a toast instead of silently guessing.
+  const handleAddItemByQuery = (query) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return;
+    const byCode = products.find((p) => p.code.toLowerCase() === q);
+    if (byCode) {
+      handleAddItem(byCode.code);
+      return;
+    }
+    const nameMatches = products.filter((p) => p.name.toLowerCase().includes(q));
+    if (nameMatches.length === 1) {
+      handleAddItem(nameMatches[0].code);
+      return;
+    }
+    if (nameMatches.length > 1) {
+      dispatch(
+        showToast(
+          `${nameMatches.length} items match "${query}" — type the exact code or a more specific name`,
+          "info",
+        ),
+      );
+      return;
+    }
+    dispatch(showToast(`No item found for "${query}"`, "warning"));
   };
 
   const handleQtyChange = (code, qty) => {
@@ -596,6 +638,11 @@ export default function LineSalePage() {
     setBusyHeldId(summary.id);
     try {
       await discardHeldBill(summary.id).unwrap();
+      // The bill on screen was resumed from this exact held bill — now that
+      // it's deleted, drop the stale link so the header stops showing its
+      // "· HB-000xx" tag and a later Hold Bill creates a fresh held bill
+      // instead of trying to update one that no longer exists.
+      if (summary.id === activeHeldBill?.id) setActiveHeldBill(null);
       dispatch(showToast(`${summary.reference} discarded`, "info"));
     } catch (err) {
       dispatch(
@@ -714,33 +761,64 @@ export default function LineSalePage() {
           : undefined
       }
     >
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={1.5}
-        sx={{
-          alignItems: { xs: "flex-start", sm: "center" },
-          justifyContent: "space-between",
-        }}
-      >
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>
-            {step === "payment" ? "Line Sale — Payment" : "Line Sale"}
-          </Typography>
-          <Breadcrumbs
-            separator={<NavigateNextIcon sx={{ fontSize: 14 }} />}
-            sx={{
-              "& .MuiTypography-root, & .MuiLink-root": { fontSize: 12.5 },
-            }}
-          >
-            <MuiLink
-              component={RouterLink}
-              to="/home"
-              underline="hover"
-              color="text.secondary"
+      {step === "billing" ? (
+        <Stack direction="row" spacing={2} sx={{ alignItems: "stretch" }}>
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexShrink: 0 }}>
+            <ShoppingCartOutlinedIcon sx={{ color: "primary.main" }} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 800 }} noWrap>
+              Line Sales
+            </Typography>
+          </Stack>
+          <LineSaleTopBar
+            billNo={
+              activeHeldBill
+                ? `${billNo} \u00b7 ${activeHeldBill.reference}`
+                : billNo
+            }
+            billStatus="Draft"
+            cashierName={cashierName}
+            dateTime={dateTime}
+            isFullScreen={isFullScreen}
+            onEnterFullScreen={enterFullScreen}
+            onExitFullScreen={exitFullScreen}
+            onHoldBill={handleHoldBill}
+            isHolding={isHolding || isUpdatingHeld || isResuming}
+            heldCount={heldBills.length}
+            onOpenHeld={() => setHeldDialogOpen(true)}
+            onClear={handleClear}
+            moreActionsAnchor={moreActionsAnchor}
+            onOpenMoreActions={(e) => setMoreActionsAnchor(e.currentTarget)}
+            onCloseMoreActions={() => setMoreActionsAnchor(null)}
+            onMoreAction={handleMoreAction}
+          />
+        </Stack>
+      ) : (
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          sx={{
+            alignItems: { xs: "flex-start", sm: "center" },
+            justifyContent: "space-between",
+          }}
+        >
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              Line Sale — Payment
+            </Typography>
+            <Breadcrumbs
+              separator={<NavigateNextIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                "& .MuiTypography-root, & .MuiLink-root": { fontSize: 12.5 },
+              }}
             >
-              Home
-            </MuiLink>
-            {step === "payment" ? (
+              <MuiLink
+                component={RouterLink}
+                to="/home"
+                underline="hover"
+                color="text.secondary"
+              >
+                Home
+              </MuiLink>
               <MuiLink
                 component="button"
                 type="button"
@@ -750,54 +828,45 @@ export default function LineSalePage() {
               >
                 Line Sale
               </MuiLink>
-            ) : (
-              <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                Line Sale
-              </Typography>
-            )}
-            {step === "payment" && (
               <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 Payment
               </Typography>
-            )}
-          </Breadcrumbs>
-        </Box>
-        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-          <Tooltip
-            title={
-              isFullScreen ? "Exit full screen (Esc)" : "Full screen (Space)"
-            }
-          >
-            <IconButton
-              onClick={isFullScreen ? exitFullScreen : enterFullScreen}
-              aria-label={
-                isFullScreen ? "Exit full screen" : "Enter full screen"
+            </Breadcrumbs>
+          </Box>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+            <Tooltip
+              title={
+                isFullScreen ? "Exit full screen (Esc)" : "Full screen (Space)"
               }
             >
-              {isFullScreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
-            </IconButton>
-          </Tooltip>
-          <>
-            <Button
-              variant="outlined"
-              color="warning"
-              startIcon={<PauseCircleOutlineIcon />}
-              onClick={handleHoldBill}
-              disabled={isHolding || isUpdatingHeld || isResuming}
-              sx={{ minHeight: 44 }}
-            >
-              {isHolding || isUpdatingHeld ? "Holding\u2026" : "Hold Bill"}
-            </Button>
-            <Badge badgeContent={heldBills.length} color="warning" max={99}>
-              <Button
-                variant="outlined"
-                color="inherit"
-                startIcon={<FolderOpenOutlinedIcon />}
-                onClick={() => setHeldDialogOpen(true)}
-                sx={{ minHeight: 44 }}
+              <IconButton
+                onClick={isFullScreen ? exitFullScreen : enterFullScreen}
+                aria-label={
+                  isFullScreen ? "Exit full screen" : "Enter full screen"
+                }
               >
-                Held Bills
-              </Button>
+                {isFullScreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+              </IconButton>
+            </Tooltip>
+            <Badge badgeContent={heldBills.length} color="warning" max={99}>
+              <ButtonGroup
+                variant="outlined"
+                color="warning"
+                sx={{ "& .MuiButtonGroup-grouped": { minHeight: 44 } }}
+              >
+                <Button
+                  startIcon={<PauseCircleOutlineIcon />}
+                  onClick={handleHoldBill}
+                  disabled={isHolding || isUpdatingHeld || isResuming}
+                >
+                  {isHolding || isUpdatingHeld ? "Holding\u2026" : "Hold Bill"}
+                </Button>
+                <Tooltip title="View held bills">
+                  <Button onClick={() => setHeldDialogOpen(true)} sx={{ px: 1.25 }}>
+                    <FolderOpenOutlinedIcon fontSize="small" />
+                  </Button>
+                </Tooltip>
+              </ButtonGroup>
             </Badge>
             <Button variant="outlined" color="error" onClick={handleClear}>
               Clear
@@ -825,14 +894,51 @@ export default function LineSalePage() {
                 Void Sale
               </MenuItem>
             </Menu>
-          </>
+          </Stack>
         </Stack>
-      </Stack>
+      )}
 
       {step === "billing" ? (
         <>
-          <BillSummaryRow
+          <CustomerSearchBar
             customer={customer}
+            onSelectCustomer={handleSelectCustomer}
+            onAddCustomer={handleAddCustomer}
+            products={products}
+            onAddItemByQuery={handleAddItemByQuery}
+          />
+
+          <Grid container spacing={2} sx={{ alignItems: "stretch" }}>
+            <Grid size={{ xs: 12, lg: 8 }}>
+              <Box sx={{ height: { lg: 560 } }}>
+                <CurrentSaleTable
+                  lines={cart}
+                  onQtyChange={handleQtyChange}
+                  onRemove={handleRemove}
+                />
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12, lg: 4 }}>
+              <BillSummaryPanel
+                billStatus="Draft"
+                itemCount={cart.length}
+                qtyCount={totalQty}
+                discount={discount}
+                discountType={discountType}
+                onDiscountChange={setDiscount}
+                onDiscountTypeChange={setDiscountType}
+                totals={totals}
+                onProceed={handleProceed}
+                disabled={cart.length === 0}
+              />
+            </Grid>
+          </Grid>
+        </>
+      ) : (
+        <>
+          <StepProgress current={1} />
+
+          <BillInfoCard
             billNo={
               activeHeldBill
                 ? `${billNo} \u00b7 ${activeHeldBill.reference}`
@@ -840,48 +946,7 @@ export default function LineSalePage() {
             }
             cashierName={cashierName}
             dateTime={dateTime}
-            onAddCustomer={handleAddCustomer}
-            onSelectCustomer={handleSelectCustomer}
           />
-
-          <Grid container spacing={2} sx={{ alignItems: "stretch" }}>
-            <Grid size={{ xs: 12, lg: 6 }}>
-              <Box sx={{ height: { lg: 560 } }}>
-                <ItemsPanel onAddItem={handleAddItem} />
-              </Box>
-            </Grid>
-            <Grid size={{ xs: 12, lg: 6 }}>
-              <Box sx={{ height: { lg: 560 } }}>
-                <CartPanel
-                  lines={cart}
-                  onQtyChange={handleQtyChange}
-                  onRemove={handleRemove}
-                  discount={discount}
-                  discountType={discountType}
-                  onDiscountChange={setDiscount}
-                  onDiscountTypeChange={setDiscountType}
-                  totals={totals}
-                />
-              </Box>
-            </Grid>
-          </Grid>
-
-          <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-            <Button
-              variant="contained"
-              size="large"
-              endIcon={<ArrowForwardIcon />}
-              onClick={handleProceed}
-              disabled={cart.length === 0}
-              sx={{ px: 4 }}
-            >
-              Proceed to Payment
-            </Button>
-          </Box>
-        </>
-      ) : (
-        <>
-          <StepProgress current={1} />
 
           <Grid container spacing={2} sx={{ alignItems: "flex-start" }}>
             <Grid size={{ xs: 12, lg: 8 }}>

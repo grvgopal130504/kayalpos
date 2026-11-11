@@ -193,7 +193,7 @@ const initialState = {
   toast: null, // { id, message, severity }
   sidebarOpen: true, // desktop: expanded vs icon rail. mobile: drawer open/closed.
   themeMode: readStoredThemeMode(), // 'light' | 'dark'
-  accentThemeKey: readStoredAccentThemeKey(), // key into ACCENT_THEMES (solid color or gradient combo)
+  accentThemeKey: readStoredAccentThemeKey(), // key into ACCENT_THEMES (solid color or gradient combo; also carries its own dark-panel/secondary color)
   sidebarFont: readStoredValue(SIDEBAR_FONT_STORAGE_KEY, DEFAULT_FONT),
   bodyFont: readStoredValue(BODY_FONT_STORAGE_KEY, DEFAULT_FONT),
   sidebarFontStyle: readStoredJson(SIDEBAR_FONT_STYLE_STORAGE_KEY, DEFAULT_FONT_STYLE),

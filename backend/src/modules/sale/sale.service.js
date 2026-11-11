@@ -4,6 +4,7 @@ import { ApiError } from '../../middleware/errorHandler.js';
 import { TAX_RATE } from './saleConstants.js';
 import { completeHeldBill } from '../held-bill/heldBill.service.js';
 import { writeTczBill, toSaleDto } from './tczBilling.service.js';
+import { getOrCreateWalkInCustomer } from '../customer/customer.service.js';
 
 /**
  * Preview of the bill number the NEXT sale will get (e.g. "LS-00001"),
@@ -59,10 +60,20 @@ export async function createSale({
       if (prior) return toSaleDto(prior, prior.lines);
     }
 
-    let customer = null;
+    // A customerId means a real registered customer was picked on the
+    // Line Sale screen; no customerId means Walk-in Customer (the
+    // frontend's WALK_IN_CUSTOMER sentinel never sends an id — see
+    // LineSalePage's handlePayAndPrint/holdCurrentBill). Either way the
+    // sale is saved against a real Customer row: a registered one, or the
+    // tenant's single reused Walk-in Customer row (see customer.service.js)
+    // — never a bare null id. This keeps every sale attributable without
+    // ever creating a new customer record per walk-in transaction.
+    let customer;
     if (customerId) {
       customer = await tx.customer.findFirst({ where: { id: customerId, tenantId } });
       if (!customer) throw new ApiError(400, 'Selected customer was not found');
+    } else {
+      customer = await getOrCreateWalkInCustomer(tx, tenantId);
     }
 
     const productIds = [...new Set(lines.map((line) => line.productId))];
@@ -116,8 +127,8 @@ export async function createSale({
     const stockBefore = new Map(products.map((p) => [p.id, p.availableQty]));
 
     const sale = await writeTczBill(tx, {
-      tenantId, outletId, billNo, cashierName, customer, customerId: customerId || null,
-      customerName: customerName || 'Walk-in Customer',
+      tenantId, outletId, billNo, cashierName, customer, customerId: customer.id,
+      customerName: customerId ? (customerName || customer.name) : customer.name,
       productById, lineData, subTotal, discountAmount, taxable, taxAmount, grandTotal,
       discountType, discountValue, paymentMethod, receivedAmount, changeAmount,
       cardType, cardLast4, cardBank, upiApp, upiTxnId, paymentReference,
