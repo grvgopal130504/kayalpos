@@ -122,6 +122,9 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
+                <FormTextField name="shortId" label="Short ID" placeholder="Enter short ID (unique)" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <FormTextField name="name" label="Product Name *" placeholder="Enter product name" />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>

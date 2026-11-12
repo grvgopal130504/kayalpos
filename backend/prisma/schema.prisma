@@ -436,6 +436,10 @@ model Product {
   tenantId     String       @map("TenantId")
   tenant       Tenant       @relation(fields: [tenantId], references: [id])
   code         String       @map("Code")
+  // Short, human-typable alias for the product (quick entry at the till /
+  // on forms). Optional, but unique per tenant when present — Postgres
+  // treats NULLs as distinct, so any number of products may leave it blank.
+  shortId      String?      @map("ShortId")
   name         String       @map("Name")
   group        String       @map("Group")
   // Free-text, not a hard enum — same "kept loose, list lives in the
@@ -471,6 +475,7 @@ model Product {
   batchSerials  BatchSerial[]
 
   @@unique([tenantId, code])
+  @@unique([tenantId, shortId])
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
   // Search-by-name is the single most common query on this table (the
@@ -1808,6 +1813,7 @@ model StockReceiptItem {
   itemCode    String       @map("ItemCode")
   itemName    String       @map("ItemName")
   hsnCode     String?      @map("HsnCode")
+  barcode     String?      @map("Barcode")
   uom         String?      @map("Uom")
   orderedQty  Decimal      @default(0) @map("OrderedQty") @db.Decimal(12, 2)
   receivedQty Decimal      @map("ReceivedQty") @db.Decimal(12, 2)

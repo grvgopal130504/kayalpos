@@ -20,6 +20,8 @@ const CHUNK_SIZE = 200;
 const HEADER_MAP = {
   code: 'code',
   'product code': 'code',
+  shortid: 'shortId',
+  'short id': 'shortId',
   name: 'name',
   'product name': 'name',
   group: 'group',
@@ -191,7 +193,7 @@ export default function ProductBulkImportDialog({ open, onClose }) {
       <DialogContent dividers>
         <Stack spacing={2}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Upload an .xlsx, .xls or .csv file with columns such as Name, Group, Product Type, Brand, UOM, HSN/SAC,
+            Upload an .xlsx, .xls or .csv file with columns such as Name, Short ID, Group, Product Type, Brand, UOM, HSN/SAC,
             Tax Code, Sale Price, MRP, Available Qty and Status. Rows with an existing Product Code
             update that product; rows without one are created as new products.
           </Typography>

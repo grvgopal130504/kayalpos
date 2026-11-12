@@ -37,6 +37,7 @@ function toViewRow(row) {
   return {
     id: row.id,
     code: row.code,
+    shortId: row.shortId || '',
     name: row.name,
     group: row.group,
     productType: row.productType || '',
@@ -223,7 +224,7 @@ export default function ProductPage() {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <TextField
               label="Search Product"
-              placeholder="Search by product code, name or barcode..."
+              placeholder="Search by product code, short ID, name or barcode..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}

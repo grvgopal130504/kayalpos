@@ -5,6 +5,10 @@ import { z } from 'zod';
 // convention (4-digit sequence).
 export const createProductSchema = z.object({
   code: z.string().trim().min(1).optional(),
+  // Optional short alias; unique per tenant (DB constraint). A blank value is
+  // stored as NULL — never '' — so blanks never collide with each other.
+  shortId: z.string().trim().max(20, 'Short ID can be at most 20 characters').optional().nullable()
+    .transform((v) => (v ? v : null)),
   name: z.string().trim().min(1, 'Product name is required'),
   group: z.string().trim().min(1, 'Product group is required'),
   // Kept loose (non-empty-when-present, not a hard enum) same reasoning as

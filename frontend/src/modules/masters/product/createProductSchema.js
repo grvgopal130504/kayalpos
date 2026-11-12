@@ -23,6 +23,7 @@ export const STATUS_OPTIONS = [
 // are kept as form strings (same convention as Warehouse's capacity fields)
 // and converted with Number() in productFormValuesToPayload below.
 export const createProductSchema = z.object({
+  shortId: z.string().trim().max(20, 'Short ID can be at most 20 characters').optional(),
   name: z.string().trim().min(1, 'Product name is required'),
   group: z.string().trim().min(1, 'Select a product group'),
   productType: z.string().trim().optional(),
@@ -40,6 +41,7 @@ export const createProductSchema = z.object({
 });
 
 export const createProductDefaultValues = {
+  shortId: '',
   name: '',
   group: '',
   productType: '',
@@ -63,6 +65,7 @@ export const createProductDefaultValues = {
 export function productToFormValues(product) {
   if (!product) return createProductDefaultValues;
   return {
+    shortId: product.shortId || '',
     name: product.name || '',
     group: product.group || '',
     productType: product.productType || '',
@@ -80,6 +83,9 @@ export function productToFormValues(product) {
 // Converts the form's values into the real POST/PUT /masters/product body.
 export function productFormValuesToPayload(values) {
   return {
+    // '' (not undefined) on purpose: clearing the field on Edit must reach
+    // the API so the stored Short ID is removed (the API stores blank as NULL).
+    shortId: values.shortId?.trim() || '',
     name: values.name.trim(),
     group: values.group,
     productType: values.productType || undefined,
