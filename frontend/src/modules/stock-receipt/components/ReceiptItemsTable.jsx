@@ -30,6 +30,7 @@ const COLUMNS = [
   { key: 'uom', label: 'UoM', minWidth: 100 },
   { key: 'orderedQty', label: 'Ordered Qty', minWidth: 100 },
   { key: 'receivedQty', label: 'Received Qty *', minWidth: 110 },
+  { key: 'mrp', label: 'MRP (₹)', minWidth: 100 },
   { key: 'unitCost', label: 'Unit Cost (₹)', minWidth: 110 },
   { key: 'discount', label: 'Discount (%)', minWidth: 100 },
   { key: 'tax', label: 'Tax (%)', minWidth: 90 },
@@ -167,6 +168,9 @@ function ItemRow({
     setValue(`items.${index}.hsnCode`, product.hsnSac || '', { shouldDirty: true });
     setValue(`items.${index}.barcode`, barcode ?? (barcodeByCode[product.code] || ''), { shouldDirty: true });
     setValue(`items.${index}.uom`, matchUom(product.uom), { shouldDirty: true });
+    // Pre-fill the MRP from the product (still editable per receipt line).
+    const productMrp = Number(product.mrp);
+    setValue(`items.${index}.mrp`, productMrp > 0 ? productMrp.toFixed(2) : '', { shouldDirty: true });
   };
 
   const lookupBarcode = (value) => {
@@ -260,6 +264,13 @@ function ItemRow({
       <TableCell>
         <Controller
           name={`items.${index}.receivedQty`}
+          control={control}
+          render={({ field }) => <TextField {...field} size="small" fullWidth placeholder="0.00" inputMode="decimal" />}
+        />
+      </TableCell>
+      <TableCell>
+        <Controller
+          name={`items.${index}.mrp`}
           control={control}
           render={({ field }) => <TextField {...field} size="small" fullWidth placeholder="0.00" inputMode="decimal" />}
         />

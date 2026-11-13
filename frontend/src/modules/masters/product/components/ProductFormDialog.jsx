@@ -19,6 +19,7 @@ import { useGetTaxCodesQuery } from '../../../../api/taxCodeApi';
 import { useGetUomsQuery } from '../../../../api/uomApi';
 import { useGetHsnSacCodesQuery } from '../../../../api/hsnSacApi';
 import { useGetSuppliersQuery } from '../../../../api/supplierApi';
+import { useGetSellingPricesQuery } from '../../../../api/sellingPriceApi';
 import { useCreateProductMutation, useUpdateProductMutation, useNextProductCode } from '../../../../api/productApi';
 import {
   createProductSchema, createProductDefaultValues, productToFormValues, productFormValuesToPayload,
@@ -39,6 +40,7 @@ import {
  * no field on this screen per the latest mockup.
  */
 const TABS = ['General', 'Purchase', 'Sales', 'Inventory'];
+const formatAmount = (v) => (v == null || v === '' ? '' : Number(v).toFixed(2));
 
 export default function ProductFormDialog({ open, mode = 'add', initialValues, onClose }) {
   const dispatch = useAppDispatch();
@@ -117,6 +119,29 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
     if (existing && !options.some((o) => o.value === existing)) options.push({ value: existing, label: existing });
     return options;
   }, [suppliers, isEdit, initialValues]);
+
+  // Sale Price / MRP are read-only here: they come from this product's Price
+  // List (Masters > Selling Price). Prefers the row of the product's own Price
+  // List, otherwise the most recently updated active one. Not available until
+  // the product exists (nothing to look up while creating).
+  const productId = isEdit ? initialValues?.id : undefined;
+  const { data: priceData } = useGetSellingPricesQuery(
+    productId ? { productId, status: 'ACTIVE', pageSize: 100 } : undefined,
+    { skip: !open || !productId },
+  );
+  const priceListRow = useMemo(() => {
+    const rows = Array.isArray(priceData) ? priceData : (priceData?.rows || []);
+    if (rows.length === 0) return null;
+    const own = initialValues?.priceList;
+    const pool = own ? rows.filter((r) => r.priceList === own) : [];
+    const candidates = pool.length ? pool : rows;
+    return candidates.slice().sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))[0];
+  }, [priceData, initialValues]);
+  const priceHelper = (() => {
+    if (!isEdit) return 'Comes from the Price List once the product is created';
+    if (!priceListRow) return 'No price list price set for this product yet';
+    return `From price list: ${priceListRow.priceList} (excl. tax)`;
+  })();
 
   const methods = useForm({
     resolver: zodResolver(createProductSchema),
@@ -265,10 +290,26 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
             {activeTab === 'Sales' && (
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <FormTextField name="salePrice" label="Sale Price (₹) *" placeholder="0.00" />
+                  <TextField
+                    label="Sale Price (₹)"
+                    value={priceListRow ? formatAmount(priceListRow.sellingPriceExclTax) : ''}
+                    placeholder="—"
+                    helperText={priceHelper}
+                    fullWidth
+                    disabled
+                    slotProps={{ input: { readOnly: true } }}
+                  />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <FormTextField name="mrp" label="MRP (₹) *" placeholder="0.00" />
+                  <TextField
+                    label="MRP (₹)"
+                    value={priceListRow ? formatAmount(priceListRow.mrp) : ''}
+                    placeholder="—"
+                    helperText={priceListRow ? 'From the price list' : ' '}
+                    fullWidth
+                    disabled
+                    slotProps={{ input: { readOnly: true } }}
+                  />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <FormSelect name="salesUom" label="Sales UoM Name" options={salesUomOptions} />
