@@ -211,8 +211,7 @@ export default function CreateStockReceiptPage({ id: propId, onBack }) {
           </Button>
           <Menu anchorEl={moreActionsAnchor} open={Boolean(moreActionsAnchor)} onClose={() => setMoreActionsAnchor(null)}>
             <MenuItem onClick={() => handleMoreAction('Save as Template')}>Save as Template</MenuItem>
-            <MenuItem onClick={() => handleMoreAction('Import Items')}>Import Items</MenuItem>
-            <MenuItem onClick={() => reset(createStockReceiptDefaultValues)}>Reset Form</MenuItem>
+                        <MenuItem onClick={() => reset(createStockReceiptDefaultValues)}>Reset Form</MenuItem>
           </Menu>
           {isEditMode ? (
             <Button variant="contained" color="warning" startIcon={<SaveOutlinedIcon fontSize="small" />} onClick={onSaveAsDraft} disabled={isSaving}>
@@ -336,7 +335,6 @@ export default function CreateStockReceiptPage({ id: propId, onBack }) {
           </Paper>
 
           <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Items</Typography>
             <ReceiptItemsTable onAddItem={handleAddItemRow} products={products} />
           </Paper>
 

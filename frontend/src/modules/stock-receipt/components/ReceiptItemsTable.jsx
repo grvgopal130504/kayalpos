@@ -1,20 +1,24 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, Table, TableHead, TableBody, TableRow, TableCell, TextField, MenuItem,
-  IconButton, Stack, Button,
+  IconButton, Stack, Button, Typography, Alert,
 } from '@mui/material';
-import { Controller, useFormContext, useFieldArray, useWatch } from 'react-hook-form';
+import { Controller, useFormContext, useFieldArray, useWatch, useFormState } from 'react-hook-form';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import AddIcon from '@mui/icons-material/Add';
+import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 
 import { useAppDispatch } from '../../../app/hooks';
 import { showToast } from '../../../features/ui/uiSlice';
 import ItemSearchCell, { useItemSearchIndex } from '../../line-sale/components/ItemSearchCell';
 
-import FormDatePicker from '../../../components/form/FormDatePicker';
+import FormDatePicker, { formatPickerDate } from '../../../components/form/FormDatePicker';
+import { readFirstSheet } from '../../../utils/excel';
+import { downloadReceiptItemsTemplate, parseReceiptItemRows } from '../receiptItemsExcel';
 import ItemCodeAutocomplete from '../../../components/form/ItemCodeAutocomplete';
 import { useGetBarcodeLabelBatchesQuery } from '../../../api/barcodeLabelApi';
-import { UOM_OPTIONS, WAREHOUSE_OPTIONS, emptyItemRow } from '../createStockReceiptSchema';
+import { UOM_OPTIONS, WAREHOUSE_OPTIONS, emptyItemRow, isBlankItemRow } from '../createStockReceiptSchema';
 
 // Only autofill the UoM select when the picked product's own uom matches one
 // of this grid's fixed dropdown values — see IndentItemsTable's own comment.
@@ -69,7 +73,11 @@ export function computeLineTotal(row) {
  */
 export default function ReceiptItemsTable({ onAddItem, products = [] }) {
   const { control } = useFormContext();
-  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' });
+  const dispatch = useAppDispatch();
+  const fileInputRef = useRef(null);
+  const [importIssues, setImportIssues] = useState([]);
+  const { isDirty } = useFormState({ control });
   // Same Product master + Barcode & Label + Receipt search index the Line Sale
   // Item Name field uses, built once for the whole grid.
   const searchIndex = useItemSearchIndex(products);
@@ -108,8 +116,70 @@ export default function ReceiptItemsTable({ onAddItem, products = [] }) {
     return widths;
   }, [items]);
 
+  // The grid starts with one row; as soon as the user puts an item on the last
+  // row a fresh blank row is added below it. `isDirty` keeps this from firing
+  // while an existing receipt is merely being loaded into the form (Edit).
+  const lastFilled = Boolean(items?.length) && !isBlankItemRow(items[items.length - 1]);
+  useEffect(() => {
+    if (isDirty && lastFilled) append(emptyItemRow(), { shouldFocus: false });
+  }, [isDirty, lastFilled, append]);
+
+  // Finds a catalogue product by code, Short ID or (when no code is given) a
+  // barcode saved on a Barcode & Label / Receipt row.
+  const findProduct = (code, barcode) => {
+    const c = String(code || '').trim().toLowerCase();
+    if (c) {
+      return products.find((p) => String(p.code || '').toLowerCase() === c)
+        || products.find((p) => p.shortId && String(p.shortId).toLowerCase() === c) || null;
+    }
+    const b = String(barcode || '').trim().toLowerCase();
+    if (!b) return null;
+    const hit = searchIndex.labelEntries.find((e) => String(e.barcode).trim().toLowerCase() === b);
+    return hit ? hit.product : null;
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!file) return;
+    try {
+      const raw = await readFirstSheet(file);
+      const { rows, errors } = parseReceiptItemRows(raw, { findProduct, formatDate: formatPickerDate, emptyItemRow });
+      setImportIssues(errors);
+      if (!rows.length) {
+        dispatch(showToast(errors.length ? 'No items were imported — see the issues below the grid' : 'The file has no item rows', 'error'));
+        return;
+      }
+      // Keep the rows already filled in, add the imported ones, end on a blank row.
+      const kept = (items || []).filter((r) => !isBlankItemRow(r));
+      replace([...kept, ...rows, emptyItemRow()]);
+      dispatch(showToast(`${rows.length} item${rows.length === 1 ? '' : 's'} imported${errors.length ? `, ${errors.length} skipped` : ''}`, errors.length ? 'warning' : 'success'));
+    } catch (err) {
+      dispatch(showToast(err?.userMessage || 'Could not read the file. Use the downloaded template (.xlsx or .csv).', 'error'));
+    }
+  };
+
   return (
     <Stack spacing={1.5}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Items</Typography>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button variant="outlined" color="inherit" size="small" startIcon={<FileDownloadOutlinedIcon fontSize="small" />} onClick={downloadReceiptItemsTemplate}>
+            Download Template
+          </Button>
+          <Button variant="outlined" color="warning" size="small" startIcon={<UploadFileOutlinedIcon fontSize="small" />} onClick={() => fileInputRef.current?.click()}>
+            Import Excel
+          </Button>
+          <input ref={fileInputRef} type="file" hidden accept=".xlsx,.xls,.csv" onChange={handleImportFile} />
+        </Stack>
+      </Stack>
+      {importIssues.length > 0 && (
+        <Alert severity="warning" onClose={() => setImportIssues([])}>
+          {importIssues.length} row{importIssues.length === 1 ? '' : 's'} skipped:
+          {importIssues.slice(0, 8).map((i) => <div key={`${i.row}-${i.message}`}>Row {i.row}: {i.message}</div>)}
+          {importIssues.length > 8 && <div>…and {importIssues.length - 8} more</div>}
+        </Alert>
+      )}
       <Box sx={{ overflowX: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
         <Table size="small" sx={{ width: 'max-content', minWidth: '100%' }}>
           <TableHead>
