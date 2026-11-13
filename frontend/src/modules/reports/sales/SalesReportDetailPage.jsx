@@ -1,351 +1,287 @@
 import { useMemo, useState } from 'react';
-import { Link as RouterLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, Link as RouterLink, Navigate } from 'react-router-dom';
 import {
-  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, TextField, MenuItem, Chip,
-  Table, TableHead, TableBody, TableRow, TableCell, TableFooter, TablePagination, Alert, Skeleton, InputAdornment,
+  Stack, Box, Typography, Breadcrumbs, Link as MuiLink, Grid, Paper, Button, TextField, MenuItem, Alert, Skeleton,
+  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination,
+  Dialog, DialogTitle, DialogContent, IconButton,
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
-import { BarChart } from '@mui/x-charts/BarChart';
-import { LineChart } from '@mui/x-charts/LineChart';
 
 import { useAppDispatch } from '../../../app/hooks';
 import { showToast } from '../../../features/ui/uiSlice';
-import { formatCurrency } from '../../../utils/format';
-import { downloadWorkbook, datedFileName } from '../../../utils/excel';
-import { useSalesReportQuery, useSalesReportFiltersQuery } from '../../../api/salesReportsApi';
-import {
-  SALES_REPORTS, todayIso, formatDisplayDate, datePresets, rowLabel,
-} from './salesReportConfig';
+import StatCard from '../../../components/common/StatCard';
+import { DatePickerField, formatPickerDate, parsePickerDate } from '../../../components/form/FormDatePicker';
+import { downloadCsv } from '../../../utils/exportCsv';
+import { useSalesReportFiltersQuery } from '../../../api/salesReportsApi';
+import { SALES_REPORT_DEFINITIONS } from './salesReportDefinitions';
 
-const money = (v) => formatCurrency(Number(v) || 0, { decimals: true });
-const PLURAL = {
-  'Item Name': 'Items', Category: 'Categories', Brand: 'Brands', Outlet: 'Outlets', Cashier: 'Cashiers', Customer: 'Customers',
-};
-const qtyFmt = (v) => (Number(v) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+const PAGE_SIZE = 20;
 
-function StatTile({ label, value, color }) {
-  return (
-    <Paper variant="outlined" sx={{ borderRadius: 3, p: 2, minHeight: 74 }}>
-      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>{label}</Typography>
-      <Typography variant="h6" sx={{ fontWeight: 800, color: color || 'text.primary', mt: 0.25 }}>{value}</Typography>
-    </Paper>
-  );
+function toKey(pickerValue) {
+  const date = parsePickerDate(pickerValue);
+  if (!date) return undefined;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-/** Table columns for a report: { id, label, align, value(row) -> text, total(summary) -> text, num? } */
-function buildColumns(config) {
-  const cols = [];
-  if (config.api === 'item') {
-    cols.push(
-      { id: 'code', label: 'Item Code', value: (r) => r.code },
-      { id: 'name', label: 'Item Name', value: (r) => r.label },
-      { id: 'category', label: 'Category', value: (r) => r.category || '—' },
-      { id: 'brand', label: 'Brand', value: (r) => r.brand || '—' },
-    );
-  } else {
-    cols.push({ id: 'label', label: config.rowLabel, value: (r) => rowLabel(config, r) });
-    if (config.extra) cols.push({ id: 'extra', label: config.extraLabel, value: (r) => r[config.extra] || '—' });
-  }
-  cols.push(
-    { id: 'bills', label: 'Bills', align: 'right', value: (r) => r.bills, total: (s) => s.bills, raw: (r) => r.bills, rawTotal: (s) => s.bills },
-    { id: 'qty', label: 'Qty Sold', align: 'right', value: (r) => qtyFmt(r.qty), total: (s) => qtyFmt(s.qty), raw: (r) => r.qty, rawTotal: (s) => s.qty },
-    { id: 'gross', label: 'Gross', align: 'right', value: (r) => money(r.gross), total: (s) => money(s.gross), raw: (r) => r.gross, rawTotal: (s) => s.gross },
-    { id: 'discount', label: 'Discount', align: 'right', value: (r) => money(r.discount), total: (s) => money(s.discount), raw: (r) => r.discount, rawTotal: (s) => s.discount },
-    { id: 'tax', label: 'Tax', align: 'right', value: (r) => money(r.tax), total: (s) => money(s.tax), raw: (r) => r.tax, rawTotal: (s) => s.tax },
-    { id: 'sales', label: 'Sales', align: 'right', value: (r) => money(r.sales), total: (s) => money(s.sales), bold: true, raw: (r) => r.sales, rawTotal: (s) => s.sales },
-    { id: 'returns', label: 'Returns', align: 'right', value: (r) => money(r.returns), total: (s) => money(s.returns), raw: (r) => r.returns, rawTotal: (s) => s.returns },
-    { id: 'net', label: 'Net Sales', align: 'right', value: (r) => money(r.net), total: (s) => money(s.net), bold: true, raw: (r) => r.net, rawTotal: (s) => s.net },
-  );
-  if (config.kind === 'bill') {
-    cols.push({ id: 'avgBill', label: 'Avg Bill', align: 'right', value: (r) => money(r.avgBill), total: (s) => money(s.avgBill), raw: (r) => r.avgBill, rawTotal: (s) => s.avgBill });
-  }
-  cols.push({ id: 'share', label: 'Share %', align: 'right', value: (r) => `${(r.share || 0).toFixed(1)}%`, total: (s) => (s.sales > 0 ? '100.0%' : '0.0%'), raw: (r) => r.share || 0, rawTotal: (s) => (s.sales > 0 ? 100 : 0) });
-  return cols;
+function defaultFilters(rangeDays = 30) {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(from.getDate() - (rangeDays - 1));
+  return {
+    from: formatPickerDate(from), to: formatPickerDate(to), outletId: '', search: '',
+  };
 }
 
 /**
- * One real Sales Report (Daily / Monthly / Outlet-wise / Cashier-wise /
- * Item-wise / Category-wise / Brand-wise / Customer-wise), reached from the
- * Sales Reports landing tiles at /reports/sales/:report. Filters live in the
- * URL (?from&to&outletId&cashier&search) so a report can be refreshed,
- * bookmarked and opened from the landing screen with its filters carried over.
+ * Drill-down dialog for any report whose definition carries a `drillDown`
+ * config (currently just Hourly Sales → items sold that hour). Generic over
+ * `drillDown.useQuery`/`buildParams`/`columns`, same shape as the report's
+ * own table, so adding a drill-down to another report needs no changes
+ * here — just a `drillDown` block in that report's definition.
+ */
+function DrillDownDialog({ drillDown, row, baseParams, onClose }) {
+  const params = row ? drillDown.buildParams(row, baseParams) : undefined;
+  const { data, isLoading, isError } = drillDown.useQuery(params, { skip: !row });
+
+  return (
+    <Dialog open={Boolean(row)} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{row ? drillDown.title(row) : ''}</Typography>
+        <IconButton onClick={onClose} aria-label="Close" sx={{ width: 44, height: 44 }}><CloseIcon /></IconButton>
+      </DialogTitle>
+      <DialogContent dividers>
+        {isLoading && <Skeleton variant="rounded" height={200} />}
+        {isError && <Alert severity="error">Could not load this drill-down.</Alert>}
+        {data && (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  {drillDown.columns.map((col) => (
+                    <TableCell key={col.key} align={col.align || 'left'}>{col.label}</TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data.rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={drillDown.columns.length} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                      {drillDown.emptyMessage || 'No records found.'}
+                    </TableCell>
+                  </TableRow>
+                )}
+                {data.rows.map((r) => (
+                  <TableRow key={r.id} hover>
+                    {drillDown.columns.map((col) => (
+                      <TableCell key={col.key} align={col.align || 'left'} sx={{ whiteSpace: 'nowrap' }}>
+                        {col.render ? col.render(r) : r[col.key]}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Generic Sales Report detail page — one shell (filters + summary tiles +
+ * table + CSV export) reused for Hourly Sales, Payment-wise Sales, Discount
+ * Report, Tax Report and Return Report (salesReportDefinitions.js), driven
+ * by `reportKey` from the route (/reports/sales/:reportKey). Same shape as
+ * InventoryReportDetailPage.jsx / CashierReportDetailPage.jsx, just with
+ * outlet (no cashier) as the only non-date filter — none of these 5 reports
+ * group by cashier.
  */
 export default function SalesReportDetailPage() {
-  const { report: slug } = useParams();
-  const config = SALES_REPORTS[slug];
+  const { reportKey } = useParams();
+  const definition = SALES_REPORT_DEFINITIONS[reportKey];
+  if (!definition) return <Navigate to="/reports/sales" replace />;
+  // Remounts whenever reportKey changes, so each mount only ever calls one
+  // fixed report's RTK Query hook — see InventoryReportDetailPage.jsx's
+  // identical reasoning.
+  return <SalesReportBody key={reportKey} definition={definition} />;
+}
+
+function SalesReportBody({ definition }) {
   const dispatch = useAppDispatch();
-  const [params, setParams] = useSearchParams();
 
-  const today = todayIso();
-  const applied = {
-    from: params.get('from') || today,
-    to: params.get('to') || params.get('from') || today,
-    outletId: params.get('outletId') || '',
-    cashier: params.get('cashier') || '',
-    search: params.get('search') || '',
-  };
+  const [draft, setDraft] = useState(() => defaultFilters(definition.defaultRangeDays));
+  const [applied, setApplied] = useState(() => defaultFilters(definition.defaultRangeDays));
+  const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
+  const [drillRow, setDrillRow] = useState(null);
 
-  // Draft = what's typed in the filter bar; only "Search" applies it.
-  const [draft, setDraft] = useState(applied);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const { data: options } = useSalesReportFiltersQuery();
 
-  const { data: filterData } = useSalesReportFiltersQuery();
-  const outlets = filterData?.outlets || [];
-  const cashiers = filterData?.cashiers || [];
+  const params = useMemo(() => ({
+    from: toKey(applied.from),
+    to: toKey(applied.to),
+    outletId: applied.outletId || undefined,
+    search: applied.search || undefined,
+    page,
+    pageSize: PAGE_SIZE,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [applied, page]);
 
-  const queryArgs = {
-    report: config?.api,
-    from: applied.from,
-    to: applied.to,
-    ...(applied.outletId ? { outletId: applied.outletId } : {}),
-    ...(applied.cashier ? { cashier: applied.cashier } : {}),
-    ...(applied.search ? { search: applied.search } : {}),
-  };
   const {
     data, isLoading, isFetching, isError, error, refetch,
-  } = useSalesReportQuery(queryArgs, { skip: !config });
+  } = definition.useQuery(params);
 
-  const columns = useMemo(() => (config ? buildColumns(config) : []), [config]);
-
-  if (!config) return <Navigate to="/reports/sales" replace />;
-
-  const dateError = draft.from && draft.to && draft.from > draft.to ? '"To" date cannot be before "From" date' : '';
-  const setField = (field) => (e) => setDraft((d) => ({ ...d, [field]: e.target.value }));
-
-  const handleSearch = () => {
-    if (dateError || !draft.from || !draft.to) return;
-    const next = {};
-    Object.entries(draft).forEach(([k, v]) => { if (v) next[k] = v; });
-    setParams(next, { replace: true });
-    setPage(0);
-  };
+  const handleSearch = () => { setPage(1); setApplied(draft); };
   const handleReset = () => {
-    const fresh = {
-      from: today, to: today, outletId: '', cashier: '', search: '',
-    };
-    setDraft(fresh);
-    setParams({}, { replace: true });
-    setPage(0);
-  };
-  const applyPreset = (preset) => {
-    const next = { ...draft, from: preset.from, to: preset.to };
-    setDraft(next);
-    const q = {};
-    Object.entries(next).forEach(([k, v]) => { if (v) q[k] = v; });
-    setParams(q, { replace: true });
-    setPage(0);
+    const d = defaultFilters(definition.defaultRangeDays);
+    setDraft(d);
+    setApplied(d);
+    setPage(1);
   };
 
-  const rows = data?.rows || [];
-  const summary = data?.summary;
-  const outletName = outlets.find((o) => o.id === applied.outletId)?.name;
-
-  const handleExport = () => {
-    if (!rows.length) {
-      dispatch(showToast('Nothing to export for the selected filters', 'info'));
-      return;
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const rows = [];
+      for (let p = 1; ; p += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await dispatch(definition.endpoint.initiate({ ...params, page: p, pageSize: 200 }, { forceRefetch: true })).unwrap();
+        rows.push(...res.rows);
+        if (p >= res.totalPages) break;
+      }
+      downloadCsv(`${definition.exportName}_${params.from}_${params.to}.csv`, definition.exportHeaders, rows.map(definition.exportRow));
+    } catch {
+      dispatch(showToast('Could not export the report. Please try again.', 'error'));
+    } finally {
+      setExporting(false);
     }
-    const exportable = columns.map((c) => c.label);
-    // Numbers (not formatted text) so the sheet can be summed / sorted in Excel.
-    const body = rows.map((r) => columns.map((c) => (c.raw ? c.raw(r) : c.value(r))));
-    const totalRow = columns.map((c, i) => (i === 0 ? 'Total' : (c.rawTotal ? c.rawTotal(summary) : '')));
-    downloadWorkbook(datedFileName(config.title.replace(/[^A-Za-z]+/g, '_')), [
-      { name: config.title.slice(0, 31), rows: [exportable, ...body, totalRow] },
-      {
-        name: 'Filters',
-        rows: [
-          ['Report', config.title],
-          ['From', formatDisplayDate(applied.from)],
-          ['To', formatDisplayDate(applied.to)],
-          ['Outlet', outletName || 'All Outlets'],
-          ['Cashier', applied.cashier || 'All Cashiers'],
-          ['Search', applied.search || ''],
-        ],
-      },
-    ]);
   };
 
-  // Chart: time reports show everything in order; ranked reports show the top 10.
-  const isTime = config.api === 'daily' || config.api === 'monthly';
-  const series = (data?.series || []);
-  const chartSeries = isTime ? series : series.slice(0, 10);
-  const chartLabels = chartSeries.map((p) => (config.api === 'daily' ? formatDisplayDate(p.label).slice(0, 5) : (config.api === 'monthly' ? rowLabel(config, { month: p.label }) : p.label)));
-  const chartData = chartSeries.map((p) => p.sales);
-
-  const pageRows = rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-  const rangeText = applied.from === applied.to ? formatDisplayDate(applied.from) : `${formatDisplayDate(applied.from)} – ${formatDisplayDate(applied.to)}`;
+  const errorMessage = error?.data?.message || 'Could not load this report.';
+  const summaryTiles = data?.summary ? definition.summaryTiles(data.summary) : [];
 
   return (
     <Stack spacing={2}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}>
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{config.title}</Typography>
-          <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
-            <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
-            <MuiLink component={RouterLink} to="/reports" underline="hover" color="text.secondary">Reports</MuiLink>
-            <MuiLink component={RouterLink} to="/reports/sales" underline="hover" color="text.secondary">Sales Reports</MuiLink>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{config.title}</Typography>
-          </Breadcrumbs>
-        </Box>
-        <Button variant="outlined" color="inherit" startIcon={<FileDownloadOutlinedIcon fontSize="small" />} onClick={handleExport} disabled={isLoading || !rows.length}>
-          Export Excel
-        </Button>
-      </Stack>
+      <Box>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>{definition.label}</Typography>
+        <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 14 }} />} sx={{ '& .MuiTypography-root, & .MuiLink-root': { fontSize: 12.5 } }}>
+          <MuiLink component={RouterLink} to="/home" underline="hover" color="text.secondary">Home</MuiLink>
+          <MuiLink component={RouterLink} to="/reports" underline="hover" color="text.secondary">Reports</MuiLink>
+          <MuiLink component={RouterLink} to="/reports/sales" underline="hover" color="text.secondary">Sales Reports</MuiLink>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>{definition.label}</Typography>
+        </Breadcrumbs>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>{definition.description}</Typography>
+      </Box>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
-        <Grid container spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+        <Grid container spacing={1.5} sx={{ alignItems: 'flex-end' }}>
           <Grid size={{ xs: 6, md: 2 }}>
-            <TextField label="From" type="date" value={draft.from} onChange={setField('from')} fullWidth slotProps={{ inputLabel: { shrink: true } }} error={Boolean(dateError)} />
+            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', mb: 0.5 }}>From</Typography>
+            <DatePickerField value={draft.from} onChange={(v) => setDraft((d) => ({ ...d, from: v }))} />
           </Grid>
           <Grid size={{ xs: 6, md: 2 }}>
-            <TextField label="To" type="date" value={draft.to} onChange={setField('to')} fullWidth slotProps={{ inputLabel: { shrink: true } }} error={Boolean(dateError)} helperText={dateError} />
+            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', mb: 0.5 }}>To</Typography>
+            <DatePickerField value={draft.to} onChange={(v) => setDraft((d) => ({ ...d, to: v }))} />
           </Grid>
-          <Grid size={{ xs: 6, md: 2 }}>
-            <TextField select label="Outlet" value={draft.outletId} onChange={setField('outletId')} fullWidth>
-              <MenuItem value="">All Outlets</MenuItem>
-              {outlets.map((o) => <MenuItem key={o.id} value={o.id}>{o.name}</MenuItem>)}
+          <Grid size={{ xs: 6, md: 2.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', mb: 0.5 }}>Outlet</Typography>
+            <TextField select fullWidth value={draft.outletId} onChange={(e) => setDraft((d) => ({ ...d, outletId: e.target.value }))} disabled={options && !options.canChooseOutlet}>
+              <MenuItem value="">My outlet</MenuItem>
+              {options?.canChooseOutlet && <MenuItem value="all">All outlets</MenuItem>}
+              {options?.outlets.map((o) => <MenuItem key={o.id} value={o.id}>{o.name}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, md: 2 }}>
-            <TextField select label="Cashier" value={draft.cashier} onChange={setField('cashier')} fullWidth>
-              <MenuItem value="">All Cashiers</MenuItem>
-              {cashiers.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-            </TextField>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', mb: 0.5 }}>Search</Typography>
+            <TextField fullWidth placeholder="Filter rows" value={draft.search} onChange={(e) => setDraft((d) => ({ ...d, search: e.target.value }))} />
           </Grid>
-          {config.search ? (
-            <Grid size={{ xs: 12, md: 2 }}>
-              <TextField
-                label={`Find ${config.rowLabel.toLowerCase()}`}
-                value={draft.search}
-                onChange={setField('search')}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
-                fullWidth
-                slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-              />
-            </Grid>
-          ) : null}
-          <Grid size={{ xs: 6, md: 1 }}>
-            <Button variant="contained" onClick={handleSearch} disabled={Boolean(dateError)} fullWidth sx={{ height: 56 }}>Search</Button>
-          </Grid>
-          <Grid size={{ xs: 6, md: 1 }}>
-            <Button variant="outlined" color="inherit" startIcon={<CloseIcon fontSize="small" />} onClick={handleReset} fullWidth sx={{ height: 56 }}>Reset</Button>
+          <Grid size={{ xs: 12, md: 2.5 }}>
+            <Stack direction="row" spacing={1}>
+              <Button variant="contained" startIcon={<SearchIcon fontSize="small" />} onClick={handleSearch} fullWidth sx={{ minHeight: 48 }}>Search</Button>
+              <Button variant="outlined" color="inherit" onClick={handleReset} sx={{ minHeight: 48 }} aria-label="Reset filters"><CloseIcon fontSize="small" /></Button>
+            </Stack>
           </Grid>
         </Grid>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }}>
-          {datePresets().map((p) => (
-            <Chip
-              key={p.label}
-              size="small"
-              clickable
-              label={p.label}
-              variant={applied.from === p.from && applied.to === p.to ? 'filled' : 'outlined'}
-              color={applied.from === p.from && applied.to === p.to ? 'primary' : 'default'}
-              onClick={() => applyPreset(p)}
-            />
-          ))}
-        </Stack>
       </Paper>
 
-      {isError ? (
-        <Alert severity="error" action={<Button color="inherit" size="small" onClick={refetch}>Retry</Button>}>
-          {error?.data?.message
-            ? `${error.data.message}${error.data.details ? ` — ${Object.values(error.data.details).flat().join(', ')}` : ''}`
-            : 'Failed to load the report.'}
-        </Alert>
-      ) : null}
+      {isError && (
+        <Alert severity="error" action={<Button color="inherit" size="small" onClick={refetch}>Retry</Button>}>{errorMessage}</Alert>
+      )}
 
       <Grid container spacing={2}>
-        {[
-          ['Total Sales', summary && money(summary.sales), 'primary.main'],
-          ['Returns', summary && money(summary.returns), 'error.main'],
-          ['Net Sales', summary && money(summary.net), 'success.main'],
-          ['Bills', summary && summary.bills],
-          ['Items Sold', summary && qtyFmt(summary.qty)],
-          ['Avg Bill Value', summary && money(summary.avgBill)],
-        ].map(([label, value, color]) => (
-          <Grid key={label} size={{ xs: 6, md: 4, lg: 2 }}>
-            {isLoading ? <Skeleton variant="rounded" height={74} /> : <StatTile label={label} value={value ?? '—'} color={color} />}
+        {(isLoading ? Array.from({ length: definition.summaryTiles({}).length }) : summaryTiles).map((card, i) => (
+          <Grid key={card?.label || i} size={{ xs: 12, sm: 6, lg: 3 }}>
+            {isLoading || !card ? <Skeleton variant="rounded" height={92} /> : <StatCard icon={card.icon} iconColor={card.iconColor} label={card.label} value={card.value} />}
           </Grid>
         ))}
       </Grid>
 
-      <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 2.5 } }}>
-        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            {isTime ? 'Sales Trend' : `Top ${PLURAL[config.rowLabel] || config.rowLabel} by Sales`}
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            {rangeText}{outletName ? ` · ${outletName}` : ''}{applied.cashier ? ` · ${applied.cashier}` : ''}
-          </Typography>
-        </Stack>
-        {isLoading ? <Skeleton variant="rounded" height={260} /> : chartData.length === 0 || chartData.every((v) => !v) ? (
-          <Box sx={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>No sales in this period.</Typography>
+      <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+        <Stack direction="row" sx={{ p: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{definition.label}</Typography>
+            {definition.drillDown && (
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>Click a row to see the items sold</Typography>
+            )}
           </Box>
-        ) : config.chart === 'line' ? (
-          <LineChart height={280} xAxis={[{ scaleType: 'point', data: chartLabels }]} series={[{ data: chartData, label: 'Sales (₹)', area: true }]} />
-        ) : (
-          <BarChart height={280} xAxis={[{ scaleType: 'band', data: chartLabels }]} series={[{ data: chartData, label: 'Sales (₹)' }]} />
-        )}
-      </Paper>
-
-      <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden', opacity: isFetching && !isLoading ? 0.6 : 1 }}>
-        <Box sx={{ overflowX: 'auto' }}>
-          <Table size="small" sx={{ minWidth: 980 }}>
+          <Button variant="outlined" startIcon={<FileDownloadOutlinedIcon />} onClick={handleExport} disabled={exporting || !data?.total} sx={{ minHeight: 44 }}>
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </Button>
+        </Stack>
+        <TableContainer sx={{ maxHeight: 640, opacity: isFetching && !isLoading ? 0.6 : 1 }}>
+          <Table size="small" stickyHeader sx={{ minWidth: 960, '& td, & th': { py: 1.1 } }}>
             <TableHead>
-              <TableRow sx={{ '& th': { fontWeight: 700, fontSize: 12.5, whiteSpace: 'nowrap', bgcolor: 'rgba(242,107,33,0.10)' } }}>
-                <TableCell sx={{ width: 48 }}>#</TableCell>
-                {columns.map((c) => <TableCell key={c.id} align={c.align}>{c.label}</TableCell>)}
+              <TableRow>
+                {definition.columns.map((col) => (
+                  <TableCell key={col.key} align={col.align || 'left'}>{col.label}</TableCell>
+                ))}
               </TableRow>
             </TableHead>
             <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}><TableCell colSpan={columns.length + 1}><Skeleton /></TableCell></TableRow>
-                ))
-              ) : pageRows.length === 0 ? (
+              {isLoading && Array.from({ length: 6 }).map((_, i) => (
+                <TableRow key={i}><TableCell colSpan={definition.columns.length}><Skeleton height={32} /></TableCell></TableRow>
+              ))}
+              {!isLoading && data?.rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={columns.length + 1} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                    No sales found for the selected filters.
+                  <TableCell colSpan={definition.columns.length} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                    No records match these filters. Try widening the date range or clearing a filter.
                   </TableCell>
                 </TableRow>
-              ) : pageRows.map((row, i) => (
-                <TableRow key={row.key} hover>
-                  <TableCell sx={{ color: 'text.secondary' }}>{page * rowsPerPage + i + 1}</TableCell>
-                  {columns.map((c) => (
-                    <TableCell key={c.id} align={c.align} sx={{ whiteSpace: 'nowrap', fontWeight: c.bold ? 700 : 400, color: c.id === 'returns' && row.returns > 0 ? 'error.main' : undefined }}>
-                      {c.value(row)}
+              )}
+              {data?.rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  hover
+                  sx={definition.drillDown ? { cursor: 'pointer' } : undefined}
+                  onClick={definition.drillDown ? () => setDrillRow(row) : undefined}
+                >
+                  {definition.columns.map((col) => (
+                    <TableCell key={col.key} align={col.align || 'left'} sx={{ whiteSpace: 'nowrap' }}>
+                      {col.render ? col.render(row) : row[col.key]}
                     </TableCell>
                   ))}
                 </TableRow>
               ))}
             </TableBody>
-            {summary && rows.length > 0 ? (
-              <TableFooter>
-                <TableRow sx={{ '& td': { fontWeight: 800, bgcolor: 'rgba(0,0,0,0.03)', whiteSpace: 'nowrap' } }}>
-                  <TableCell />
-                  {columns.map((c, i) => (
-                    <TableCell key={c.id} align={c.align}>{i === 0 ? `Total (${rows.length})` : (c.total ? c.total(summary) : '')}</TableCell>
-                  ))}
-                </TableRow>
-              </TableFooter>
-            ) : null}
           </Table>
-        </Box>
+        </TableContainer>
         <TablePagination
           component="div"
-          count={rows.length}
-          page={Math.min(page, Math.max(Math.ceil(rows.length / rowsPerPage) - 1, 0))}
-          onPageChange={(_e, p) => setPage(p)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0); }}
-          rowsPerPageOptions={[10, 25, 50, 100]}
+          count={data?.total || 0}
+          page={(data?.page || 1) - 1}
+          rowsPerPage={PAGE_SIZE}
+          rowsPerPageOptions={[PAGE_SIZE]}
+          onPageChange={(_, p) => setPage(p + 1)}
         />
       </Paper>
+
+      {definition.drillDown && (
+        <DrillDownDialog drillDown={definition.drillDown} row={drillRow} baseParams={params} onClose={() => setDrillRow(null)} />
+      )}
     </Stack>
   );
 }

@@ -1,10 +1,28 @@
 import { z } from 'zod';
 
+const dateKey = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format');
+
+// ---------------------------------------------------------------------------
+// Hourly Sales, Payment-wise Sales, Discount Report, Tax Report, Return Report
+// — same filter set, just a different source table per report (see
+// salesReports.service.js).
+// ---------------------------------------------------------------------------
+export const salesReportQuerySchema = z.object({
+  from: dateKey.optional(),
+  to: dateKey.optional(),
+  outletId: z.string().trim().min(1).optional(),
+  search: z.string().trim().optional(),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(200).default(20),
+});
+
+// ---------------------------------------------------------------------------
+// Daily, Monthly, Outlet-wise, Cashier-wise, Item-wise, Category-wise,
+// Brand-wise and Customer-wise Sales (see salesReportsSummary.service.js).
+// ---------------------------------------------------------------------------
 export const REPORT_TYPES = [
   'daily', 'monthly', 'outlet', 'cashier', 'item', 'category', 'brand', 'customer',
 ];
-
-const ymd = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format');
 
 // Longest range one request may cover. Keeps a single report from pulling a
 // whole year-after-year history of bills into memory.
@@ -15,8 +33,8 @@ export const reportParamsSchema = z.object({
 });
 
 export const reportQuerySchema = z.object({
-  from: ymd.optional(),
-  to: ymd.optional(),
+  from: dateKey.optional(),
+  to: dateKey.optional(),
   outletId: z.string().trim().min(1).optional(),
   cashier: z.string().trim().min(1).optional(),
   // Free-text filter on the report's own row label (item / customer / outlet ...).

@@ -12,7 +12,8 @@ import { showToast } from '../../../features/ui/uiSlice';
 
 import { useSalesReportFiltersQuery } from '../../../api/salesReportsApi';
 import { SALES_REPORT_ITEMS } from './salesReportsMockData';
-import { todayIso } from './salesReportConfig';
+import { SALES_REPORT_DEFINITIONS } from './salesReportDefinitions';
+import { SALES_REPORTS, todayIso } from './salesReportConfig';
 
 function ReportTypeCard({ item, onOpen }) {
   const Icon = item.icon;
@@ -66,11 +67,14 @@ function ReportTypeCard({ item, onOpen }) {
 
 /**
  * Sales Reports — the Sales Report category's landing screen, reached from
- * the Reports page's "Sales Report" card. The date range / outlet / cashier
- * filters (outlets and cashiers come from real data) are carried into
- * whichever report tile is opened: Daily, Monthly, Outlet-wise, Cashier-wise,
- * Item-wise, Category-wise, Brand-wise and Customer-wise are live reports at
- * /reports/sales/:report; the remaining tiles are still "coming soon".
+ * the Reports page's "Sales Report" card. Every tile opens a live report at
+ * /reports/sales/:reportKey:
+ *  - Daily, Monthly, Outlet-wise, Cashier-wise, Item-wise, Category-wise,
+ *    Brand-wise and Customer-wise (SALES_REPORTS in salesReportConfig.js) get
+ *    the date range / outlet / cashier chosen here carried into the report;
+ *  - Hourly, Payment-wise, Discount, Tax and Return
+ *    (SALES_REPORT_DEFINITIONS) have their own filter bar on the report page.
+ * Outlets and cashiers come from real data.
  */
 export default function SalesReportsPage() {
   const dispatch = useAppDispatch();
@@ -84,6 +88,7 @@ export default function SalesReportsPage() {
   const { data: filterData } = useSalesReportFiltersQuery();
   const outlets = filterData?.outlets || [];
   const cashiers = filterData?.cashiers || [];
+  const canChooseOutlet = filterData?.canChooseOutlet !== false;
   const dateError = dateFrom && dateTo && dateFrom > dateTo ? '"To" date cannot be before "From" date' : '';
 
   const handleReset = () => {
@@ -93,7 +98,12 @@ export default function SalesReportsPage() {
     setCashier('');
   };
   const handleOpenReport = (item) => {
-    if (!item.wired) {
+    // Reports with their own filter bar open straight away.
+    if (SALES_REPORT_DEFINITIONS[item.key]) {
+      navigate(`/reports/sales/${item.key}`);
+      return;
+    }
+    if (!SALES_REPORTS[item.key]) {
       dispatch(showToast(`${item.label} report is coming soon`, 'info'));
       return;
     }
@@ -102,7 +112,7 @@ export default function SalesReportsPage() {
       return;
     }
     const q = new URLSearchParams({ from: dateFrom, to: dateTo });
-    if (outletId) q.set('outletId', outletId);
+    if (canChooseOutlet && outletId) q.set('outletId', outletId);
     if (cashier) q.set('cashier', cashier);
     navigate(`/reports/sales/${item.key}?${q.toString()}`);
   };
@@ -129,8 +139,15 @@ export default function SalesReportsPage() {
             <TextField label="To" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} error={Boolean(dateError)} helperText={dateError} />
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
-            <TextField select label="Outlet" value={outletId} onChange={(e) => setOutletId(e.target.value)} fullWidth>
-              <MenuItem value="">All Outlets</MenuItem>
+            <TextField
+              select
+              label="Outlet"
+              value={canChooseOutlet ? outletId : (outlets[0]?.id || '')}
+              onChange={(e) => setOutletId(e.target.value)}
+              disabled={!canChooseOutlet}
+              fullWidth
+            >
+              {canChooseOutlet ? <MenuItem value="">All Outlets</MenuItem> : null}
               {outlets.map((o) => <MenuItem key={o.id} value={o.id}>{o.name}</MenuItem>)}
             </TextField>
           </Grid>
@@ -147,7 +164,8 @@ export default function SalesReportsPage() {
           </Grid>
         </Grid>
         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
-          These filters are applied to whichever report you open.
+          These filters are applied to Daily, Monthly, Outlet-wise, Cashier-wise, Item-wise, Category-wise, Brand-wise and Customer-wise reports.
+          The other reports have their own filters.
         </Typography>
       </Paper>
 
