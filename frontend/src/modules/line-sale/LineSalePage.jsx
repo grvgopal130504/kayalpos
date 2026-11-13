@@ -56,6 +56,8 @@ import PaymentActionsCard from "./components/PaymentActionsCard";
 import AmountPayableCard from "./components/AmountPayableCard";
 import HeldBillsDialog from "./components/HeldBillsDialog";
 import { PAYMENT_METHODS, WALK_IN_CUSTOMER, TAX_RATE } from "./lineSaleMockData";
+import { printReceipt } from "./receiptPrint";
+import { useCompanyProfileQuery } from "../../api/companyApi";
 
 // Quick-cash chips next to the "Exact" chip (which fills the bill total).
 const QUICK_AMOUNTS = [100, 500, 2000];
@@ -148,6 +150,9 @@ export default function LineSalePage() {
     isError: billNoError,
   } = useNextBillNoQuery();
   const [createSale, { isLoading: isPaying }] = useCreateSaleMutation();
+  // Header details (business name/address/GSTIN/phone) for the printed
+  // receipt — null when the tenant hasn't saved a Company profile yet.
+  const { data: companyProfile } = useCompanyProfileQuery();
 
   // Held ("parked") bills — saved carts, never sales (see modules/held-bill
   // on the backend). refetchOnMountOrArgChange re-reads the server list every
@@ -750,8 +755,26 @@ export default function LineSalePage() {
     setStep("payment");
   };
   const handleBackToBilling = () => setStep("billing");
-  const handlePrintInvoice = () =>
-    dispatch(showToast("Print Invoice is coming soon", "info"));
+  const handlePrintInvoice = () => {
+    if (cart.length === 0) {
+      dispatch(showToast("Add at least one item before printing", "warning"));
+      return;
+    }
+    const opened = printReceipt({
+      company: companyProfile,
+      billNo,
+      cashierName,
+      dateTime,
+      cart,
+      totals,
+      paymentMethod,
+      receivedAmount,
+      changeAmount,
+    });
+    if (!opened) {
+      dispatch(showToast("Allow pop-ups for this site to print the invoice", "warning"));
+    }
+  };
 
   return (
     <Stack
