@@ -6,7 +6,9 @@ import { ApiError } from '../../middleware/errorHandler.js';
  * Read-only, derived from existing rows:
  *   Net sales    = sum of each COMPLETED Linesales line's taxable value (sales excl. GST,
  *                  after discount). Falls back to LineTotal - TaxValue when TaxableValue is 0.
- *   Cost         = quantity x the product's latest SellingPrice.purchaseCost.
+ *   Cost         = per line, quantity x the purchase price of the FIFO lot it was sold
+ *                  from (frozen on the line); older lines without one fall back to the
+ *                  product's latest SellingPrice.purchaseCost.
  *   Gross profit = net sales - cost; margin % = gross profit / net sales.
  * Products with no purchase cost on file count as cost 0 and are flagged (noCost)
  * so the figure is never silently overstated. Sales returns are not netted off yet.
@@ -72,7 +74,8 @@ export async function getGrossProfitReport(user, params = {}) {
       SUM(l."Quantity") AS "qty",
       SUM(CASE WHEN COALESCE(l."TaxableValue", 0) > 0 THEN l."TaxableValue"
                ELSE COALESCE(l."LineTotal", 0) - COALESCE(l."TaxValue", 0) END) AS "netSales",
-      COALESCE(MAX(c."PurchaseCost"), 0) AS "unitCost"
+      SUM(l."Quantity" * COALESCE(l."UnitCost", c."PurchaseCost", 0)) AS "cost",
+      BOOL_OR(l."UnitCost" IS NULL AND COALESCE(c."PurchaseCost", 0) = 0) AS "noCost"
     FROM "Linesales" s
     JOIN "LinesaleItemDetails" l ON l."DocEntry" = s."DocEntry"
     LEFT JOIN (
@@ -91,7 +94,7 @@ export async function getGrossProfitReport(user, params = {}) {
     SELECT to_char(s."CreateDate", 'YYYY-MM-DD') AS "day",
       SUM(CASE WHEN COALESCE(l."TaxableValue", 0) > 0 THEN l."TaxableValue"
                ELSE COALESCE(l."LineTotal", 0) - COALESCE(l."TaxValue", 0) END) AS "netSales",
-      SUM(l."Quantity" * COALESCE(c."PurchaseCost", 0)) AS "cost"
+      SUM(l."Quantity" * COALESCE(l."UnitCost", c."PurchaseCost", 0)) AS "cost"
     FROM "Linesales" s
     JOIN "LinesaleItemDetails" l ON l."DocEntry" = s."DocEntry"
     LEFT JOIN (
@@ -107,7 +110,7 @@ export async function getGrossProfitReport(user, params = {}) {
   const rows = lines.map((r) => {
     const qty = n(r.qty);
     const netSales = round2(r.netSales);
-    const cost = round2(qty * n(r.unitCost));
+    const cost = round2(r.cost);
     const grossProfit = round2(netSales - cost);
     return {
       productId: r.productId,
@@ -115,11 +118,11 @@ export async function getGrossProfitReport(user, params = {}) {
       name: r.name,
       qty: Math.round(qty * 1000) / 1000,
       netSales,
-      unitCost: round2(r.unitCost),
+      unitCost: qty > 0 ? round2(cost / qty) : 0,
       cost,
       grossProfit,
       marginPct: netSales > 0 ? round2((grossProfit / netSales) * 100) : 0,
-      noCost: n(r.unitCost) === 0,
+      noCost: Boolean(r.noCost),
     };
   });
 
@@ -146,7 +149,7 @@ export async function getGrossProfitReport(user, params = {}) {
     })),
     rows,
     notes: {
-      cost: 'Cost = quantity sold x the latest purchase cost from Selling Price. Products with no cost on file are shown as cost 0.',
+      cost: 'Cost = quantity sold x the purchase price of the batch (FIFO lot) it was sold from; older bills use the latest purchase cost from Selling Price. Lines with no cost on file count as 0.',
       returns: 'Sales returns are not deducted.',
     },
   };
