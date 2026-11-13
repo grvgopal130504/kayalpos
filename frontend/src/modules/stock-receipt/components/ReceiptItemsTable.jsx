@@ -7,6 +7,10 @@ import { Controller, useFormContext, useFieldArray, useWatch } from 'react-hook-
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import AddIcon from '@mui/icons-material/Add';
 
+import { useAppDispatch } from '../../../app/hooks';
+import { showToast } from '../../../features/ui/uiSlice';
+import ItemSearchCell, { useItemSearchIndex } from '../../line-sale/components/ItemSearchCell';
+
 import FormDatePicker from '../../../components/form/FormDatePicker';
 import ItemCodeAutocomplete from '../../../components/form/ItemCodeAutocomplete';
 import { useGetBarcodeLabelBatchesQuery } from '../../../api/barcodeLabelApi';
@@ -21,7 +25,7 @@ function matchUom(value) {
 const COLUMNS = [
   { key: 'barcode', label: 'Barcode', minWidth: 150 },
   { key: 'itemCode', label: 'Item Code', minWidth: 150 },
-  { key: 'itemName', label: 'Item Name', minWidth: 150 },
+  { key: 'itemName', label: 'Item Name', minWidth: 260 },
   { key: 'hsnCode', label: 'HSN Code', minWidth: 110 },
   { key: 'uom', label: 'UoM', minWidth: 100 },
   { key: 'orderedQty', label: 'Ordered Qty', minWidth: 100 },
@@ -35,6 +39,11 @@ const COLUMNS = [
   { key: 'expiryDate', label: 'Expiry Date', minWidth: 130 },
   { key: 'remarks', label: 'Remarks', minWidth: 140 },
 ];
+
+// Columns that grow with their content, and the widest each may become (px).
+const CONTENT_CAP = {
+  barcode: 260, itemCode: 220, itemName: 460, hsnCode: 180, uom: 140, warehouse: 200, batchNo: 220, remarks: 420,
+};
 
 function toNumber(value) {
   const n = parseFloat(value);
@@ -61,39 +70,60 @@ export function computeLineTotal(row) {
 export default function ReceiptItemsTable({ onAddItem, products = [] }) {
   const { control } = useFormContext();
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  // Same Product master + Barcode & Label + Receipt search index the Line Sale
+  // Item Name field uses, built once for the whole grid.
+  const searchIndex = useItemSearchIndex(products);
 
   // itemCode -> barcode, taken from the Barcode & Label rows, so picking an
   // item pre-fills its Barcode cell (still editable afterwards).
   const { data: labelBatches = [] } = useGetBarcodeLabelBatchesQuery();
-  const { barcodeByCode, codeByBarcode } = useMemo(() => {
+  const barcodeByCode = useMemo(() => {
     const byCode = {};
-    const byBarcode = {};
     labelBatches.forEach((batch) => {
       (batch.items || []).forEach((item) => {
         if (!item.barcode) return;
         if (!byCode[item.itemCode]) byCode[item.itemCode] = item.barcode;
-        if (!byBarcode[item.barcode]) byBarcode[item.barcode] = item.itemCode;
       });
     });
-    return { barcodeByCode: byCode, codeByBarcode: byBarcode };
+    return byCode;
   }, [labelBatches]);
+
+  // Column widths follow the longest value typed in that column (header
+  // minimum up to a cap), so long names / codes / remarks are never cut off.
+  const items = useWatch({ control, name: 'items' });
+  const colWidths = useMemo(() => {
+    const labelOf = (opts, v) => opts.find((o) => o.value === v)?.label || '';
+    const widths = {};
+    COLUMNS.forEach((col) => {
+      let longest = 0;
+      (items || []).forEach((row) => {
+        let text = row?.[col.key];
+        if (col.key === 'uom') text = labelOf(UOM_OPTIONS, text);
+        if (col.key === 'warehouse') text = labelOf(WAREHOUSE_OPTIONS, text);
+        longest = Math.max(longest, String(text ?? '').length);
+      });
+      const cap = CONTENT_CAP[col.key];
+      widths[col.key] = cap ? Math.min(cap, Math.max(col.minWidth, longest * 9 + 64)) : col.minWidth;
+    });
+    return widths;
+  }, [items]);
 
   return (
     <Stack spacing={1.5}>
       <Box sx={{ overflowX: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-        <Table size="small" sx={{ minWidth: 1650 }}>
+        <Table size="small" sx={{ width: 'max-content', minWidth: '100%' }}>
           <TableHead>
             <TableRow sx={{ '& th': { fontWeight: 700, fontSize: 12.5, whiteSpace: 'nowrap', bgcolor: 'rgba(0,0,0,0.02)' } }}>
               <TableCell sx={{ width: 44 }}>#</TableCell>
               {COLUMNS.map((col) => (
-                <TableCell key={col.key} sx={{ minWidth: col.minWidth }}>{col.label}</TableCell>
+                <TableCell key={col.key} sx={{ minWidth: colWidths[col.key], width: colWidths[col.key] }}>{col.label}</TableCell>
               ))}
               <TableCell sx={{ width: 60 }}>Action</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {fields.map((field, index) => (
-              <ItemRow key={field.id} index={index} control={control} onRemove={() => remove(index)} removable={fields.length > 1} products={products} barcodeByCode={barcodeByCode} codeByBarcode={codeByBarcode} />
+              <ItemRow key={field.id} index={index} control={control} onRemove={() => remove(index)} removable={fields.length > 1} products={products} barcodeByCode={barcodeByCode} searchIndex={searchIndex} />
             ))}
           </TableBody>
         </Table>
@@ -124,9 +154,10 @@ export default function ReceiptItemsTable({ onAddItem, products = [] }) {
 }
 
 function ItemRow({
-  index, control, onRemove, removable, products, barcodeByCode, codeByBarcode,
+  index, control, onRemove, removable, products, barcodeByCode, searchIndex,
 }) {
   const { setValue } = useFormContext();
+  const dispatch = useAppDispatch();
   const row = useWatch({ control, name: `items.${index}` });
   const totalCost = computeLineTotal(row);
 
@@ -138,19 +169,21 @@ function ItemRow({
     setValue(`items.${index}.uom`, matchUom(product.uom), { shouldDirty: true });
   };
 
-  // Barcode is the first field of the row: a scanned/typed barcode that
-  // exists in Barcode & Label fills the item details (Enter, Tab or leaving
-  // the field). An unknown barcode is kept as typed.
   const lookupBarcode = (value) => {
-    const code = codeByBarcode[String(value || '').trim()];
-    const product = code ? products.find((p) => p.code === code) : null;
-    if (product && row?.itemCode !== product.code) fillFromProduct(product, { barcode: String(value).trim() });
+    const q = String(value || '').trim().toLowerCase();
+    if (!q || row?.itemCode) return;
+    const hit = searchIndex.labelEntries.find((e) => String(e.barcode).trim().toLowerCase() === q);
+    if (hit) fillFromProduct(hit.product, { barcode: String(value).trim() });
   };
 
   return (
     <TableRow sx={{ '& td': { py: 0.75 } }}>
       <TableCell sx={{ color: 'text.secondary' }}>{index + 1}</TableCell>
       <TableCell>
+        {/* Plain text input — whatever is typed is saved with the receipt line
+            and is then searchable in the Line Sale Barcode field. If the row
+            has no item yet, a barcode that already belongs to a known item
+            fills the row on Enter / leaving the field. */}
         <Controller
           name={`items.${index}.barcode`}
           control={control}
@@ -160,6 +193,7 @@ function ItemRow({
               size="small"
               fullWidth
               placeholder="Scan / Enter Barcode"
+              autoComplete="off"
               onBlur={(e) => { field.onBlur(); lookupBarcode(e.target.value); }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -176,14 +210,24 @@ function ItemRow({
           control={control}
           name={`items.${index}.itemCode`}
           products={products}
+          compact
           onSelectProduct={(product) => fillFromProduct(product)}
         />
       </TableCell>
       <TableCell>
-        <Controller
-          name={`items.${index}.itemName`}
-          control={control}
-          render={({ field }) => <TextField {...field} size="small" fullWidth placeholder="Enter Item Name" />}
+        {/* Identical to the Line Sale Item Name field: scan / type a barcode,
+            code, Short ID or name, pick from the grouped dropdown (Enter / Tab
+            also accept a match). Passing a line object keeps it in the
+            "filled row" mode so Tab moves on to the next cell. */}
+        <ItemSearchCell
+          wide
+          index={searchIndex}
+          line={{ code: row?.itemCode || '', name: row?.itemName || '' }}
+          onNotify={(message, severity) => dispatch(showToast(message, severity))}
+          onSelect={(code) => {
+            const product = searchIndex.productByCode[code];
+            if (product) fillFromProduct(product, { barcode: searchIndex.barcodeByCode[code] });
+          }}
         />
       </TableCell>
       <TableCell>

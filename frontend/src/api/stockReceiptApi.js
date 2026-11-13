@@ -42,6 +42,16 @@ const stockReceiptApi = baseApi.injectEndpoints({
         { type: 'StockReceipt', id: 'SUMMARY' },
       ],
     }),
+    // Excel import: { receipts: [...] } -> { total, created, updated, failed, errors }.
+    StockReceiptImport: builder.mutation({
+      query: (body) => ({ url: '/stock-receipts/import', method: 'POST', body }),
+      transformResponse: (response) => response.data,
+      invalidatesTags: [
+        { type: 'StockReceipt', id: 'LIST' },
+        { type: 'StockReceipt', id: 'NEXT' },
+        { type: 'StockReceipt', id: 'SUMMARY' },
+      ],
+    }),
     StockReceiptUpdate: builder.mutation({
       query: ({ id, ...body }) => ({ url: `/stock-receipts/${id}`, method: 'PUT', body }),
       transformResponse: (response) => response.data,
@@ -67,5 +77,6 @@ export const useGetStockReceiptQuery = stockReceiptApi.useStockReceiptByIdQuery;
 export const useNextStockReceiptCodeQuery = stockReceiptApi.useNextStockReceiptCodeQuery;
 export const useStockReceiptSummaryQuery = stockReceiptApi.useStockReceiptSummaryQuery;
 export const useCreateStockReceiptMutation = stockReceiptApi.useStockReceiptCreateMutation;
+export const useImportStockReceiptsMutation = stockReceiptApi.useStockReceiptImportMutation;
 export const useUpdateStockReceiptMutation = stockReceiptApi.useStockReceiptUpdateMutation;
 export const useDeleteStockReceiptMutation = stockReceiptApi.useStockReceiptDeleteMutation;

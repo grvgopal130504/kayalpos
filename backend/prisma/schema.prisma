@@ -40,6 +40,7 @@ model Tenant {
 
   outlets             Outlet[]
   users               User[]
+  roles               Role[]
   brands              Brand[]
   products            Product[]
   customers           Customer[]
@@ -251,6 +252,28 @@ model WarehouseContact {
   @@index([warehouseId])
 }
 
+// RBAC role. `permissions` is a JSON object keyed by menu key, e.g.
+// { "line-sale": { "view": true, "add": true, "edit": false, "delete": false } } —
+// see src/modules/permission/permissionCatalog.js for the valid keys/actions.
+model Role {
+  id          String   @id @default(cuid()) @map("Id")
+  tenantId    String   @map("TenantId")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  name        String   @map("Name")
+  description String?  @map("Description")
+  permissions Json     @default("{}") @map("Permissions")
+  isActive    Boolean  @default(true) @map("IsActive")
+  createdAt   DateTime @default(now()) @map("CreatedAt")
+  updatedAt   DateTime @updatedAt @map("UpdatedAt")
+  createdBy   String?  @map("CreatedBy")
+  updatedBy   String?  @map("UpdatedBy")
+
+  users User[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
 model User {
   id           String    @id @default(cuid()) @map("Id")
   tenantId     String    @map("TenantId")
@@ -265,6 +288,10 @@ model User {
   employee     Employee? @relation(fields: [employeeId], references: [id])
   outletId     String?   @map("OutletId")
   outlet       Outlet?   @relation(fields: [outletId], references: [id])
+  // RBAC: the role whose permission matrix applies to this user. NULL means a
+  // full administrator (every account that predates RBAC stays that way).
+  roleId       String?   @map("RoleId")
+  appRole      Role?     @relation(fields: [roleId], references: [id], onDelete: SetNull)
   lastLogin    DateTime? @map("LastLogin")
   isActive     Boolean   @default(true) @map("IsActive")
   sapRef        String?   @map("SapRef")
@@ -816,6 +843,12 @@ model Supplier {
   city         String?      @map("City")
   state        String?      @map("State")
   paymentTerms String?      @map("PaymentTerms")
+  // Postal address + free-text remarks. country/state/city are stored as
+  // names (same convention as city/state above); the frontend fills them from
+  // the country-state-city package, defaulting country to India.
+  address      String?      @map("Address")
+  country      String?      @map("Country")
+  remarks      String?      @map("Remarks")
   status       RecordStatus @default(ACTIVE) @map("Status")
   sapRef        String?   @map("SapRef")
   sapSyncStatus String    @default("Pending") @map("SapSyncStatus")

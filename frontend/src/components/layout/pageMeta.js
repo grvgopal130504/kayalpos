@@ -12,6 +12,7 @@ import BalanceOutlinedIcon from '@mui/icons-material/BalanceOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
+import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 
 import { ALL_NAV_ITEMS } from './navConfig';
 import { MASTER_ITEMS } from '../../modules/masters/mastersMockData';
@@ -52,6 +53,7 @@ const OVERRIDES = {
   '/customer/add': { label: 'Add Customer', icon: PersonAddAltOutlinedIcon },
   '/expenses-book/add': { label: 'Add Expense', icon: AddCircleOutlineOutlinedIcon },
   '/settings': { label: 'Settings', icon: SettingsOutlinedIcon },
+  '/user-management': { label: 'User Management', icon: AdminPanelSettingsOutlinedIcon },
   '/settings/profile': { label: 'Profile', icon: PersonOutlineOutlinedIcon },
 
   '/reports/sales': { label: 'Sales Reports', icon: BarChartOutlinedIcon },
@@ -59,6 +61,14 @@ const OVERRIDES = {
   '/reports/purchase': { label: 'Purchase Reports', icon: BarChartOutlinedIcon },
   '/reports/cashier': { label: 'Cashier Reports', icon: BarChartOutlinedIcon },
   '/reports/cashier/shift-variance': { label: 'Shift-to-Shift Variance', icon: BarChartOutlinedIcon },
+  '/reports/sales/daily-sales': { label: 'Daily Sales', icon: BarChartOutlinedIcon },
+  '/reports/sales/monthly-sales': { label: 'Monthly Sales', icon: BarChartOutlinedIcon },
+  '/reports/sales/outlet-wise-sales': { label: 'Outlet-wise Sales', icon: BarChartOutlinedIcon },
+  '/reports/sales/cashier-wise-sales': { label: 'Cashier-wise Sales', icon: BarChartOutlinedIcon },
+  '/reports/sales/item-wise-sales': { label: 'Item-wise Sales', icon: BarChartOutlinedIcon },
+  '/reports/sales/category-wise-sales': { label: 'Category-wise Sales', icon: BarChartOutlinedIcon },
+  '/reports/sales/brand-wise-sales': { label: 'Brand-wise Sales', icon: BarChartOutlinedIcon },
+  '/reports/sales/customer-wise-sales': { label: 'Customer-wise Sales', icon: BarChartOutlinedIcon },
   '/reports/financial': { label: 'Financial Reports', icon: BarChartOutlinedIcon },
   '/reports/sap': { label: 'SAP Reports', icon: BarChartOutlinedIcon },
 

@@ -41,6 +41,7 @@ import CashierWiseSalesPage from './modules/cashier-panel/CashierWiseSalesPage';
 import ExpensesBookPage from './modules/expenses-book/ExpensesBookPage';
 import ReportsPage from './modules/reports/ReportsPage';
 import SalesReportsPage from './modules/reports/sales/SalesReportsPage';
+import SalesReportDetailPage from './modules/reports/sales/SalesReportDetailPage';
 import InventoryReportsPage from './modules/reports/inventory/InventoryReportsPage';
 import PurchaseReportsPage from './modules/reports/purchase/PurchaseReportsPage';
 import CashierReportsPage from './modules/reports/cashier/CashierReportsPage';
@@ -64,6 +65,7 @@ import PriceListPage from './modules/masters/price-list/PriceListPage';
 import BatchSerialPage from './modules/masters/batch-serial/BatchSerialPage';
 import SupplierPage from './modules/masters/supplier/SupplierPage';
 import EmployeePage from './modules/masters/employee/EmployeePage';
+import UserManagementPage from './modules/user-management/UserManagementPage';
 import SettingsPage from './modules/settings/SettingsPage';
 import ProfilePage from './modules/settings/ProfilePage';
 import ProtectedRoute from './routes/ProtectedRoute';
@@ -110,6 +112,7 @@ export default function App() {
             <Route path="/expenses-book" element={<ExpensesBookPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/reports/sales" element={<SalesReportsPage />} />
+            <Route path="/reports/sales/:report" element={<SalesReportDetailPage />} />
             <Route path="/reports/inventory" element={<InventoryReportsPage />} />
             <Route path="/reports/purchase" element={<PurchaseReportsPage />} />
             <Route path="/reports/cashier" element={<CashierReportsPage />} />
@@ -149,6 +152,7 @@ export default function App() {
             <Route path="/cashier-panel/cash-reconciliation" element={<CashReconciliationPage />} />
             <Route path="/cashier-panel/shortage-excess" element={<ShortageExcessPage />} />
             <Route path="/cashier-panel/cashier-wise-sales" element={<CashierWiseSalesPage />} />
+            <Route path="/user-management" element={<UserManagementPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/profile" element={<ProfilePage />} />
           </Route>
