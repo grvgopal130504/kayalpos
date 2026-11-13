@@ -47,6 +47,8 @@ import cashReconciliationRoutes from './modules/cash-reconciliation/cashReconcil
 import shortageExcessRoutes from './modules/shortage-excess/shortageExcess.routes.js';
 import cashierWiseSalesRoutes from './modules/cashier-wise-sales/cashierWiseSales.routes.js';
 import shiftVarianceRoutes from './modules/shift-variance/shiftVariance.routes.js';
+import grossProfitRoutes from './modules/gross-profit/grossProfit.routes.js';
+import netSalesRoutes from './modules/net-sales/netSales.routes.js';
 import cashierPanelRoutes from './modules/cashier-panel/cashierPanel.routes.js';
 import expenseRoutes from './modules/expense/expense.routes.js';
 import companyRoutes from './modules/company/company.routes.js';
@@ -138,6 +140,8 @@ app.use('/api/cash-reconciliations', cashReconciliationRoutes);
 app.use('/api/shortage-excess', shortageExcessRoutes);
 app.use('/api/cashier-wise-sales', cashierWiseSalesRoutes);
 app.use('/api/shift-variance', shiftVarianceRoutes);
+app.use('/api/gross-profit', grossProfitRoutes);
+app.use('/api/net-sales', netSalesRoutes);
 app.use('/api/cashier-panel', cashierPanelRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/company', companyRoutes);

@@ -60,6 +60,8 @@ const OVERRIDES = {
   '/reports/cashier': { label: 'Cashier Reports', icon: BarChartOutlinedIcon },
   '/reports/cashier/shift-variance': { label: 'Shift-to-Shift Variance', icon: BarChartOutlinedIcon },
   '/reports/financial': { label: 'Financial Reports', icon: BarChartOutlinedIcon },
+  '/reports/financial/gross-profit': { label: 'Gross Profit', icon: BarChartOutlinedIcon },
+  '/reports/financial/net-sales': { label: 'Net Sales', icon: BarChartOutlinedIcon },
   '/reports/sap': { label: 'SAP Reports', icon: BarChartOutlinedIcon },
 
   '/cashier-panel/login': { label: 'Cashier Login', icon: LoginOutlinedIcon },

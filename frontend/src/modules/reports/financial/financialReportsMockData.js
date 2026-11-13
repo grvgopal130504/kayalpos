@@ -26,8 +26,8 @@ export const DEFAULT_DATE_RANGE = { from: '2026-05-26', to: '2026-05-26' };
 export const DEFAULT_FINANCIAL_YEAR = '2026-2027';
 
 export const FINANCIAL_REPORT_ITEMS = [
-  { key: 'gross-profit', label: 'Gross Profit', description: 'View gross profit summary and trends.', icon: TrendingUpOutlinedIcon, color: '#2563EB' },
-  { key: 'net-sales', label: 'Net Sales', description: 'View net sales summary and performance.', icon: ShoppingCartOutlinedIcon, color: '#22A06B' },
+  { key: 'gross-profit', label: 'Gross Profit', description: 'View gross profit summary and trends.', icon: TrendingUpOutlinedIcon, color: '#2563EB', path: '/reports/financial/gross-profit' },
+  { key: 'net-sales', label: 'Net Sales', description: 'View net sales summary and performance.', icon: ShoppingCartOutlinedIcon, color: '#22A06B', path: '/reports/financial/net-sales' },
   { key: 'expenses', label: 'Expenses', description: 'View all expenses summary and details.', icon: ReceiptLongOutlinedIcon, color: '#F26B21' },
   { key: 'profitability', label: 'Profitability', description: 'View profitability analysis and reports.', icon: PieChartOutlineOutlinedIcon, color: '#7C3AED' },
   { key: 'tax-summary', label: 'Tax Summary', description: 'View tax collected summary and details.', icon: ReceiptOutlinedIcon, color: '#0EA5A4' },

@@ -46,6 +46,8 @@ import PurchaseReportsPage from './modules/reports/purchase/PurchaseReportsPage'
 import CashierReportsPage from './modules/reports/cashier/CashierReportsPage';
 import ShiftVarianceReportPage from './modules/reports/cashier/ShiftVarianceReportPage';
 import FinancialReportsPage from './modules/reports/financial/FinancialReportsPage';
+import GrossProfitReportPage from './modules/reports/financial/GrossProfitReportPage';
+import NetSalesReportPage from './modules/reports/financial/NetSalesReportPage';
 import SapReportsPage from './modules/reports/sap/SapReportsPage';
 import MasterSyncPage from './modules/master-sync/MasterSyncPage';
 import StockSyncPage from './modules/stock-sync/StockSyncPage';
@@ -115,6 +117,8 @@ export default function App() {
             <Route path="/reports/cashier" element={<CashierReportsPage />} />
             <Route path="/reports/cashier/shift-variance" element={<ShiftVarianceReportPage />} />
             <Route path="/reports/financial" element={<FinancialReportsPage />} />
+            <Route path="/reports/financial/gross-profit" element={<GrossProfitReportPage />} />
+            <Route path="/reports/financial/net-sales" element={<NetSalesReportPage />} />
             <Route path="/reports/sap" element={<SapReportsPage />} />
             <Route path="/master-sync" element={<MasterSyncPage />} />
             <Route path="/stock-sync" element={<StockSyncPage />} />
