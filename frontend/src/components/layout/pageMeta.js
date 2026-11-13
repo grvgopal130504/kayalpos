@@ -85,6 +85,13 @@ const OVERRIDES = {
   '/reports/sales/brand-wise-sales': { label: 'Brand-wise Sales', icon: BarChartOutlinedIcon },
   '/reports/sales/customer-wise-sales': { label: 'Customer-wise Sales', icon: BarChartOutlinedIcon },
   '/reports/financial': { label: 'Financial Reports', icon: BarChartOutlinedIcon },
+  '/reports/financial/gross-profit': { label: 'Gross Profit', icon: BarChartOutlinedIcon },
+  '/reports/financial/net-sales': { label: 'Net Sales', icon: BarChartOutlinedIcon },
+  '/reports/financial/expenses': { label: 'Expenses', icon: BarChartOutlinedIcon },
+  '/reports/financial/profitability': { label: 'Profitability', icon: BarChartOutlinedIcon },
+  '/reports/financial/tax-summary': { label: 'Tax Summary', icon: BarChartOutlinedIcon },
+  '/reports/financial/outstanding': { label: 'Outstanding', icon: BarChartOutlinedIcon },
+  '/reports/financial/payment-collection': { label: 'Payment Collection', icon: BarChartOutlinedIcon },
   '/reports/sap': { label: 'SAP Reports', icon: BarChartOutlinedIcon },
 
   '/cashier-panel/login': { label: 'Cashier Login', icon: LoginOutlinedIcon },

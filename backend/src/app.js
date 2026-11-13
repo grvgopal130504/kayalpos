@@ -47,6 +47,11 @@ import cashReconciliationRoutes from './modules/cash-reconciliation/cashReconcil
 import shortageExcessRoutes from './modules/shortage-excess/shortageExcess.routes.js';
 import cashierWiseSalesRoutes from './modules/cashier-wise-sales/cashierWiseSales.routes.js';
 import shiftVarianceRoutes from './modules/shift-variance/shiftVariance.routes.js';
+import grossProfitRoutes from './modules/gross-profit/grossProfit.routes.js';
+import netSalesRoutes from './modules/net-sales/netSales.routes.js';
+import productLotRoutes from './modules/product-lot/productLot.routes.js';
+import expenseReportRoutes from './modules/expense-report/expenseReport.routes.js';
+import financialReportsRoutes from './modules/financial-reports/financialReports.routes.js';
 import inventoryReportsRoutes from './modules/inventory-reports/inventoryReports.routes.js';
 import cashierReportsRoutes from './modules/cashier-reports/cashierReports.routes.js';
 import salesReportsRoutes from './modules/sales-reports/salesReports.routes.js';
@@ -145,6 +150,12 @@ app.use('/api/shortage-excess', authorize('cashier-panel', { alsoView: ['reports
 app.use('/api/reports/inventory', authorize('reports-inventory'), inventoryReportsRoutes);
 app.use('/api/reports/cashier', authorize('reports-cashier'), cashierReportsRoutes);
 app.use('/api/reports/sales', authorize('reports-sales'), salesReportsRoutes);
+app.use('/api/gross-profit', authorize('reports-financial'), grossProfitRoutes);
+app.use('/api/net-sales', authorize('reports-financial'), netSalesRoutes);
+app.use('/api/expense-report', authorize('reports-financial'), expenseReportRoutes);
+app.use('/api/financial-reports', authorize('reports-financial'), financialReportsRoutes);
+// Lot / FIFO price lookup used by the Line Sale screen (and read by Reports).
+app.use('/api/product-lots', authorize('line-sale', { lookup: true, alsoView: ['reports'] }), productLotRoutes);
 app.use('/api/cashier-wise-sales', authorize('cashier-panel', { alsoView: ['reports'] }), cashierWiseSalesRoutes);
 app.use('/api/shift-variance', authorize('cashier-panel', { alsoView: ['reports'] }), shiftVarianceRoutes);
 app.use('/api/cashier-panel', authorize('cashier-panel', { alsoView: ['reports'] }), cashierPanelRoutes);

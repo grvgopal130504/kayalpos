@@ -49,6 +49,13 @@ import CashierReportsPage from './modules/reports/cashier/CashierReportsPage';
 import ShiftVarianceReportPage from './modules/reports/cashier/ShiftVarianceReportPage';
 import CashierReportDetailPage from './modules/reports/cashier/CashierReportDetailPage';
 import FinancialReportsPage from './modules/reports/financial/FinancialReportsPage';
+import GrossProfitReportPage from './modules/reports/financial/GrossProfitReportPage';
+import NetSalesReportPage from './modules/reports/financial/NetSalesReportPage';
+import ExpenseReportPage from './modules/reports/financial/ExpenseReportPage';
+import ProfitabilityReportPage from './modules/reports/financial/ProfitabilityReportPage';
+import TaxSummaryReportPage from './modules/reports/financial/TaxSummaryReportPage';
+import OutstandingReportPage from './modules/reports/financial/OutstandingReportPage';
+import PaymentCollectionReportPage from './modules/reports/financial/PaymentCollectionReportPage';
 import SapReportsPage from './modules/reports/sap/SapReportsPage';
 import MasterSyncPage from './modules/master-sync/MasterSyncPage';
 import StockSyncPage from './modules/stock-sync/StockSyncPage';
@@ -122,6 +129,13 @@ export default function App() {
             <Route path="/reports/cashier/shift-variance" element={<ShiftVarianceReportPage />} />
             <Route path="/reports/cashier/:reportKey" element={<CashierReportDetailPage />} />
             <Route path="/reports/financial" element={<FinancialReportsPage />} />
+            <Route path="/reports/financial/gross-profit" element={<GrossProfitReportPage />} />
+            <Route path="/reports/financial/net-sales" element={<NetSalesReportPage />} />
+            <Route path="/reports/financial/expenses" element={<ExpenseReportPage />} />
+            <Route path="/reports/financial/profitability" element={<ProfitabilityReportPage />} />
+            <Route path="/reports/financial/tax-summary" element={<TaxSummaryReportPage />} />
+            <Route path="/reports/financial/outstanding" element={<OutstandingReportPage />} />
+            <Route path="/reports/financial/payment-collection" element={<PaymentCollectionReportPage />} />
             <Route path="/reports/sap" element={<SapReportsPage />} />
             <Route path="/master-sync" element={<MasterSyncPage />} />
             <Route path="/stock-sync" element={<StockSyncPage />} />

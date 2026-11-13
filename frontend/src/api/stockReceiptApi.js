@@ -40,6 +40,8 @@ const stockReceiptApi = baseApi.injectEndpoints({
         { type: 'StockReceipt', id: 'LIST' },
         { type: 'StockReceipt', id: 'NEXT' },
         { type: 'StockReceipt', id: 'SUMMARY' },
+        // Receiving a receipt adds stock (FIFO lots) to products.
+        { type: 'Product', id: 'LIST' },
       ],
     }),
     // Excel import: { receipts: [...] } -> { total, created, updated, failed, errors }.
@@ -59,6 +61,7 @@ const stockReceiptApi = baseApi.injectEndpoints({
         { type: 'StockReceipt', id },
         { type: 'StockReceipt', id: 'LIST' },
         { type: 'StockReceipt', id: 'SUMMARY' },
+        { type: 'Product', id: 'LIST' },
       ],
     }),
     StockReceiptDelete: builder.mutation({
