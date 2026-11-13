@@ -18,6 +18,7 @@
     "test:tcz-timezone": "node test/tczTimezone.integration.mjs",
     "test:shift-variance": "node test/shiftVariance.integration.mjs",
     "test:fifo-lots": "node test/fifoLots.unit.mjs",
+    "test:tax-rates": "node test/taxRates.unit.mjs",
     "test:fifo-lots-db": "node test/fifoLots.integration.mjs"
   },
   "keywords": [],

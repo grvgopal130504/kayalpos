@@ -1,7 +1,6 @@
 import {
-  Paper, Stack, Box, Typography, Button, Divider,
+  Paper, Stack, Box, Typography, Divider,
 } from '@mui/material';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 
 import DataTable from '../../../components/common/DataTable';
 import StatusBadge from '../../../components/common/StatusBadge';
@@ -27,7 +26,7 @@ function DetailField({ label, value, valueColor }) {
  * full line detail, so showing it here is free and matches
  * TransferDetailsCard/IndentDetailsCard's own items table).
  */
-export default function StockReceiptDetailsCard({ receipt, onEdit }) {
+export default function StockReceiptDetailsCard({ receipt }) {
   const itemColumns = [
     { key: 'index', label: '#', render: (_row, i) => i + 1 },
     { key: 'code', label: 'Item Code' },
@@ -46,9 +45,6 @@ export default function StockReceiptDetailsCard({ receipt, onEdit }) {
         <Stack spacing={2.5}>
           <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Receipt Details</Typography>
-            <Button variant="outlined" color="inherit" size="small" startIcon={<EditOutlinedIcon fontSize="small" />} onClick={onEdit}>
-              Edit Receipt
-            </Button>
           </Stack>
 
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
