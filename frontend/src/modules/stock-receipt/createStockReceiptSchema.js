@@ -117,6 +117,7 @@ export const createStockReceiptSchema = z
     vehicleNo: z.string().trim().optional(),
     transporter: z.string().trim().optional(),
     deliveryChallanNo: z.string().trim().optional(),
+    deliveryDate: z.string().trim().optional(),
     otherRemarks: z.string().trim().optional(),
 
     notes: z.string().trim().optional(),
@@ -157,6 +158,7 @@ export const createStockReceiptDefaultValues = {
   vehicleNo: '',
   transporter: '',
   deliveryChallanNo: '',
+  deliveryDate: '',
   otherRemarks: '',
 
   notes: '',

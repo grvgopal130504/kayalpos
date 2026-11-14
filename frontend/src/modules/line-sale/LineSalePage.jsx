@@ -55,6 +55,7 @@ import PaymentMethodsCard from "./components/PaymentMethodsCard";
 import PaymentActionsCard from "./components/PaymentActionsCard";
 import AmountPayableCard from "./components/AmountPayableCard";
 import HeldBillsDialog from "./components/HeldBillsDialog";
+import ItemChoiceDialog from "./components/ItemChoiceDialog";
 import { PAYMENT_METHODS, WALK_IN_CUSTOMER, TAX_RATE } from "./lineSaleMockData";
 import { printReceipt } from "./receiptPrint";
 import AppLogo from "../../components/common/AppLogo";
@@ -267,6 +268,8 @@ export default function LineSalePage() {
   // A held bill the cashier tapped Resume on while another unsaved bill is
   // still on screen — drives the "hold or clear it first" prompt.
   const [pendingResume, setPendingResume] = useState(null);
+  // Item picker popup — see handleAddItem / ItemChoiceDialog.
+  const [itemChoice, setItemChoice] = useState(null);
   const [busyHeldId, setBusyHeldId] = useState(null);
   // Idempotency token for one "hold new bill" attempt: reused if the request
   // is retried after a network failure so the server can't create two bills.
@@ -413,7 +416,35 @@ export default function LineSalePage() {
 
   const changeAmount = round2(receivedAmount - totals.grandTotal);
 
+  // Entry point for every "add this item" (search, scan, Short ID). When the
+  // pick is ambiguous — other active products share its name, or it has 2+
+  // open stock lots — a popup lists the candidates (with stock and lots) so
+  // the cashier chooses; otherwise the item goes straight onto the bill.
   const handleAddItem = (code) => {
+    const item = productByCode[code];
+    if (!item) return;
+    const nameKey = String(item.name || "").trim().toLowerCase();
+    const siblings = products.filter(
+      (p) => String(p.name || "").trim().toLowerCase() === nameKey,
+    );
+    const lotsOf = (p) => lotsByProduct.get(p.id) || [];
+    const ambiguous = siblings.length >= 2 || lotsOf(item).length >= 2;
+    if (!ambiguous) {
+      addItemToCart(code);
+      return;
+    }
+    const ordered = [
+      ...siblings.filter((p) => p.code === code),
+      ...siblings.filter((p) => p.code !== code),
+    ];
+    setItemChoice({
+      name: item.name,
+      pickedCode: code,
+      candidates: ordered.map((p) => ({ product: p, lots: lotsOf(p) })),
+    });
+  };
+
+  const addItemToCart = (code) => {
     const item = productByCode[code];
     if (!item) return;
 
@@ -1226,6 +1257,15 @@ export default function LineSalePage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ItemChoiceDialog
+        choice={itemChoice}
+        onClose={() => setItemChoice(null)}
+        onPick={(code) => {
+          setItemChoice(null);
+          addItemToCart(code);
+        }}
+      />
 
       <AddCustomerDialog
         open={addCustomerOpen}

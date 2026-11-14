@@ -141,6 +141,7 @@ export function receiptToFormValues(row, emptyItemRow) {
     vehicleNo: row.vehicleNo || '',
     transporter: row.transporter || '',
     deliveryChallanNo: row.deliveryChallanNo || '',
+    deliveryDate: row.deliveryDate ? formatPickerDate(new Date(row.deliveryDate)) : '',
     otherRemarks: row.otherRemarks || '',
 
     notes: row.notes || '',
@@ -156,6 +157,7 @@ export function formValuesToPayload(values, { status, isBlankItemRow }) {
   const receiptDate = parsePickerDate(values.receiptDate);
   const purchaseInvoiceDate = values.purchaseInvoiceDate ? parsePickerDate(values.purchaseInvoiceDate) : null;
   const grnDcDate = values.grnDcDate ? parsePickerDate(values.grnDcDate) : null;
+  const deliveryDate = values.deliveryDate ? parsePickerDate(values.deliveryDate) : null;
 
   const items = values.items
     .filter((row) => !isBlankItemRow(row))
@@ -199,6 +201,7 @@ export function formValuesToPayload(values, { status, isBlankItemRow }) {
     vehicleNo: values.vehicleNo?.trim() || '',
     transporter: values.transporter?.trim() || '',
     deliveryChallanNo: values.deliveryChallanNo?.trim() || '',
+    deliveryDate: deliveryDate ? deliveryDate.toISOString() : null,
     otherRemarks: values.otherRemarks?.trim() || '',
 
     notes: values.notes?.trim() || '',

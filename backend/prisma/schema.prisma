@@ -1910,6 +1910,7 @@ model StockReceipt {
   vehicleNo           String?   @map("VehicleNo")
   transporter         String?   @map("Transporter")
   deliveryChallanNo   String?   @map("DeliveryChallanNo")
+  deliveryDate        DateTime? @map("DeliveryDate")
   otherRemarks        String?   @map("OtherRemarks")
   notes               String?   @map("Notes")
   totalItems          Int       @default(0) @map("TotalItems")

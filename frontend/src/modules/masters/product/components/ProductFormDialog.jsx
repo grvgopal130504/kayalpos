@@ -169,8 +169,26 @@ export default function ProductFormDialog({ open, mode = 'add', initialValues, o
       }
       onClose?.();
     } catch (err) {
-      dispatch(showToast(err?.data?.message || 'Failed to save product', 'error'));
+      const fieldErrors = err?.data?.details && typeof err.data.details === 'object'
+        ? Object.entries(err.data.details).map(([k, v]) => `${k}: ${[].concat(v).join(', ')}`).join('; ')
+        : '';
+      const base = err?.data?.message || (err?.status ? `Failed to save product (HTTP ${err.status})` : 'Failed to save product');
+      dispatch(showToast(fieldErrors ? `${base} — ${fieldErrors}` : base, 'error'));
     }
+  }, (errors) => {
+    // Validation failed: previously nothing happened when the bad field sat on
+    // another tab. Jump to that tab and say what's wrong.
+    const generalFields = ['uom', 'brand', 'additionalIdentifier', 'packSize', 'manageItemBy', 'hsnSac', 'taxCode', 'taxGroup', 'remarks', 'isGst', 'isExcisable'];
+    const tabOf = (name) => {
+      if (['preferredVendor', 'purchasingUom'].includes(name)) return 'Purchase';
+      if (['salesUom', 'salePrice', 'mrp'].includes(name)) return 'Sales';
+      if (name === 'availableQty') return 'Inventory';
+      return generalFields.includes(name) ? 'General' : null;
+    };
+    const [firstName, firstErr] = Object.entries(errors)[0] || [];
+    const tab = tabOf(firstName);
+    if (tab) setActiveTab(tab);
+    dispatch(showToast(firstErr?.message ? `Please fix: ${firstErr.message}` : 'Please fix the highlighted fields', 'warning'));
   });
 
   return (

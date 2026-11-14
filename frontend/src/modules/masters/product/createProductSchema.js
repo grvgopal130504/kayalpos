@@ -89,8 +89,10 @@ export const createProductSchema = z.object({
   // required: they are never typed here, so a blank is always valid.
   salePrice: z.string().trim().optional(),
   mrp: z.string().trim().optional(),
-  availableQty: z.string().trim().min(1, 'Available qty is required')
-    .refine((v) => /^\d+$/.test(v.trim()), 'Enter a whole, non-negative number'),
+  // Blank is allowed (saved as 0). It lives on the Inventory tab, so a
+  // "required" error here used to block Save/Update with nothing visible.
+  availableQty: z.string().trim()
+    .refine((v) => v === '' || /^\d+$/.test(v), 'Enter a whole, non-negative number'),
   status: z.string().trim().min(1, 'Select a status'),
 }).superRefine((values, ctx) => {
   // "Item Category *" on the General tab — at least one of Excisable/GST
@@ -219,7 +221,7 @@ export function productFormValuesToPayload(values) {
     // salePrice / mrp are intentionally not sent: the form only displays the
     // price-list price, so saving a product must never overwrite them (a new
     // product defaults to 0 on the server; an update keeps the stored value).
-    availableQty: Number(values.availableQty),
+    availableQty: Number(values.availableQty || 0),
     status: values.status === 'Inactive' ? 'INACTIVE' : 'ACTIVE',
   };
 }
